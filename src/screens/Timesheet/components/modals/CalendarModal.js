@@ -1,12 +1,15 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableHighlight, Modal, Dimensions, StatusBar } from 'react-native';
+import React, { useMemo, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableHighlight, Modal, Dimensions, StatusBar, TouchableOpacity } from 'react-native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
+import { MonthYearPicker } from './MonthYearPicker';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+
 // Настройка русской локализации
 LocaleConfig.locales['ru'] = {
-  monthNames: ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'],
+  monthNames: MONTHS,
   monthNamesShort: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'],
   dayNames: ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'],
   dayNamesShort: ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'],
@@ -15,6 +18,16 @@ LocaleConfig.locales['ru'] = {
 LocaleConfig.defaultLocale = 'ru';
 
 export const CalendarModal = ({ visible, selectedDate, onClose, onDateSelect }) => {
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(selectedDate || new Date());
+
+  // Синхронизируем currentCalendarDate с selectedDate при изменении
+  useEffect(() => {
+    if (selectedDate) {
+      setCurrentCalendarDate(selectedDate);
+    }
+  }, [selectedDate]);
+
   // Формируем строку даты в формате YYYY-MM-DD для react-native-calendars
   const selectedDateString = useMemo(() => {
     if (!selectedDate) return null;
@@ -24,6 +37,15 @@ export const CalendarModal = ({ visible, selectedDate, onClose, onDateSelect }) 
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   }, [selectedDate]);
+
+  // Формируем строку текущей даты календаря для навигации
+  const currentCalendarDateString = useMemo(() => {
+    const date = new Date(currentCalendarDate);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, [currentCalendarDate]);
 
   // Получаем текущую дату для отметки
   const today = useMemo(() => {
@@ -69,6 +91,16 @@ export const CalendarModal = ({ visible, selectedDate, onClose, onDateSelect }) 
     onDateSelect(date);
   };
 
+  const handleMonthYearSelect = (month, year) => {
+    // Создаем новую дату с выбранным месяцем и годом
+    const newDate = new Date(year, month, 1);
+    setCurrentCalendarDate(newDate);
+  };
+
+  const openPicker = () => {
+    setPickerVisible(true);
+  };
+
   return (
     <Modal
       visible={visible}
@@ -82,11 +114,21 @@ export const CalendarModal = ({ visible, selectedDate, onClose, onDateSelect }) 
         <View style={styles.modalBlurLayer} />
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Выберите дату</Text>
+
           <Calendar
-            current={selectedDateString || today}
+            key={currentCalendarDateString}
+            current={currentCalendarDateString}
             onDayPress={handleDayPress}
             markedDates={markedDates}
             markingType={'custom'}
+            renderHeader={(date) => {
+              const monthYear = `${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+              return (
+                <TouchableOpacity onPress={openPicker} style={styles.calendarHeader}>
+                  <Text style={styles.calendarHeaderText}>{monthYear}</Text>
+                </TouchableOpacity>
+              );
+            }}
             theme={{
               selectedDayBackgroundColor: '#999999',
               selectedDayTextColor: '#ffffff',
@@ -104,7 +146,13 @@ export const CalendarModal = ({ visible, selectedDate, onClose, onDateSelect }) 
               borderRadius: 8,
             }}
             enableSwipeMonths={true}
+            onMonthChange={(month) => {
+              // Обновляем текущую дату календаря при свайпе
+              const newDate = new Date(month.year, month.month - 1, 1);
+              setCurrentCalendarDate(newDate);
+            }}
           />
+
           <TouchableHighlight
             style={styles.modalCloseButton}
             onPress={onClose}
@@ -114,6 +162,13 @@ export const CalendarModal = ({ visible, selectedDate, onClose, onDateSelect }) 
           </TouchableHighlight>
         </View>
       </View>
+
+      <MonthYearPicker
+        visible={pickerVisible}
+        currentDate={currentCalendarDate}
+        onClose={() => setPickerVisible(false)}
+        onSelect={handleMonthYearSelect}
+      />
     </Modal>
   );
 };
@@ -152,17 +207,27 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textAlign: 'center',
   },
+  calendarHeader: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  calendarHeaderText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#555',
+  },
   modalCloseButton: {
     backgroundColor: '#d0d0d0',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 12,
-    marginTop: 15,
+    marginTop: 25,
     alignItems: 'center',
   },
   modalCloseText: {
     color: '#777',
     fontSize: 16,
+	lineHeight: 16,
     fontWeight: '700',
   },
 });
