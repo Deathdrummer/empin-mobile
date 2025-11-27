@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import Toast from 'react-native-toast-message';
 import { Can } from '../../../components/Can';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { formatShortName } from '../../../utils/formatName';
+import { EmojiPicker } from './EmojiPicker';
+import { CommentContextMenu } from './CommentContextMenu';
 
 // Функция форматирования даты в формат "20:41 10.11.25"
 const formatDateTime = (dateString) => {
@@ -39,6 +41,9 @@ export const ChatSection = ({
 }) => {
   const [lastTap, setLastTap] = React.useState(null);
   const [isFocused, setIsFocused] = React.useState(false);
+  const [menuVisible, setMenuVisible] = React.useState(false);
+  const [menuPosition, setMenuPosition] = React.useState({ top: 0, left: 0 });
+  const [selectedComment, setSelectedComment] = React.useState(null);
   const { can } = usePermissions();
 
   const handleDoubleTap = (comment) => {
@@ -71,13 +76,43 @@ export const ChatSection = ({
     }
   };
 
-  const handleCommentLongPress = (comment) => {
+  const handleCommentLongPress = (comment, event) => {
     if (!comment.self) return;
 
     console.log('[Haptics] Heavy impact triggered');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    onDeleteComment(comment.id);
+    // Получаем позицию нажатия
+    event.target.measure((x, y, width, height, pageX, pageY) => {
+      setMenuPosition({ top: pageY, left: pageX });
+      setSelectedComment(comment);
+      setMenuVisible(true);
+    });
+  };
+
+  const handleCloseMenu = () => {
+    setMenuVisible(false);
+    setSelectedComment(null);
+  };
+
+  const handleMenuEdit = () => {
+    handleCloseMenu();
+    if (selectedComment) {
+      onEditComment(selectedComment);
+    }
+  };
+
+  const handleMenuDelete = () => {
+    handleCloseMenu();
+    if (selectedComment) {
+      onDeleteComment(selectedComment.id);
+    }
+  };
+
+  const handleEmojiSelect = (emoji) => {
+    console.log('Selected emoji:', emoji);
+    // TODO: Добавить логику реакции на комментарий
+    handleCloseMenu();
   };
 
   return (
@@ -91,7 +126,7 @@ export const ChatSection = ({
               comment.self && styles.chatMessageSelf,
             ]}
             onPress={() => handleDoubleTap(comment)}
-            onLongPress={() => handleCommentLongPress(comment)}
+            onLongPress={(event) => handleCommentLongPress(comment, event)}
             activeOpacity={0.7}
           >
             <View style={styles.chatHeader}>
@@ -146,6 +181,32 @@ export const ChatSection = ({
           </TouchableOpacity>
         </View>
       </Can>
+
+      {/* Модальное окно с меню и эмоджи */}
+      <Modal
+        visible={menuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseMenu}
+      >
+        <Pressable style={styles.modalOverlay} onPress={handleCloseMenu}>
+          <View style={styles.menuContainer}>
+            {menuVisible && (
+              <>
+                <EmojiPicker
+                  position={menuPosition}
+                  onEmojiSelect={handleEmojiSelect}
+                />
+                <CommentContextMenu
+                  position={menuPosition}
+                  onEdit={handleMenuEdit}
+                  onDelete={handleMenuDelete}
+                />
+              </>
+            )}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 };
@@ -227,5 +288,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#AEAEAE',
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  menuContainer: {
+    flex: 1,
+    position: 'relative',
   },
 });

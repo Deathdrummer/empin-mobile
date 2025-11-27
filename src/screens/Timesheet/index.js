@@ -79,10 +79,6 @@ export default function TimesheetScreen({ onLogout }) {
     handleEditComment,
     handleUpdateComment,
     handleCancelEdit,
-    deleteConfirmVisible: commentDeleteConfirmVisible,
-    setDeleteConfirmVisible: setCommentDeleteConfirmVisible,
-    deleteCommentId,
-    confirmDeleteComment,
   } = useCommentActions(loadDays, minIndex, maxIndex);
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
@@ -250,14 +246,6 @@ export default function TimesheetScreen({ onLogout }) {
         message={`Вы уверены, что хотите удалить договор "${contractDeleteData.name}"?`}
         onCancel={() => setContractDeleteConfirmVisible(false)}
         onConfirm={confirmDeleteContract}
-      />
-
-      <DeleteConfirmModal
-        visible={commentDeleteConfirmVisible}
-        title="Удалить комментарий?"
-        message="Вы уверены, что хотите удалить комментарий?"
-        onCancel={() => setCommentDeleteConfirmVisible(false)}
-        onConfirm={confirmDeleteComment}
       />
 
       <FlatList

@@ -9,8 +9,6 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
   const [editingComment, setEditingComment] = useState(null);
   const [updatingComment, setUpdatingComment] = useState(false);
   const [addingComment, setAddingComment] = useState(null);
-  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
-  const [deleteCommentId, setDeleteCommentId] = useState(null);
 
   const handleAddComment = async (timesheetContractId) => {
     if (!commentText.trim()) {
@@ -73,29 +71,14 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
         return;
       }
 
-      setDeleteCommentId(commentId);
-      setDeleteConfirmVisible(true);
+      // Удаляем комментарий сразу без подтверждения
+      await timesheetAPI.removeComment(commentId);
+      await loadDays(minIndex, maxIndex, true);
     } catch (error) {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: 'Не удалось проверить права',
-        position: 'top',
-        visibilityTime: 3000,
-      });
-    }
-  };
-
-  const confirmDeleteComment = async () => {
-    setDeleteConfirmVisible(false);
-    try {
-      await timesheetAPI.removeComment(deleteCommentId);
-      setTimeout(() => loadDays(minIndex, maxIndex, true), 300);
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: 'Ошибка',
-        text2: 'Не удалось удалить комментарий',
+        text2: error.message || 'Не удалось удалить комментарий',
         position: 'top',
         visibilityTime: 3000,
       });
@@ -159,9 +142,5 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
     handleEditComment,
     handleUpdateComment,
     handleCancelEdit,
-    deleteConfirmVisible,
-    setDeleteConfirmVisible,
-    deleteCommentId,
-    confirmDeleteComment,
   };
 };
