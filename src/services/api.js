@@ -145,10 +145,11 @@ export const timesheetAPI = {
     return response.data;
   },
 
-  addComment: async (timesheetContractId, message) => {
+  addComment: async (timesheetContractId, message, replyToId = null) => {
     const response = await api.post('/timesheet/comment', {
       timesheet_contract_id: timesheetContractId,
       message,
+      reply_to_id: replyToId,
     });
     return response.data;
   },
@@ -160,6 +161,20 @@ export const timesheetAPI = {
 
   updateComment: async (id, message) => {
     const response = await api.put(`/timesheet/comment/${id}`, { message });
+    return response.data;
+  },
+
+  addReaction: async (commentId, emoji) => {
+    const response = await api.post(`/timesheet/comment/${commentId}/reaction`, {
+      emoji,
+    });
+    return response.data;
+  },
+
+  removeReaction: async (commentId, emoji) => {
+    const response = await api.delete(`/timesheet/comment/${commentId}/reaction`, {
+      data: { emoji },
+    });
     return response.data;
   },
 };

@@ -18,6 +18,8 @@ export const ContractCard = ({
   onDeleteComment,
   onEditComment,
   onReplyComment,
+  onToggleReaction,
+  onCancelReply,
 }) => {
   const isExpanded = expandedContract === contract.timesheet_contract_id;
   const isAddingComment = addingComment === contract.timesheet_contract_id;
@@ -75,6 +77,8 @@ export const ContractCard = ({
           onDeleteComment={onDeleteComment}
           onEditComment={onEditComment}
           onReplyComment={onReplyComment}
+          onToggleReaction={onToggleReaction}
+          onCancelReply={onCancelReply}
         />
       )}
     </View>

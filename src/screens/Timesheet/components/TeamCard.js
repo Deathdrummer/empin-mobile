@@ -20,6 +20,8 @@ export const TeamCard = ({
   onDeleteComment,
   onEditComment,
   onReplyComment,
+  onToggleReaction,
+  onCancelReply,
 }) => {
   const masterName = formatShortName(team.master);
 
@@ -67,6 +69,8 @@ export const TeamCard = ({
             onDeleteComment={onDeleteComment}
             onEditComment={onEditComment}
             onReplyComment={onReplyComment}
+            onToggleReaction={onToggleReaction}
+            onCancelReply={onCancelReply}
           />
         ))
       )}

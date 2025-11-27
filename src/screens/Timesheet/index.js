@@ -82,6 +82,7 @@ export default function TimesheetScreen({ onLogout }) {
     handleCancelEdit,
     handleReplyComment,
     handleCancelReply,
+    handleToggleReaction,
   } = useCommentActions(loadDays, minIndex, maxIndex);
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
@@ -186,6 +187,8 @@ export default function TimesheetScreen({ onLogout }) {
       onDeleteComment={handleDeleteComment}
       onEditComment={handleEditComment}
       onReplyComment={handleReplyComment}
+      onToggleReaction={handleToggleReaction}
+      onCancelReply={handleCancelReply}
     />
   );
 

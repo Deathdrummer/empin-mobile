@@ -39,7 +39,9 @@ export const ChatSection = ({
   onAddComment,
   onDeleteComment,
   onEditComment,
-  onReplyComment
+  onReplyComment,
+  onToggleReaction,
+  onCancelReply
 }) => {
   const [lastTap, setLastTap] = React.useState(null);
   const [isFocused, setIsFocused] = React.useState(false);
@@ -119,8 +121,9 @@ export const ChatSection = ({
   };
 
   const handleEmojiSelect = (emoji) => {
-    console.log('Selected emoji:', emoji);
-    // TODO: Добавить логику реакции на комментарий
+    if (selectedComment) {
+      onToggleReaction(selectedComment.id, emoji);
+    }
     handleCloseMenu();
   };
 
@@ -155,22 +158,48 @@ export const ChatSection = ({
                 </>
               )}
             </View>
+            {comment.reply_to_id && (
+              <Text style={styles.replyIndicator}>↩ Ответ</Text>
+            )}
             <Text style={[
               styles.chatText,
               comment.self && styles.chatTextSelf
             ]}>{comment.message}</Text>
+            {comment.reactions && comment.reactions.length > 0 && (
+              <View style={styles.reactionsContainer}>
+                {comment.reactions.map((reaction, index) => (
+                  <View key={index} style={styles.reactionBubble}>
+                    <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
+                    <Text style={styles.reactionCount}>{reaction.count || 1}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </TouchableOpacity>
         ))
       )}
 
       <Can permission="mobile-app-can-create-comment:site">
+        {replyingToComment && (
+          <View style={styles.replyBanner}>
+            <View style={styles.replyBannerContent}>
+              <Text style={styles.replyBannerTitle}>Ответ на комментарий:</Text>
+              <Text style={styles.replyBannerText} numberOfLines={1}>
+                {formatShortName(replyingToComment.from)}: {replyingToComment.message}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onCancelReply} style={styles.replyBannerClose}>
+              <Text style={styles.replyBannerCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.chatInputWrapper}>
           <TextInput
             style={[
               styles.chatTextInput,
               isFocused && styles.chatTextInputFocused
             ]}
-            placeholder="Ваш комментарий..."
+            placeholder={replyingToComment ? "Ваш ответ..." : "Ваш комментарий..."}
             value={commentText}
             onChangeText={onCommentChange}
             onFocus={() => setIsFocused(true)}
@@ -306,5 +335,64 @@ const styles = StyleSheet.create({
   menuContainer: {
     flex: 1,
     position: 'relative',
+  },
+  replyBanner: {
+    backgroundColor: '#F5F5F5',
+    padding: 8,
+    paddingLeft: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#999999',
+    marginBottom: 8,
+    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  replyBannerContent: {
+    flex: 1,
+    marginRight: 8,
+  },
+  replyBannerTitle: {
+    fontSize: 11,
+    color: '#888',
+    marginBottom: 2,
+  },
+  replyBannerText: {
+    fontSize: 12,
+    color: '#333',
+  },
+  replyBannerClose: {
+    padding: 4,
+  },
+  replyBannerCloseText: {
+    fontSize: 18,
+    color: '#999',
+  },
+  replyIndicator: {
+    fontSize: 10,
+    color: '#999',
+    marginBottom: 2,
+  },
+  reactionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 4,
+    gap: 4,
+  },
+  reactionBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    gap: 2,
+  },
+  reactionEmoji: {
+    fontSize: 14,
+  },
+  reactionCount: {
+    fontSize: 11,
+    color: '#666',
   },
 });

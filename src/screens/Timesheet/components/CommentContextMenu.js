@@ -65,8 +65,8 @@ const styles = StyleSheet.create({
     color: '#999999',
   },
   separator: {
-    height: 0.5,
-    backgroundColor: '#E8E8E8',
+    height: 1,
+    backgroundColor: '#DCDCDC',
     marginHorizontal: 0,
   },
 });

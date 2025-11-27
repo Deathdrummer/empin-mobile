@@ -40,8 +40,10 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
         return;
       }
 
-      await timesheetAPI.addComment(timesheetContractId, commentText.trim());
+      const replyToId = replyingToComment ? replyingToComment.id : null;
+      await timesheetAPI.addComment(timesheetContractId, commentText.trim(), replyToId);
       setCommentText('');
+      setReplyingToComment(null);
       await loadDays(minIndex, maxIndex, true);
       setAddingComment(null);
     } catch (error) {
@@ -149,6 +151,23 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
     setReplyingToComment(null);
   };
 
+  const handleToggleReaction = async (commentId, emoji) => {
+    try {
+      // Попробуем добавить реакцию
+      // Если пользователь уже поставил эту реакцию, сервер должен её удалить
+      await timesheetAPI.addReaction(commentId, emoji);
+      await loadDays(minIndex, maxIndex, true);
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: error.message || 'Не удалось добавить реакцию',
+        position: 'top',
+        visibilityTime: 2000,
+      });
+    }
+  };
+
   return {
     expandedContract,
     setExpandedContract,
@@ -165,5 +184,6 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
     handleCancelEdit,
     handleReplyComment,
     handleCancelReply,
+    handleToggleReaction,
   };
 };
