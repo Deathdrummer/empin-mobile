@@ -11,10 +11,14 @@ export const DayCard = ({
   commentText,
   addingComment,
   replyingToComment,
+  deletingTeam,
+  deletingContract,
+  deletingComment,
   onAddTeam,
   onDeleteTeam,
   onAddContract,
   onDeleteContract,
+  onDeleteContractDirect,
   onToggleChat,
   onCommentChange,
   onAddComment,
@@ -58,9 +62,13 @@ export const DayCard = ({
                 commentText={commentText}
                 addingComment={addingComment}
                 replyingToComment={replyingToComment}
+                deletingTeam={deletingTeam}
+                deletingContract={deletingContract}
+                deletingComment={deletingComment}
                 onDeleteTeam={onDeleteTeam}
                 onAddContract={onAddContract}
                 onDeleteContract={onDeleteContract}
+                onDeleteContractDirect={onDeleteContractDirect}
                 onToggleChat={onToggleChat}
                 onCommentChange={onCommentChange}
                 onAddComment={onAddComment}

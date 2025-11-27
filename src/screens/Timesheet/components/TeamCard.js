@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TouchableHighlight } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TouchableHighlight, ActivityIndicator } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Can } from '../../../components/Can';
 import { ContractCard } from './ContractCard';
@@ -11,9 +11,13 @@ export const TeamCard = ({
   commentText,
   addingComment,
   replyingToComment,
+  deletingTeam,
+  deletingContract,
+  deletingComment,
   onDeleteTeam,
   onAddContract,
   onDeleteContract,
+  onDeleteContractDirect,
   onToggleChat,
   onCommentChange,
   onAddComment,
@@ -24,18 +28,25 @@ export const TeamCard = ({
   onCancelReply,
 }) => {
   const masterName = formatShortName(team.master);
+  const isDeletingThisTeam = deletingTeam === team.id;
 
   return (
-    <TouchableOpacity
-      style={styles.team}
-      activeOpacity={0.7}
-      onLongPress={() => {
-        console.log('[Haptics] Heavy impact triggered');
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        onDeleteTeam(team.id, masterName);
-      }}
-    >
-      <View style={styles.teamHeader}>
+    <View style={styles.teamWrapper}>
+      {isDeletingThisTeam && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#999999" />
+        </View>
+      )}
+      <TouchableOpacity
+        style={styles.team}
+        activeOpacity={0.7}
+        onLongPress={() => {
+          console.log('[Haptics] Heavy impact triggered');
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          onDeleteTeam(team.id, masterName);
+        }}
+      >
+        <View style={styles.teamHeader}>
         <Text style={styles.masterName}>
           {masterName}
         </Text>
@@ -62,8 +73,11 @@ export const TeamCard = ({
             commentText={commentText}
             addingComment={addingComment}
             replyingToComment={replyingToComment}
+            deletingContract={deletingContract}
+            deletingComment={deletingComment}
             onToggleChat={() => onToggleChat(contract.timesheet_contract_id)}
             onDeleteContract={onDeleteContract}
+            onDeleteContractDirect={onDeleteContractDirect}
             onCommentChange={onCommentChange}
             onAddComment={onAddComment}
             onDeleteComment={onDeleteComment}
@@ -75,12 +89,28 @@ export const TeamCard = ({
         ))
       )}
     </TouchableOpacity>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  team: {
+  teamWrapper: {
+    position: 'relative',
     marginBottom: 32,
+  },
+  team: {
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 8,
+    zIndex: 10,
   },
   teamHeader: {
     flexDirection: 'row',

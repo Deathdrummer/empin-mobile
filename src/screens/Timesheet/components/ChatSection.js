@@ -1,12 +1,24 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import * as Clipboard from 'expo-clipboard';
 import Toast from 'react-native-toast-message';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Can } from '../../../components/Can';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { formatShortName } from '../../../utils/formatName';
 import { EmojiPicker } from './EmojiPicker';
 import { CommentContextMenu } from './CommentContextMenu';
+
+// Маппинг эмоджи на иконки MaterialCommunityIcons
+const EMOJI_TO_ICON = {
+  '👍': { icon: 'thumb-up', color: '#757575' },
+  '👎': { icon: 'thumb-down', color: '#757575' },
+  '❤️': { icon: 'heart', color: '#757575' },
+  '🔥': { icon: 'fire', color: '#757575' },
+  '👀': { icon: 'eye', color: '#757575' },
+};
 
 // Функция форматирования даты в формат "20:41 10.11.25"
 const formatDateTime = (dateString) => {
@@ -31,10 +43,34 @@ const formatDateTime = (dateString) => {
   return `${hours}:${minutes} ${day}.${month}.${year}`;
 };
 
+// Функция группировки реакций по emoji и подсчета количества
+const groupReactions = (reactions, currentUserId) => {
+  if (!reactions || !Array.isArray(reactions)) return [];
+
+  const grouped = reactions.reduce((acc, reaction) => {
+    const emoji = reaction.emoji;
+    if (!acc[emoji]) {
+      acc[emoji] = {
+        emoji,
+        count: 0,
+        hasCurrentUserReacted: false,
+      };
+    }
+    acc[emoji].count++;
+    if (reaction.user_id === currentUserId) {
+      acc[emoji].hasCurrentUserReacted = true;
+    }
+    return acc;
+  }, {});
+
+  return Object.values(grouped);
+};
+
 export const ChatSection = ({
   chat,
   commentText,
   replyingToComment,
+  deletingComment,
   onCommentChange,
   onAddComment,
   onDeleteComment,
@@ -48,7 +84,37 @@ export const ChatSection = ({
   const [menuVisible, setMenuVisible] = React.useState(false);
   const [menuPosition, setMenuPosition] = React.useState({ top: 0, left: 0 });
   const [selectedComment, setSelectedComment] = React.useState(null);
+  const [currentUserId, setCurrentUserId] = React.useState(null);
   const { can } = usePermissions();
+  const inputRef = React.useRef(null);
+
+  // Функция для поиска родительского комментария
+  const findParentComment = (replyToId) => {
+    if (!chat || !replyToId) return null;
+    return chat.find(comment => comment.id === replyToId);
+  };
+
+  React.useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          const user = JSON.parse(userJson);
+          setCurrentUserId(user.id);
+        }
+      } catch (error) {
+        console.error('Failed to load current user:', error);
+      }
+    };
+    loadCurrentUser();
+  }, []);
+
+  // Автофокус на поле ввода при выборе ответа
+  React.useEffect(() => {
+    if (replyingToComment && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [replyingToComment]);
 
   const handleDoubleTap = (comment) => {
     if (!comment.self) return;
@@ -120,6 +186,31 @@ export const ChatSection = ({
     }
   };
 
+  const handleMenuCopy = async () => {
+    handleCloseMenu();
+    if (selectedComment) {
+      try {
+        await Clipboard.setStringAsync(selectedComment.message);
+        Toast.show({
+          type: 'success',
+          text1: 'Скопировано',
+          text2: 'Текст комментария скопирован в буфер обмена',
+          position: 'top',
+          visibilityTime: 2000,
+        });
+      } catch (error) {
+        console.error('Failed to copy comment:', error);
+        Toast.show({
+          type: 'error',
+          text1: 'Ошибка',
+          text2: 'Не удалось скопировать текст',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+      }
+    }
+  };
+
   const handleEmojiSelect = (emoji) => {
     if (selectedComment) {
       onToggleReaction(selectedComment.id, emoji);
@@ -130,53 +221,92 @@ export const ChatSection = ({
   return (
     <View style={styles.chatContainer}>
       {chat && chat.length > 0 && (
-        chat.map((comment) => (
-          <TouchableOpacity
-            key={comment.id}
-            style={[
-              styles.chatMessage,
-              comment.self && styles.chatMessageSelf,
-            ]}
-            onPress={() => handleDoubleTap(comment)}
-            onLongPress={(event) => handleCommentLongPress(comment, event)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.chatHeader}>
-              {comment.self ? (
-                <>
-                  <Text style={styles.chatDateTime}>{formatDateTime(comment.created_at)}</Text>
-                  <Text style={styles.chatAuthor}>
-                    {formatShortName(comment.from)}
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.chatAuthor}>
-                    {formatShortName(comment.from)}
-                  </Text>
-                  <Text style={styles.chatDateTime}>{formatDateTime(comment.created_at)}</Text>
-                </>
+        chat.map((comment) => {
+          const isDeletingThisComment = deletingComment === comment.id;
+          return (
+            <View key={comment.id} style={styles.commentWrapper}>
+              {isDeletingThisComment && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator size="small" color="#999999" />
+                </View>
               )}
-            </View>
-            {comment.reply_to_id && (
-              <Text style={styles.replyIndicator}>↩ Ответ</Text>
-            )}
-            <Text style={[
-              styles.chatText,
-              comment.self && styles.chatTextSelf
-            ]}>{comment.message}</Text>
-            {comment.reactions && comment.reactions.length > 0 && (
-              <View style={styles.reactionsContainer}>
-                {comment.reactions.map((reaction, index) => (
-                  <View key={index} style={styles.reactionBubble}>
-                    <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
-                    <Text style={styles.reactionCount}>{reaction.count || 1}</Text>
+              <TouchableOpacity
+                style={[
+                  styles.chatMessage,
+                  comment.self && styles.chatMessageSelf,
+                ]}
+                onPress={() => handleDoubleTap(comment)}
+                onLongPress={(event) => handleCommentLongPress(comment, event)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.chatHeader}>
+                  {comment.self ? (
+                    <>
+                      <Text style={styles.chatDateTime}>{formatDateTime(comment.created_at)}</Text>
+                      <Text style={styles.chatAuthor}>
+                        {formatShortName(comment.from)}
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.chatAuthor}>
+                        {formatShortName(comment.from)}
+                      </Text>
+                      <Text style={styles.chatDateTime}>{formatDateTime(comment.created_at)}</Text>
+                    </>
+                  )}
+                </View>
+                {comment.reply_to_id && (() => {
+                  const parentComment = findParentComment(comment.reply_to_id);
+                  return parentComment ? (
+                    <View style={[
+                      styles.replyQuote,
+                      comment.self && styles.replyQuoteSelf
+                    ]}>
+                      <Text style={styles.replyQuoteText} numberOfLines={2}>
+                        <Text style={styles.replyQuoteAuthor}>{formatShortName(parentComment.from)}</Text>: {parentComment.message}
+                      </Text>
+                    </View>
+                  ) : null;
+                })()}
+                <Text style={[
+                  styles.chatText,
+                  comment.self && styles.chatTextSelf
+                ]}>{comment.message}</Text>
+                {comment.reactions && comment.reactions.length > 0 && (
+                  <View style={styles.reactionsContainer}>
+                    {groupReactions(comment.reactions, currentUserId).map((reaction, index) => {
+                      const iconData = EMOJI_TO_ICON[reaction.emoji];
+                      if (!iconData) return null;
+
+                      return (
+                        <TouchableOpacity
+                          key={index}
+                          style={[
+                            styles.reactionBubble,
+                            reaction.hasCurrentUserReacted && styles.reactionBubbleActive
+                          ]}
+                          onPress={() => onToggleReaction(comment.id, reaction.emoji, reaction.hasCurrentUserReacted)}
+                          activeOpacity={0.6}
+                        >
+                          <MaterialCommunityIcons
+                            name={iconData.icon}
+                            size={14}
+                            color={reaction.hasCurrentUserReacted ? '#4A90E2' : iconData.color}
+                          />
+                          <Text style={[
+                            styles.reactionCount,
+                            reaction.hasCurrentUserReacted && styles.reactionCountActive
+                          ]}>{reaction.count}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
-                ))}
-              </View>
-            )}
-          </TouchableOpacity>
-        ))
+                )}
+              </TouchableOpacity>
+            </View>
+          );
+        })
       )}
 
       <Can permission="mobile-app-can-create-comment:site">
@@ -195,6 +325,7 @@ export const ChatSection = ({
         )}
         <View style={styles.chatInputWrapper}>
           <TextInput
+            ref={inputRef}
             style={[
               styles.chatTextInput,
               isFocused && styles.chatTextInputFocused
@@ -240,6 +371,7 @@ export const ChatSection = ({
                   onReply={handleMenuReply}
                   onEdit={handleMenuEdit}
                   onDelete={handleMenuDelete}
+                  onCopy={handleMenuCopy}
                 />
               </>
             )}
@@ -253,6 +385,21 @@ export const ChatSection = ({
 const styles = StyleSheet.create({
   chatContainer: {
     marginTop: 15,
+  },
+  commentWrapper: {
+    position: 'relative',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 4,
+    zIndex: 10,
   },
   chatMessage: {
     marginBottom: 8,
@@ -368,31 +515,49 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#999',
   },
-  replyIndicator: {
-    fontSize: 10,
+  replyQuote: {
+    backgroundColor: '#F8F8F8',
+    borderLeftWidth: 2,
+    borderLeftColor: '#CDCDCD',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    marginTop: 4,
+    marginBottom: 4,
+    borderRadius: 4,
+  },
+  replyQuoteSelf: {
+    alignSelf: 'flex-end',
+  },
+  replyQuoteText: {
+    fontSize: 11,
+    color: '#666',
+    fontStyle: 'italic',
+    lineHeight: 14,
+  },
+  replyQuoteAuthor: {
     color: '#999',
-    marginBottom: 2,
+    fontSize: 10,
   },
   reactionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 4,
+    marginTop: 2,
     gap: 4,
   },
   reactionBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
     gap: 2,
   },
-  reactionEmoji: {
-    fontSize: 14,
+  reactionBubbleActive: {
+    // Стиль для реакции, которую поставил текущий пользователь
   },
   reactionCount: {
     fontSize: 11,
     color: '#666',
+    fontWeight: '500',
+  },
+  reactionCountActive: {
+    color: '#4A90E2',
   },
 });

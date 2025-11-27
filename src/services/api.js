@@ -2,7 +2,8 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import permissionsEmitter from '../utils/permissionsEmitter';
 
-const API_BASE_URL = 'https://empin-pro.ru/api';
+const API_BASE_URL = 'https://empin-pro.ru/api'; // Production
+// const API_BASE_URL = 'http://192.168.0.102/api'; // Local development
 
 // Создаем экземпляр axios
 const api = axios.create({
@@ -165,7 +166,8 @@ export const timesheetAPI = {
   },
 
   addReaction: async (commentId, emoji) => {
-    const response = await api.post(`/timesheet/comment/${commentId}/reaction`, {
+    const response = await api.post('/timesheet/comment/reaction', {
+      comment_id: commentId,
       emoji,
     });
     return response.data;

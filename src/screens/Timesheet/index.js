@@ -48,6 +48,7 @@ export default function TimesheetScreen({ onLogout }) {
     setDeleteConfirmVisible: setTeamDeleteConfirmVisible,
     deleteData: teamDeleteData,
     confirmDeleteTeam,
+    deletingTeam,
   } = useTeamActions(loadDays, minIndex, maxIndex);
 
   const {
@@ -60,10 +61,12 @@ export default function TimesheetScreen({ onLogout }) {
     searchContracts,
     handleAddContract,
     handleDeleteContract,
+    handleDeleteContractDirect,
     deleteConfirmVisible: contractDeleteConfirmVisible,
     setDeleteConfirmVisible: setContractDeleteConfirmVisible,
     deleteData: contractDeleteData,
     confirmDeleteContract,
+    deletingContract,
   } = useContractActions(loadDays, minIndex, maxIndex);
 
   const {
@@ -77,6 +80,11 @@ export default function TimesheetScreen({ onLogout }) {
     replyingToComment,
     handleAddComment,
     handleDeleteComment,
+    confirmDeleteComment,
+    deleteConfirmVisible: commentDeleteConfirmVisible,
+    setDeleteConfirmVisible: setCommentDeleteConfirmVisible,
+    deleteData: commentDeleteData,
+    deletingComment,
     handleEditComment,
     handleUpdateComment,
     handleCancelEdit,
@@ -177,10 +185,14 @@ export default function TimesheetScreen({ onLogout }) {
       commentText={commentText}
       addingComment={addingComment}
       replyingToComment={replyingToComment}
+      deletingTeam={deletingTeam}
+      deletingContract={deletingContract}
+      deletingComment={deletingComment}
       onAddTeam={openAddTeamModal}
       onDeleteTeam={handleDeleteTeam}
       onAddContract={openAddContractModal}
       onDeleteContract={handleDeleteContract}
+      onDeleteContractDirect={handleDeleteContractDirect}
       onToggleChat={toggleChat}
       onCommentChange={setCommentText}
       onAddComment={handleAddComment}
@@ -254,6 +266,14 @@ export default function TimesheetScreen({ onLogout }) {
         message={`Вы уверены, что хотите удалить договор "${contractDeleteData.name}"?`}
         onCancel={() => setContractDeleteConfirmVisible(false)}
         onConfirm={confirmDeleteContract}
+      />
+
+      <DeleteConfirmModal
+        visible={commentDeleteConfirmVisible}
+        title="Удалить комментарий?"
+        message="Вы уверены, что хотите удалить этот комментарий?"
+        onCancel={() => setCommentDeleteConfirmVisible(false)}
+        onConfirm={confirmDeleteComment}
       />
 
       <FlatList

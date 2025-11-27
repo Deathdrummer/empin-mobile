@@ -11,6 +11,7 @@ export const useContractActions = (loadDays, minIndex, maxIndex) => {
   const [addingContract, setAddingContract] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [deleteData, setDeleteData] = useState({ id: null, name: '' });
+  const [deletingContract, setDeletingContract] = useState(null);
 
   const openAddContractModal = async (teamId) => {
     try {
@@ -107,8 +108,42 @@ export const useContractActions = (loadDays, minIndex, maxIndex) => {
 
   const confirmDeleteContract = async () => {
     setDeleteConfirmVisible(false);
+    setDeletingContract(deleteData.id);
     try {
       await timesheetAPI.removeContract(deleteData.id);
+      setTimeout(() => {
+        loadDays(minIndex, maxIndex, true);
+        setDeletingContract(null);
+      }, 300);
+    } catch (error) {
+      setDeletingContract(null);
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось удалить договор',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  const handleDeleteContractDirect = async (contractId) => {
+    try {
+      const permissions = await refreshPermissions();
+      const canDelete = permissions.includes('mobile-app-can-delete-contract:site');
+
+      if (!canDelete) {
+        Toast.show({
+          type: 'error',
+          text1: 'Нет прав',
+          text2: 'У вас нет прав для удаления договора',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      await timesheetAPI.removeContract(contractId);
       setTimeout(() => loadDays(minIndex, maxIndex, true), 300);
     } catch (error) {
       Toast.show({
@@ -131,9 +166,11 @@ export const useContractActions = (loadDays, minIndex, maxIndex) => {
     searchContracts,
     handleAddContract,
     handleDeleteContract,
+    handleDeleteContractDirect,
     deleteConfirmVisible,
     setDeleteConfirmVisible,
     deleteData,
     confirmDeleteContract,
+    deletingContract,
   };
 };

@@ -17,6 +17,9 @@ export const EmojiPicker = ({ position, onEmojiSelect }) => {
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        decelerationRate={0.92}
+        snapToInterval={52}
+        snapToAlignment="start"
       >
         {EMOJIS.map((item) => (
           <TouchableOpacity
@@ -36,12 +39,11 @@ export const EmojiPicker = ({ position, onEmojiSelect }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    width: '70%',
     alignSelf: 'center',
-    left: '15%',
     backgroundColor: '#fff',
     borderRadius: 30,
     paddingVertical: 8,
+    paddingHorizontal: 4,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -49,6 +51,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     zIndex: 1000,
     overflow: 'hidden',
+    maxWidth: 240,
   },
   scrollContent: {
     paddingHorizontal: 12,

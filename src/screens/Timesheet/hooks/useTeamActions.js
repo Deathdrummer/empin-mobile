@@ -9,6 +9,7 @@ export const useTeamActions = (loadDays, minIndex, maxIndex) => {
   const [selectedDay, setSelectedDay] = useState(null);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [deleteData, setDeleteData] = useState({ id: null, name: '' });
+  const [deletingTeam, setDeletingTeam] = useState(null);
 
   const openAddTeamModal = async (day) => {
     try {
@@ -98,10 +99,15 @@ export const useTeamActions = (loadDays, minIndex, maxIndex) => {
 
   const confirmDeleteTeam = async () => {
     setDeleteConfirmVisible(false);
+    setDeletingTeam(deleteData.id);
     try {
       await timesheetAPI.removeTeam(deleteData.id);
-      setTimeout(() => loadDays(minIndex, maxIndex, true), 300);
+      setTimeout(() => {
+        loadDays(minIndex, maxIndex, true);
+        setDeletingTeam(null);
+      }, 300);
     } catch (error) {
+      setDeletingTeam(null);
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
@@ -123,5 +129,6 @@ export const useTeamActions = (loadDays, minIndex, maxIndex) => {
     setDeleteConfirmVisible,
     deleteData,
     confirmDeleteTeam,
+    deletingTeam,
   };
 };

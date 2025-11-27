@@ -10,6 +10,9 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
   const [updatingComment, setUpdatingComment] = useState(false);
   const [addingComment, setAddingComment] = useState(null);
   const [replyingToComment, setReplyingToComment] = useState(null);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [deleteData, setDeleteData] = useState({ id: null });
+  const [deletingComment, setDeletingComment] = useState(null);
 
   const handleAddComment = async (timesheetContractId) => {
     if (!commentText.trim()) {
@@ -74,10 +77,28 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
         return;
       }
 
-      // Удаляем комментарий сразу без подтверждения
-      await timesheetAPI.removeComment(commentId);
-      await loadDays(minIndex, maxIndex, true);
+      setDeleteData({ id: commentId });
+      setDeleteConfirmVisible(true);
     } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось проверить права',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  const confirmDeleteComment = async () => {
+    setDeleteConfirmVisible(false);
+    setDeletingComment(deleteData.id);
+    try {
+      await timesheetAPI.removeComment(deleteData.id);
+      await loadDays(minIndex, maxIndex, true);
+      setDeletingComment(null);
+    } catch (error) {
+      setDeletingComment(null);
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
@@ -133,17 +154,6 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
   };
 
   const handleReplyComment = (comment) => {
-    // Если комментарий уже является ответом (имеет reply_to_id), то игнорируем
-    if (comment.reply_to_id) {
-      Toast.show({
-        type: 'info',
-        text1: 'Информация',
-        text2: 'Нельзя ответить на ответ',
-        position: 'top',
-        visibilityTime: 2000,
-      });
-      return;
-    }
     setReplyingToComment(comment);
   };
 
@@ -151,17 +161,19 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
     setReplyingToComment(null);
   };
 
-  const handleToggleReaction = async (commentId, emoji) => {
+  const handleToggleReaction = async (commentId, emoji, hasReacted = false) => {
     try {
-      // Попробуем добавить реакцию
-      // Если пользователь уже поставил эту реакцию, сервер должен её удалить
-      await timesheetAPI.addReaction(commentId, emoji);
+      if (hasReacted) {
+        await timesheetAPI.removeReaction(commentId, emoji);
+      } else {
+        await timesheetAPI.addReaction(commentId, emoji);
+      }
       await loadDays(minIndex, maxIndex, true);
     } catch (error) {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: error.message || 'Не удалось добавить реакцию',
+        text2: error.response?.data?.message || error.message || (hasReacted ? 'Не удалось удалить реакцию' : 'Не удалось добавить реакцию'),
         position: 'top',
         visibilityTime: 2000,
       });
@@ -179,6 +191,11 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
     replyingToComment,
     handleAddComment,
     handleDeleteComment,
+    confirmDeleteComment,
+    deleteConfirmVisible,
+    setDeleteConfirmVisible,
+    deleteData,
+    deletingComment,
     handleEditComment,
     handleUpdateComment,
     handleCancelEdit,
