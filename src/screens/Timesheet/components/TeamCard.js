@@ -10,6 +10,7 @@ export const TeamCard = ({
   expandedContract,
   commentText,
   addingComment,
+  replyingToComment,
   onDeleteTeam,
   onAddContract,
   onDeleteContract,
@@ -18,6 +19,7 @@ export const TeamCard = ({
   onAddComment,
   onDeleteComment,
   onEditComment,
+  onReplyComment,
 }) => {
   const masterName = formatShortName(team.master);
 
@@ -57,12 +59,14 @@ export const TeamCard = ({
             expandedContract={expandedContract}
             commentText={commentText}
             addingComment={addingComment}
+            replyingToComment={replyingToComment}
             onToggleChat={() => onToggleChat(contract.timesheet_contract_id)}
             onDeleteContract={onDeleteContract}
             onCommentChange={onCommentChange}
             onAddComment={onAddComment}
             onDeleteComment={onDeleteComment}
             onEditComment={onEditComment}
+            onReplyComment={onReplyComment}
           />
         ))
       )}

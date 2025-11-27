@@ -10,12 +10,14 @@ export const ContractCard = ({
   expandedContract,
   commentText,
   addingComment,
+  replyingToComment,
   onToggleChat,
   onDeleteContract,
   onCommentChange,
   onAddComment,
   onDeleteComment,
   onEditComment,
+  onReplyComment,
 }) => {
   const isExpanded = expandedContract === contract.timesheet_contract_id;
   const isAddingComment = addingComment === contract.timesheet_contract_id;
@@ -67,10 +69,12 @@ export const ContractCard = ({
         <ChatSection
           chat={contract.chat}
           commentText={commentText}
+          replyingToComment={replyingToComment}
           onCommentChange={onCommentChange}
           onAddComment={() => onAddComment(contract.timesheet_contract_id)}
           onDeleteComment={onDeleteComment}
           onEditComment={onEditComment}
+          onReplyComment={onReplyComment}
         />
       )}
     </View>

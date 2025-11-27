@@ -10,6 +10,7 @@ export const DayCard = ({
   expandedContract,
   commentText,
   addingComment,
+  replyingToComment,
   onAddTeam,
   onDeleteTeam,
   onAddContract,
@@ -19,6 +20,7 @@ export const DayCard = ({
   onAddComment,
   onDeleteComment,
   onEditComment,
+  onReplyComment,
 }) => {
   const dateMatch = item.humanDate?.match(/(\d{4})/);
   const year = dateMatch ? dateMatch[1] : '';
@@ -53,6 +55,7 @@ export const DayCard = ({
                 expandedContract={expandedContract}
                 commentText={commentText}
                 addingComment={addingComment}
+                replyingToComment={replyingToComment}
                 onDeleteTeam={onDeleteTeam}
                 onAddContract={onAddContract}
                 onDeleteContract={onDeleteContract}
@@ -61,6 +64,7 @@ export const DayCard = ({
                 onAddComment={onAddComment}
                 onDeleteComment={onDeleteComment}
                 onEditComment={onEditComment}
+                onReplyComment={onReplyComment}
               />
             ))
           ) : (

@@ -74,11 +74,14 @@ export default function TimesheetScreen({ onLogout }) {
     editingComment,
     updatingComment,
     addingComment,
+    replyingToComment,
     handleAddComment,
     handleDeleteComment,
     handleEditComment,
     handleUpdateComment,
     handleCancelEdit,
+    handleReplyComment,
+    handleCancelReply,
   } = useCommentActions(loadDays, minIndex, maxIndex);
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
@@ -172,6 +175,7 @@ export default function TimesheetScreen({ onLogout }) {
       expandedContract={expandedContract}
       commentText={commentText}
       addingComment={addingComment}
+      replyingToComment={replyingToComment}
       onAddTeam={openAddTeamModal}
       onDeleteTeam={handleDeleteTeam}
       onAddContract={openAddContractModal}
@@ -181,6 +185,7 @@ export default function TimesheetScreen({ onLogout }) {
       onAddComment={handleAddComment}
       onDeleteComment={handleDeleteComment}
       onEditComment={handleEditComment}
+      onReplyComment={handleReplyComment}
     />
   );
 

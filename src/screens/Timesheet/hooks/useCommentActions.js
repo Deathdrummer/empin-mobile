@@ -9,6 +9,7 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
   const [editingComment, setEditingComment] = useState(null);
   const [updatingComment, setUpdatingComment] = useState(false);
   const [addingComment, setAddingComment] = useState(null);
+  const [replyingToComment, setReplyingToComment] = useState(null);
 
   const handleAddComment = async (timesheetContractId) => {
     if (!commentText.trim()) {
@@ -129,6 +130,25 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
     setEditingComment(null);
   };
 
+  const handleReplyComment = (comment) => {
+    // Если комментарий уже является ответом (имеет reply_to_id), то игнорируем
+    if (comment.reply_to_id) {
+      Toast.show({
+        type: 'info',
+        text1: 'Информация',
+        text2: 'Нельзя ответить на ответ',
+        position: 'top',
+        visibilityTime: 2000,
+      });
+      return;
+    }
+    setReplyingToComment(comment);
+  };
+
+  const handleCancelReply = () => {
+    setReplyingToComment(null);
+  };
+
   return {
     expandedContract,
     setExpandedContract,
@@ -137,10 +157,13 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
     editingComment,
     updatingComment,
     addingComment,
+    replyingToComment,
     handleAddComment,
     handleDeleteComment,
     handleEditComment,
     handleUpdateComment,
     handleCancelEdit,
+    handleReplyComment,
+    handleCancelReply,
   };
 };

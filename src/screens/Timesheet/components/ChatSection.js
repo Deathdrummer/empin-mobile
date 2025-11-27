@@ -34,10 +34,12 @@ const formatDateTime = (dateString) => {
 export const ChatSection = ({
   chat,
   commentText,
+  replyingToComment,
   onCommentChange,
   onAddComment,
   onDeleteComment,
-  onEditComment
+  onEditComment,
+  onReplyComment
 }) => {
   const [lastTap, setLastTap] = React.useState(null);
   const [isFocused, setIsFocused] = React.useState(false);
@@ -106,6 +108,13 @@ export const ChatSection = ({
     handleCloseMenu();
     if (selectedComment) {
       onDeleteComment(selectedComment.id);
+    }
+  };
+
+  const handleMenuReply = () => {
+    handleCloseMenu();
+    if (selectedComment) {
+      onReplyComment(selectedComment);
     }
   };
 
@@ -199,6 +208,7 @@ export const ChatSection = ({
                 />
                 <CommentContextMenu
                   position={menuPosition}
+                  onReply={handleMenuReply}
                   onEdit={handleMenuEdit}
                   onDelete={handleMenuDelete}
                 />
