@@ -9,6 +9,7 @@ import { StaffModal } from './components/modals/StaffModal';
 import { ContractModal } from './components/modals/ContractModal';
 import { CalendarModal } from './components/modals/CalendarModal';
 import { LogoutModal } from './components/modals/LogoutModal';
+import { FilterModal } from './components/modals/FilterModal';
 import { EditCommentModal } from './components/modals/EditCommentModal';
 import { DeleteConfirmModal } from './components/modals/DeleteConfirmModal';
 import { useTimesheetData } from './hooks/useTimesheetData';
@@ -95,6 +96,7 @@ export default function TimesheetScreen({ onLogout }) {
 
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [calendarModalVisible, setCalendarModalVisible] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const scrollStartX = useRef(0);
   const isScrolling = useRef(false);
 
@@ -155,6 +157,10 @@ export default function TimesheetScreen({ onLogout }) {
 
   const handleCalendarPress = () => {
     setCalendarModalVisible(true);
+  };
+
+  const handleFilterPress = () => {
+    setFilterModalVisible(true);
   };
 
   const onDateSelect = (date) => {
@@ -225,6 +231,11 @@ export default function TimesheetScreen({ onLogout }) {
         visible={logoutModalVisible}
         onClose={() => setLogoutModalVisible(false)}
         onConfirm={confirmLogout}
+      />
+
+      <FilterModal
+        visible={filterModalVisible}
+        onClose={() => setFilterModalVisible(false)}
       />
 
       <StaffModal
@@ -352,7 +363,11 @@ export default function TimesheetScreen({ onLogout }) {
           }, 100);
         }}
       />
-      <BottomMenu onLogout={handleLogout} onCalendarPress={handleCalendarPress} />
+      <BottomMenu
+        onLogout={handleLogout}
+        onCalendarPress={handleCalendarPress}
+        onFilterPress={handleFilterPress}
+      />
     </SafeAreaView>
   );
 }

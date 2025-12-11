@@ -2,15 +2,15 @@ import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function BottomMenu({ onLogout, onCalendarPress }) {
+export default function BottomMenu({ onLogout, onCalendarPress, onFilterPress }) {
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.menuItem} onPress={onCalendarPress} activeOpacity={0.7}>
         <Ionicons name="calendar-outline" size={28} color="#999999" />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.menuItem} onPress={() => {}} activeOpacity={0.7}>
-        {/* Пустая секция 2 */}
+      <TouchableOpacity style={styles.menuItem} onPress={onFilterPress} activeOpacity={0.7}>
+        <Ionicons name="funnel-outline" size={28} color="#999999" />
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.menuItem} onPress={() => {}} activeOpacity={0.7}>
