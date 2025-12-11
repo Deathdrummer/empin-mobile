@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -19,6 +19,13 @@ const EMOJI_TO_ICON = {
   '🔥': { icon: 'fire', color: '#757575' },
   '👀': { icon: 'eye', color: '#757575' },
 };
+
+// Константы для расчета позиции меню
+const EMOJI_PICKER_HEIGHT = 60; // Высота блока реакций
+const CONTEXT_MENU_HEIGHT = 240; // Приблизительная высота контекстного меню
+const SCREEN_PADDING = 20; // Отступ от края экрана
+const EMOJI_OFFSET = 60; // EmojiPicker находится на 60px выше комментария
+const MENU_OFFSET = 10; // CommentContextMenu находится на 10px ниже комментария
 
 // Функция форматирования даты в формат "20:41 10.11.25"
 const formatDateTime = (dateString) => {
@@ -154,7 +161,28 @@ export const ChatSection = ({
 
     // Получаем позицию нажатия
     event.target.measure((x, y, width, height, pageX, pageY) => {
-      setMenuPosition({ top: pageY, left: pageX });
+      const screenHeight = Dimensions.get('window').height;
+
+      // Вычисляем нижнюю границу контекстного меню
+      const menuBottomPosition = pageY + MENU_OFFSET + CONTEXT_MENU_HEIGHT;
+
+      let adjustedTop = pageY;
+
+      // Проверяем, выходит ли меню за нижнюю границу экрана
+      if (menuBottomPosition > screenHeight - SCREEN_PADDING) {
+        // Вычисляем новую позицию, чтобы меню полностью влезло на экран
+        // Меню должно заканчиваться на screenHeight - SCREEN_PADDING
+        adjustedTop = screenHeight - SCREEN_PADDING - CONTEXT_MENU_HEIGHT - MENU_OFFSET;
+
+        // Также проверяем, чтобы блок реакций не выходил за верхнюю границу
+        const emojiTopPosition = adjustedTop - EMOJI_OFFSET;
+        if (emojiTopPosition < SCREEN_PADDING) {
+          // Если блок реакций выходит за верхнюю границу, корректируем позицию
+          adjustedTop = SCREEN_PADDING + EMOJI_OFFSET;
+        }
+      }
+
+      setMenuPosition({ top: adjustedTop, left: pageX });
       setSelectedComment(comment);
       setMenuVisible(true);
     });
