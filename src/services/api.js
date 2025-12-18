@@ -98,8 +98,15 @@ export const authAPI = {
 };
 
 export const timesheetAPI = {
-  getSlides: async (indexes) => {
-    const response = await api.post('/timesheet/slides', { indexes });
+  getSlides: async (indexes, filters = null) => {
+    const requestBody = { indexes };
+
+    // Добавляем фильтры в запрос, если они есть
+    if (filters && (filters.teams?.length > 0 || filters.contracts?.length > 0)) {
+      requestBody.filters = filters;
+    }
+
+    const response = await api.post('/timesheet/slides', requestBody);
     return response.data;
   },
 
@@ -110,6 +117,11 @@ export const timesheetAPI = {
 
   getStaff: async () => {
     const response = await api.get('/timesheet/staff');
+    return response.data;
+  },
+
+  getFilterOptions: async () => {
+    const response = await api.get('/timesheet/filter-options');
     return response.data;
   },
 

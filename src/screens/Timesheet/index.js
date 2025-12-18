@@ -12,18 +12,33 @@ import { LogoutModal } from './components/modals/LogoutModal';
 import { FilterModal } from './components/modals/FilterModal';
 import { EditCommentModal } from './components/modals/EditCommentModal';
 import { DeleteConfirmModal } from './components/modals/DeleteConfirmModal';
+import { ActiveFilterTags } from './components/ActiveFilterTags';
 import { useTimesheetData } from './hooks/useTimesheetData';
 import { useTeamActions } from './hooks/useTeamActions';
 import { useContractActions } from './hooks/useContractActions';
 import { useCommentActions } from './hooks/useCommentActions';
+import { useFilterData } from './hooks/useFilterData';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function TimesheetScreen({ onLogout }) {
   const {
+    filters,
+    allTeams,
+    allContracts,
+    loading: filterDataLoading,
+    applyFilters,
+    removeTeamFilter,
+    removeContractFilter,
+    getActiveFilterTags,
+    refreshFilterOptions,
+  } = useFilterData();
+
+  const {
     days,
     loading,
     refreshing,
+    filterLoading,
     currentIndex,
     setCurrentIndex,
     flatListRef,
@@ -34,9 +49,11 @@ export default function TimesheetScreen({ onLogout }) {
     loadMoreForward,
     loadMoreBackward,
     handleDateSelect,
+    handleContentSizeChange,
     LOAD_MORE_THRESHOLD,
     loadingMore,
-  } = useTimesheetData(onLogout);
+    isPrepending,
+  } = useTimesheetData(onLogout, filters, isPrependingRef);
 
   const {
     staffModalVisible,
@@ -99,6 +116,8 @@ export default function TimesheetScreen({ onLogout }) {
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const scrollStartX = useRef(0);
   const isScrolling = useRef(false);
+  const lastScrollTime = useRef(0);
+  const isPrependingRef = useRef(false);
 
   // Shake detection
   useEffect(() => {
@@ -163,6 +182,29 @@ export default function TimesheetScreen({ onLogout }) {
     setFilterModalVisible(true);
   };
 
+  const handleApplyFilters = (newFilters) => {
+    applyFilters(newFilters);
+    setFilterModalVisible(false);
+  };
+
+  const handleClearFilters = () => {
+    applyFilters({
+      teams: [],
+      contracts: [],
+    });
+  };
+
+  const hasActiveFilters = filters.teams.length > 0 || filters.contracts.length > 0;
+  const activeFilterTags = getActiveFilterTags();
+
+  const handleRemoveFilterTag = (type, itemId) => {
+    if (type === 'team') {
+      removeTeamFilter(itemId);
+    } else if (type === 'contract') {
+      removeContractFilter(itemId);
+    }
+  };
+
   const onDateSelect = (date) => {
     setCalendarModalVisible(false);
     handleDateSelect(date);
@@ -220,6 +262,18 @@ export default function TimesheetScreen({ onLogout }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      {filterLoading && (
+        <View style={styles.filterLoadingOverlay}>
+          <ActivityIndicator size="large" color="#999999" />
+        </View>
+      )}
+
+      {isPrepending && (
+        <View style={styles.prependingOverlay}>
+          <ActivityIndicator size="large" color="#999999" />
+        </View>
+      )}
+
       <CalendarModal
         visible={calendarModalVisible}
         selectedDate={getCurrentSelectedDate()}
@@ -236,6 +290,12 @@ export default function TimesheetScreen({ onLogout }) {
       <FilterModal
         visible={filterModalVisible}
         onClose={() => setFilterModalVisible(false)}
+        onApply={handleApplyFilters}
+        currentFilters={filters}
+        allTeams={allTeams}
+        allContracts={allContracts}
+        loading={filterDataLoading}
+        onRefresh={refreshFilterOptions}
       />
 
       <StaffModal
@@ -301,7 +361,7 @@ export default function TimesheetScreen({ onLogout }) {
         snapToInterval={SCREEN_WIDTH}
         snapToAlignment="start"
         keyboardShouldPersistTaps='handled'
-        initialScrollIndex={currentIndex}
+        onContentSizeChange={handleContentSizeChange}
         getItemLayout={(data, index) => ({
           length: SCREEN_WIDTH,
           offset: SCREEN_WIDTH * index,
@@ -312,44 +372,63 @@ export default function TimesheetScreen({ onLogout }) {
           isScrolling.current = true;
         }}
         onMomentumScrollEnd={(event) => {
-          // Игнорируем изменения во время подгрузки данных
-          if (loadingMore) return;
+          const now = Date.now();
+          const timeSinceLastScroll = now - lastScrollTime.current;
 
-          const currentOffsetX = event.nativeEvent.contentOffset.x;
-          const scrollDistance = Math.abs(currentOffsetX - scrollStartX.current);
-          const minSwipeDistance = SCREEN_WIDTH * 0.3;
-          const minUserScrollDistance = 50;
-
-          const newIndex = Math.round(currentOffsetX / SCREEN_WIDTH);
-
-          // Игнорируем программные скроллы (scrollDistance близко к 0)
-          if (scrollDistance < minUserScrollDistance) {
+          // КРИТИЧНО: блокируем все scroll events во время prepending
+          if (isPrependingRef.current) {
             return;
           }
 
-          // Если свайп меньше 30%, возвращаем на текущую страницу
-          if (scrollDistance < minSwipeDistance && newIndex !== currentIndex) {
-            if (flatListRef.current) {
-              flatListRef.current.scrollToIndex({
-                index: currentIndex,
-                animated: true,
-              });
-            }
+          // Игнорируем scroll events в течение 200ms после предыдущего
+          // для предотвращения множественных срабатываний
+          if (timeSinceLastScroll < 200) {
+            return;
+          }
+
+          if (loadingMore) {
+            return;
+          }
+
+          lastScrollTime.current = now;
+
+          const currentOffsetX = event.nativeEvent.contentOffset.x;
+          const newIndex = Math.round(currentOffsetX / SCREEN_WIDTH);
+
+          if (newIndex === currentIndex) {
             return;
           }
 
           setCurrentIndex(newIndex);
           isScrolling.current = false;
 
-          const daysFromEnd = days.length - 1 - newIndex;
-          const daysFromStart = newIndex;
+          const currentDayData = days[newIndex];
+          const currentDayIndex = currentDayData?.index;
 
-          if (daysFromEnd <= LOAD_MORE_THRESHOLD) {
+          // Проверяем расстояние до границ ДИАПАЗОНА (а не массива записей)
+          // Это важно для корректной работы с фильтрами
+          const distanceToMinBoundary = currentDayIndex - minIndex;
+          const distanceToMaxBoundary = maxIndex - currentDayIndex;
+
+          console.log('📊 [SCROLL] Позиция:', {
+            arrayIndex: newIndex,
+            dayIndex: currentDayIndex,
+            date: currentDayData?.date,
+            totalDays: days.length,
+            loadedRange: `${minIndex} .. ${maxIndex}`,
+            distanceToMinBoundary,
+            distanceToMaxBoundary,
+            threshold: LOAD_MORE_THRESHOLD,
+          });
+
+          if (distanceToMinBoundary <= LOAD_MORE_THRESHOLD) {
+            console.log('⬅️ [LOAD] Подгрузка НАЗАД (близко к minIndex)');
+            loadMoreBackward(newIndex);
+          } else if (distanceToMaxBoundary <= LOAD_MORE_THRESHOLD) {
+            console.log('➡️ [LOAD] Подгрузка ВПЕРЕД (близко к maxIndex)');
             loadMoreForward();
-          }
-
-          if (daysFromStart <= LOAD_MORE_THRESHOLD) {
-            loadMoreBackward();
+          } else {
+            console.log('✅ [SCROLL] Подгрузка не требуется');
           }
         }}
         onScrollToIndexFailed={(info) => {
@@ -363,10 +442,16 @@ export default function TimesheetScreen({ onLogout }) {
           }, 100);
         }}
       />
+      <ActiveFilterTags
+        tags={activeFilterTags}
+        onRemoveTag={handleRemoveFilterTag}
+      />
       <BottomMenu
         onLogout={handleLogout}
         onCalendarPress={handleCalendarPress}
         onFilterPress={handleFilterPress}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={handleClearFilters}
       />
     </SafeAreaView>
   );
@@ -382,5 +467,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f3eff6',
+  },
+  filterLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  prependingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
   },
 });

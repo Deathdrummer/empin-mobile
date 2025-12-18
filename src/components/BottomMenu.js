@@ -2,7 +2,15 @@ import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function BottomMenu({ onLogout, onCalendarPress, onFilterPress }) {
+export default function BottomMenu({ onLogout, onCalendarPress, onFilterPress, hasActiveFilters, onClearFilters }) {
+  const handleFilterIconPress = () => {
+    if (hasActiveFilters && onClearFilters) {
+      onClearFilters();
+    } else {
+      onFilterPress();
+    }
+  };
+
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.menuItem} onPress={onCalendarPress} activeOpacity={0.7}>
@@ -10,7 +18,18 @@ export default function BottomMenu({ onLogout, onCalendarPress, onFilterPress })
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.menuItem} onPress={onFilterPress} activeOpacity={0.7}>
-        <Ionicons name="funnel-outline" size={28} color="#999999" />
+        <View style={styles.filterIconContainer}>
+          <Ionicons name="funnel-outline" size={28} color="#999999" />
+          {hasActiveFilters && (
+            <TouchableOpacity
+              style={styles.clearFilterButton}
+              onPress={onClearFilters}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close-circle" size={20} color="#555555" />
+            </TouchableOpacity>
+          )}
+        </View>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.menuItem} onPress={() => {}} activeOpacity={0.7}>
@@ -41,5 +60,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  filterIconContainer: {
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearFilterButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    zIndex: 10,
+    backgroundColor: '#fff',
+    borderRadius: 10,
   },
 });
