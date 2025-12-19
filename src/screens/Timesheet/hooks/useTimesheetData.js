@@ -19,6 +19,8 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
   const [maxIndex, setMaxIndex] = useState(DAYS_RANGE);
   const [loadingMore, setLoadingMore] = useState(false);
   const [isPrepending, setIsPrepending] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0); // Версия данных для ремонтирования FlatList
+  const [initialScrollIndex, setInitialScrollIndex] = useState(0); // Начальная позиция скролла
   const flatListRef = useRef(null);
   const isLoadingRef = useRef(false);
   const pendingScrollRef = useRef(null); // Для хранения отложенного скролла
@@ -32,12 +34,12 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
 
   // Перезагружаем данные при изменении фильтров
   // ВАЖНО: всегда загружаем диапазон вокруг текущей даты, а не текущий загруженный диапазон
-  // При сбросе фильтров (все пустые) - возвращаемся на текущую дату
+  // При изменении фильтров ВСЕГДА ищем ближайший к сегодня день (preserveScrollPosition = false)
+  // чтобы учитывать ВСЕ выбранные объекты/бригады, а не только последний
   useEffect(() => {
     if (!loading) {
       setFilterLoading(true);
-      const isFilterReset = !filters || (filters.teams?.length === 0 && filters.contracts?.length === 0);
-      loadDays(-DAYS_RANGE, DAYS_RANGE, !isFilterReset);
+      loadDays(-DAYS_RANGE, DAYS_RANGE, false);
     }
   }, [filters]);
 
@@ -55,21 +57,27 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
           ? days[currentIndex].index
           : null;
 
-        setDays(data);
-        setMinIndex(min);
-        setMaxIndex(max);
+        // Вычисляем целевой индекс ДО установки данных, чтобы избежать скачков
+        let targetIdx = -1;
+
+        console.log('🔍 [loadDays] Поиск целевого дня:', {
+          preserveScrollPosition,
+          currentDayIndex,
+          totalDays: data.length,
+          dayIndexes: data.map(d => d.index),
+        });
 
         if (preserveScrollPosition && currentDayIndex !== null) {
           // Пытаемся найти текущий день в новых данных
-          let newIdx = data.findIndex(day => day.index === currentDayIndex);
+          targetIdx = data.findIndex(day => day.index === currentDayIndex);
 
           // Если текущий день отфильтрован, ищем ближайший к сегодня (index = 0)
-          if (newIdx === -1) {
+          if (targetIdx === -1) {
             // Сначала пытаемся найти сегодня (index = 0)
-            newIdx = data.findIndex(day => day.index === 0);
+            targetIdx = data.findIndex(day => day.index === 0);
 
             // Если и сегодня нет, ищем день с минимальным расстоянием от 0
-            if (newIdx === -1 && data.length > 0) {
+            if (targetIdx === -1 && data.length > 0) {
               let minDistance = Infinity;
               let closestIdx = 0;
 
@@ -81,57 +89,73 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
                 }
               });
 
-              newIdx = closestIdx;
+              targetIdx = closestIdx;
             }
-          }
-
-          if (newIdx !== -1) {
-            setCurrentIndex(newIdx);
-            setTimeout(() => {
-              if (flatListRef.current) {
-                flatListRef.current.scrollToIndex({
-                  index: newIdx,
-                  animated: false,
-                });
-              }
-            }, 50);
           }
         } else {
           // Первая загрузка - ищем сегодня
-          let todayIdx = data.findIndex(day => day.index === 0);
+          targetIdx = data.findIndex(day => day.index === 0);
 
           // Если сегодня нет (отфильтровано), ищем день с минимальным расстоянием от 0
-          if (todayIdx === -1 && data.length > 0) {
+          if (targetIdx === -1 && data.length > 0) {
             let minDistance = Infinity;
             let closestIdx = 0;
 
             data.forEach((day, idx) => {
               const distance = Math.abs(day.index);
+              console.log(`  День ${idx}: index=${day.index}, distance=${distance}, minDistance=${minDistance}`);
               if (distance < minDistance) {
                 minDistance = distance;
                 closestIdx = idx;
+                console.log(`    ✓ Новый минимум! closestIdx=${closestIdx}`);
               }
             });
 
-            todayIdx = closestIdx;
+            targetIdx = closestIdx;
           }
+        }
 
-          if (todayIdx !== -1) {
-            setCurrentIndex(todayIdx);
-            setTimeout(() => {
-              if (flatListRef.current) {
-                flatListRef.current.scrollToIndex({
-                  index: todayIdx,
-                  animated: false,
-                });
-              }
-            }, 100);
+        console.log('✅ [loadDays] Целевой день найден:', {
+          targetIdx,
+          targetDayIndex: targetIdx !== -1 ? data[targetIdx]?.index : null,
+          targetDate: targetIdx !== -1 ? data[targetIdx]?.day : null,
+        });
+
+        // При изменении фильтров - используем ремонтирование FlatList с initialScrollIndex
+        // Это избегает визуального "прыжка" и не требует setTimeout
+        if (!preserveScrollPosition && targetIdx !== -1) {
+          console.log('🔄 [loadDays] Ремонтирование FlatList с новой позицией:', targetIdx);
+
+          // Устанавливаем начальную позицию скролла
+          setInitialScrollIndex(targetIdx);
+
+          // Увеличиваем версию данных, что заставит FlatList перемонтироваться
+          setDataVersion(prev => prev + 1);
+
+          // Устанавливаем данные и индекс
+          setDays(data);
+          setMinIndex(min);
+          setMaxIndex(max);
+          setCurrentIndex(targetIdx);
+
+          // Скрываем индикатор загрузки сразу - FlatList отрисуется с правильной позицией
+          setFilterLoading(false);
+        } else {
+          // Обычная загрузка без ремонтирования
+          setDays(data);
+          setMinIndex(min);
+          setMaxIndex(max);
+          if (targetIdx !== -1) {
+            setCurrentIndex(targetIdx);
           }
+          setFilterLoading(false);
         }
       } else {
         Alert.alert('Ошибка', 'Неверный формат данных');
       }
     } catch (error) {
+      setFilterLoading(false); // Сбрасываем индикатор в случае ошибки
+
       if (error.response?.status === 401) {
         Toast.show({
           type: 'error',
@@ -157,7 +181,7 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
     } finally {
       setLoading(false);
       setRefreshing(false);
-      setFilterLoading(false);
+      // setFilterLoading сбрасывается после завершения скролла (см. выше)
     }
   };
 
@@ -463,5 +487,7 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
     LOAD_MORE_THRESHOLD,
     loadingMore,
     isPrepending,
+    dataVersion,
+    initialScrollIndex,
   };
 };

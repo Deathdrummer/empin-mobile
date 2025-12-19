@@ -125,6 +125,27 @@ export const timesheetAPI = {
     return response.data;
   },
 
+  searchFilterTeams: async (search) => {
+    const response = await api.get('/timesheet/filter-options/teams/search', {
+      params: { search: search || '' },
+    });
+    return response.data;
+  },
+
+  searchFilterContracts: async (search) => {
+    const response = await api.get('/timesheet/filter-options/contracts/search', {
+      params: { search: search || '' },
+    });
+    return response.data;
+  },
+
+  searchAllFilterContracts: async (search) => {
+    const response = await api.get('/timesheet/filter-options/contracts/search-all', {
+      params: { search: search || '' },
+    });
+    return response.data;
+  },
+
   searchContracts: async (search) => {
     const response = await api.get('/timesheet/contracts/search', {
       params: { search },

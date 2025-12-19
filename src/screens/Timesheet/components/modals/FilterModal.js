@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableHighlight, TouchableOpacity, Modal, FlatList, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableHighlight, TouchableOpacity, Modal, ActivityIndicator, Dimensions, TextInput } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { timesheetAPI } from '../../../../services/api';
+import Toast from 'react-native-toast-message';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export const FilterModal = ({
   visible,
@@ -17,6 +20,14 @@ export const FilterModal = ({
   const [selectedTeams, setSelectedTeams] = useState([]);
   const [selectedContracts, setSelectedContracts] = useState([]);
 
+  // Поиск
+  const [searchTeam, setSearchTeam] = useState('');
+  const [searchContract, setSearchContract] = useState('');
+  const [filteredTeams, setFilteredTeams] = useState(allTeams);
+  const [filteredContracts, setFilteredContracts] = useState(allContracts);
+  const [searchLoadingTeams, setSearchLoadingTeams] = useState(false);
+  const [searchLoadingContracts, setSearchLoadingContracts] = useState(false);
+
   // Восстанавливаем текущие фильтры при открытии модала
   useEffect(() => {
     if (visible && currentFilters) {
@@ -24,6 +35,93 @@ export const FilterModal = ({
       setSelectedContracts(currentFilters.contracts || []);
     }
   }, [visible, currentFilters]);
+
+  // Инициализация списков при изменении данных
+  useEffect(() => {
+    setFilteredTeams(allTeams);
+  }, [allTeams]);
+
+  useEffect(() => {
+    setFilteredContracts(allContracts);
+  }, [allContracts]);
+
+  // Debounce серверная фильтрация бригад (500мс, минимум 2 символа)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (searchTeam.trim().length >= 2) {
+        setSearchLoadingTeams(true);
+        try {
+          const results = await timesheetAPI.searchFilterTeams(searchTeam.trim());
+          setFilteredTeams(results);
+        } catch (error) {
+          console.error('Error searching teams:', error);
+          Toast.show({
+            type: 'error',
+            text1: 'Ошибка поиска',
+            text2: 'Не удалось выполнить поиск бригад',
+            position: 'top',
+            visibilityTime: 3000,
+          });
+          setFilteredTeams(allTeams);
+        } finally {
+          setSearchLoadingTeams(false);
+        }
+      } else {
+        // При пустом поиске показываем полный список
+        setFilteredTeams(allTeams);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTeam, allTeams]);
+
+  // Debounce серверная фильтрация объектов (500мс)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      const searchTerm = searchContract.trim();
+
+      if (searchTerm.length >= 2) {
+        // При вводе в поиск (>= 2 символа) - показываем ВСЕ объекты (и добавленные, и не добавленные в бригады)
+        setSearchLoadingContracts(true);
+        try {
+          const results = await timesheetAPI.searchAllFilterContracts(searchTerm);
+
+          // Проверяем, что results - массив
+          if (!Array.isArray(results)) {
+            console.error('Results is not an array:', results);
+            setFilteredContracts(allContracts);
+            return;
+          }
+
+          // Разделяем на две группы и склеиваем (сохраняя сортировку по дате внутри групп)
+          // Сначала объекты в бригадах (in_teams: true), затем остальные (in_teams: false)
+          const inTeams = results.filter(c => c.in_teams);
+          const notInTeams = results.filter(c => !c.in_teams);
+          const sortedResults = [...inTeams, ...notInTeams];
+
+          setFilteredContracts(sortedResults);
+        } catch (error) {
+          console.error('Error searching all contracts:', error);
+          Toast.show({
+            type: 'error',
+            text1: 'Ошибка поиска',
+            text2: 'Не удалось выполнить поиск объектов',
+            position: 'top',
+            visibilityTime: 3000,
+          });
+          setFilteredContracts(allContracts);
+        } finally {
+          setSearchLoadingContracts(false);
+        }
+      } else {
+        // При пустом поиске - показываем ТОЛЬКО объекты, добавленные в бригады (из allContracts)
+        // allContracts загружается из getFilterOptions, который возвращает только объекты в бригадах
+        setFilteredContracts(allContracts);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchContract, allContracts]);
 
   const handleApply = () => {
     if (onApply) {
@@ -40,6 +138,24 @@ export const FilterModal = ({
     setSelectedContracts([]);
   };
 
+  const handleClearTeamSearch = () => {
+    setSearchLoadingTeams(true);
+    setSearchTeam('');
+    setTimeout(() => {
+      setFilteredTeams(allTeams);
+      setSearchLoadingTeams(false);
+    }, 100);
+  };
+
+  const handleClearContractSearch = () => {
+    setSearchLoadingContracts(true);
+    setSearchContract('');
+    setTimeout(() => {
+      setFilteredContracts(allContracts);
+      setSearchLoadingContracts(false);
+    }, 100);
+  };
+
   const toggleTeam = (teamId) => {
     setSelectedTeams(prev => {
       if (prev.includes(teamId)) {
@@ -49,7 +165,12 @@ export const FilterModal = ({
     });
   };
 
-  const toggleContract = (contractId) => {
+  const toggleContract = (contractId, isDisabled) => {
+    // Запрещаем выбор disabled объектов (не присутствующих в бригадах)
+    if (isDisabled) {
+      return;
+    }
+
     setSelectedContracts(prev => {
       if (prev.includes(contractId)) {
         return prev.filter(id => id !== contractId);
@@ -70,7 +191,10 @@ export const FilterModal = ({
         <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
           {isSelected && <Text style={styles.checkmark}>✓</Text>}
         </View>
-        <Text style={[styles.listItemText, isSelected && styles.listItemTextSelected]}>
+        <Text
+          style={[styles.listItemText, isSelected && styles.listItemTextSelected]}
+          numberOfLines={1}
+        >
           {item.name}
         </Text>
       </TouchableOpacity>
@@ -79,22 +203,46 @@ export const FilterModal = ({
 
   const renderContractItem = ({ item }) => {
     const isSelected = selectedContracts.includes(item.id);
+    const isDisabled = !item.in_teams; // Объект не присутствует в бригадах
 
     return (
       <TouchableOpacity
-        style={[styles.listItem, isSelected && styles.listItemSelected]}
-        onPress={() => toggleContract(item.id)}
-        activeOpacity={0.7}
+        style={[
+          styles.listItem,
+          isSelected && styles.listItemSelected,
+          isDisabled && styles.listItemDisabled,
+        ]}
+        onPress={() => toggleContract(item.id, isDisabled)}
+        activeOpacity={isDisabled ? 1 : 0.7}
+        disabled={isDisabled}
       >
-        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+        <View style={[
+          styles.checkbox,
+          isSelected && styles.checkboxSelected,
+          isDisabled && styles.checkboxDisabled,
+        ]}>
           {isSelected && <Text style={styles.checkmark}>✓</Text>}
         </View>
         <View style={styles.contractInfo}>
-          <Text style={[styles.listItemText, isSelected && styles.listItemTextSelected]}>
+          <Text
+            style={[
+              styles.listItemText,
+              isSelected && styles.listItemTextSelected,
+              isDisabled && styles.listItemTextDisabled,
+            ]}
+            numberOfLines={1}
+          >
             {item.name}
           </Text>
           {item.object_number && (
-            <Text style={[styles.objectNumber, isSelected && styles.objectNumberSelected]}>
+            <Text
+              style={[
+                styles.objectNumber,
+                isSelected && styles.objectNumberSelected,
+                isDisabled && styles.objectNumberDisabled,
+              ]}
+              numberOfLines={1}
+            >
               {item.object_number}
             </Text>
           )}
@@ -155,36 +303,108 @@ export const FilterModal = ({
             ) : (
               <>
                 {activeTab === 'teams' && (
-                  <FlatList
-                    data={allTeams}
-                    keyExtractor={(item) => item.id.toString()}
-                    renderItem={renderTeamItem}
-                    ListEmptyComponent={
-                      <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>Нет доступных бригад</Text>
-                        <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-                          <Text style={styles.refreshButtonText}>Обновить</Text>
+                  <>
+                    <View style={styles.searchContainer}>
+                      <TextInput
+                        style={styles.searchInput}
+                        placeholder="Поиск бригады (мин. 2 символа)"
+                        placeholderTextColor="#aaa"
+                        value={searchTeam}
+                        onChangeText={setSearchTeam}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                      {searchTeam.length > 0 && (
+                        <TouchableOpacity
+                          style={styles.clearButton}
+                          onPress={handleClearTeamSearch}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.clearButtonText}>✕</Text>
                         </TouchableOpacity>
+                      )}
+                    </View>
+                    {searchLoadingTeams ? (
+                      <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color="#999999" />
                       </View>
-                    }
-                    showsVerticalScrollIndicator={true}
-                  />
+                    ) : (
+                      <FlashList
+                        data={filteredTeams}
+                        keyExtractor={(item) => item.id.toString()}
+                        renderItem={renderTeamItem}
+                        estimatedItemSize={56}
+                        ListEmptyComponent={
+                          <View style={styles.emptyContainer}>
+                            <Text style={styles.emptyText}>
+                              {searchTeam.trim().length >= 2
+                                ? 'Ничего не найдено'
+                                : 'Нет доступных бригад'
+                              }
+                            </Text>
+                            {searchTeam.trim().length < 2 && (
+                              <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+                                <Text style={styles.refreshButtonText}>Обновить</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        }
+                        showsVerticalScrollIndicator={true}
+                      />
+                    )}
+                  </>
                 )}
                 {activeTab === 'contracts' && (
-                  <FlatList
-                    data={allContracts}
-                    keyExtractor={(item) => item.id.toString()}
-                    renderItem={renderContractItem}
-                    ListEmptyComponent={
-                      <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>Нет доступных объектов</Text>
-                        <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-                          <Text style={styles.refreshButtonText}>Обновить</Text>
+                  <>
+                    <View style={styles.searchContainer}>
+                      <TextInput
+                        style={styles.searchInput}
+                        placeholder="Поиск объекта (мин. 2 символа)"
+                        placeholderTextColor="#aaa"
+                        value={searchContract}
+                        onChangeText={setSearchContract}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                      {searchContract.length > 0 && (
+                        <TouchableOpacity
+                          style={styles.clearButton}
+                          onPress={handleClearContractSearch}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.clearButtonText}>✕</Text>
                         </TouchableOpacity>
+                      )}
+                    </View>
+                    {searchLoadingContracts ? (
+                      <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color="#999999" />
                       </View>
-                    }
-                    showsVerticalScrollIndicator={true}
-                  />
+                    ) : (
+                      <FlashList
+                        data={filteredContracts}
+                        keyExtractor={(item) => item.id.toString()}
+                        renderItem={renderContractItem}
+                        estimatedItemSize={56}
+                        ListEmptyComponent={
+                          <View style={styles.emptyContainer}>
+                            <Text style={styles.emptyText}>
+                              {searchContract.trim().length >= 2
+                                ? 'Ничего не найдено'
+                                : 'Нет доступных объектов'
+                              }
+                            </Text>
+                            {searchContract.trim().length < 2 && (
+                              <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+                                <Text style={styles.refreshButtonText}>Обновить</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        }
+                        showsVerticalScrollIndicator={true}
+                      />
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -291,8 +511,39 @@ const styles = StyleSheet.create({
   filterContainer: {
     paddingHorizontal: 24,
     paddingVertical: 16,
-    minHeight: 200,
-    maxHeight: 600,
+    height: SCREEN_HEIGHT * 0.6,
+  },
+  searchContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  searchInput: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingRight: 48,
+    fontSize: 14,
+    color: '#333',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  clearButton: {
+    position: 'absolute',
+    right: 12,
+    top: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ccc',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 16,
   },
   listItem: {
     flexDirection: 'row',
@@ -409,5 +660,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  // Стили для disabled объектов (не присутствующих в бригадах)
+  listItemDisabled: {
+    opacity: 0.6,
+  },
+  checkboxDisabled: {
+    borderColor: '#e0e0e0',
+    backgroundColor: '#f5f5f5',
+  },
+  listItemTextDisabled: {
+    color: '#bbb',
+  },
+  objectNumberDisabled: {
+    color: '#d0d0d0',
   },
 });

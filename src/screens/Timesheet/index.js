@@ -53,6 +53,8 @@ export default function TimesheetScreen({ onLogout }) {
     LOAD_MORE_THRESHOLD,
     loadingMore,
     isPrepending,
+    dataVersion,
+    initialScrollIndex,
   } = useTimesheetData(onLogout, filters, isPrependingRef);
 
   const {
@@ -348,10 +350,12 @@ export default function TimesheetScreen({ onLogout }) {
       />
 
       <FlatList
+        key={`timesheet-${dataVersion}`}
         ref={flatListRef}
         data={days}
         renderItem={renderDay}
         keyExtractor={(item) => item.index.toString()}
+        initialScrollIndex={initialScrollIndex}
         horizontal
         pagingEnabled={false}
         scrollEnabled={true}
