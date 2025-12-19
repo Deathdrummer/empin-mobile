@@ -17,7 +17,7 @@ LocaleConfig.locales['ru'] = {
 };
 LocaleConfig.defaultLocale = 'ru';
 
-export const CalendarModal = ({ visible, selectedDate, onClose, onDateSelect }) => {
+export const CalendarModal = ({ visible, selectedDate, availableDates, hasActiveFilters, onClose, onDateSelect }) => {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [currentCalendarDate, setCurrentCalendarDate] = useState(selectedDate || new Date());
 
@@ -60,6 +60,30 @@ export const CalendarModal = ({ visible, selectedDate, onClose, onDateSelect }) 
   const markedDates = useMemo(() => {
     const marked = {};
 
+    // Если есть активные фильтры - помечаем недоступные даты как disabled
+    if (hasActiveFilters && availableDates) {
+      // Генерируем disabled даты для диапазона ±3 месяца от текущего месяца календаря
+      const currentMonth = new Date(currentCalendarDate);
+      const startDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 3, 1);
+      const endDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 4, 0);
+
+      for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const dateString = `${year}-${month}-${day}`;
+
+        // Если даты нет в списке доступных - помечаем как disabled
+        if (!availableDates.has(dateString)) {
+          marked[dateString] = {
+            ...marked[dateString],
+            disabled: true,
+            disableTouchEvent: true,
+          };
+        }
+      }
+    }
+
     // Отмечаем сегодняшнюю дату
     if (today) {
       marked[today] = {
@@ -83,7 +107,7 @@ export const CalendarModal = ({ visible, selectedDate, onClose, onDateSelect }) 
     }
 
     return marked;
-  }, [selectedDateString, today]);
+  }, [selectedDateString, today, hasActiveFilters, availableDates, currentCalendarDate]);
 
   const handleDayPress = (day) => {
     // day.timestamp - это Unix timestamp в миллисекундах

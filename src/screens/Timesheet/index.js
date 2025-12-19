@@ -222,6 +222,23 @@ export default function TimesheetScreen({ onLogout }) {
     return selectedDate;
   };
 
+  // Получаем список доступных дат (Set строк в формате YYYY-MM-DD)
+  const getAvailableDates = () => {
+    const today = new Date();
+    const availableDates = new Set();
+
+    days.forEach(day => {
+      const date = new Date(today);
+      date.setDate(today.getDate() + day.index);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const dayNum = String(date.getDate()).padStart(2, '0');
+      availableDates.add(`${year}-${month}-${dayNum}`);
+    });
+
+    return availableDates;
+  };
+
   const toggleChat = (contractId) => {
     setExpandedContract(
       expandedContract === contractId ? null : contractId
@@ -279,6 +296,8 @@ export default function TimesheetScreen({ onLogout }) {
       <CalendarModal
         visible={calendarModalVisible}
         selectedDate={getCurrentSelectedDate()}
+        availableDates={getAvailableDates()}
+        hasActiveFilters={hasActiveFilters}
         onClose={() => setCalendarModalVisible(false)}
         onDateSelect={onDateSelect}
       />
