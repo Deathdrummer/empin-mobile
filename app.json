@@ -13,7 +13,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Разрешите доступ к камере для съемки фото и видео в комментариях",
+        "NSPhotoLibraryUsageDescription": "Разрешите доступ к галерее для выбора фото и видео в комментариях",
+        "NSMicrophoneUsageDescription": "Разрешите доступ к микрофону для записи видео с камеры"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +26,14 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "ru.deathdrumer.empinmobile"
+      "package": "ru.deathdrumer.empinmobile",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

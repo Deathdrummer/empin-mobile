@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
+import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import LoginScreen from './src/screens/LoginScreen';
 import TimesheetScreen from './src/screens/TimesheetScreen';
 import { setUnauthorizedCallback } from './src/services/api';
@@ -59,15 +60,17 @@ export default function App() {
   }
 
   return (
-    <View style={styles.appContainer}>
-      {isLoggedIn ? (
-        <TimesheetScreen onLogout={handleLogout} />
-      ) : (
-        <LoginScreen onLoginSuccess={handleLoginSuccess} />
-      )}
-      <StatusBar hidden={true} /* style="auto" */ />
-      <Toast />
-    </View>
+    <ActionSheetProvider>
+      <View style={styles.appContainer}>
+        {isLoggedIn ? (
+          <TimesheetScreen onLogout={handleLogout} />
+        ) : (
+          <LoginScreen onLoginSuccess={handleLoginSuccess} />
+        )}
+        <StatusBar hidden={true} /* style="auto" */ />
+        <Toast />
+      </View>
+    </ActionSheetProvider>
   );
 }
 

@@ -3,8 +3,10 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
 import Toast from 'react-native-toast-message';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Can } from '../../../components/Can';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { formatShortName } from '../../../utils/formatName';
@@ -138,6 +140,7 @@ export const ChatSection = ({
   const [selectedComment, setSelectedComment] = React.useState(null);
   const [currentUserId, setCurrentUserId] = React.useState(null);
   const { can } = usePermissions();
+  const { showActionSheetWithOptions } = useActionSheet();
   const inputRef = React.useRef(null);
 
   // Функция для поиска родительского комментария
@@ -167,6 +170,123 @@ export const ChatSection = ({
       inputRef.current.focus();
     }
   }, [replyingToComment]);
+
+  // Функция для выбора изображения из галереи
+  const pickImageFromLibrary = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (status !== 'granted') {
+        Toast.show({
+          type: 'error',
+          text1: 'Доступ запрещен',
+          text2: 'Необходим доступ к галерее для выбора медиа',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedMedia = result.assets[0];
+        console.log('Selected media from library:', selectedMedia);
+
+        Toast.show({
+          type: 'success',
+          text1: 'Медиа выбрано',
+          text2: `Выбран файл: ${selectedMedia.fileName || 'файл'}`,
+          position: 'top',
+          visibilityTime: 2000,
+        });
+
+        // TODO: Здесь будет логика прикрепления медиа к комментарию
+      }
+    } catch (error) {
+      console.error('Error picking image from library:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось выбрать медиа из галереи',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  // Функция для съемки с камеры
+  const takePhotoWithCamera = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+
+      if (status !== 'granted') {
+        Toast.show({
+          type: 'error',
+          text1: 'Доступ запрещен',
+          text2: 'Необходим доступ к камере для съемки',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images', 'videos'],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const capturedMedia = result.assets[0];
+        console.log('Captured media from camera:', capturedMedia);
+
+        Toast.show({
+          type: 'success',
+          text1: 'Снимок сделан',
+          text2: 'Медиа готово к отправке',
+          position: 'top',
+          visibilityTime: 2000,
+        });
+
+        // TODO: Здесь будет логика прикрепления медиа к комментарию
+      }
+    } catch (error) {
+      console.error('Error taking photo with camera:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось сделать снимок',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  // Функция для показа Action Sheet с выбором медиа
+  const showMediaOptions = () => {
+    const options = ['Выбрать из галереи', 'Снять фото/видео', 'Отмена'];
+    const cancelButtonIndex = 2;
+
+    showActionSheetWithOptions(
+      {
+        options,
+        cancelButtonIndex,
+        title: 'Добавить медиа',
+      },
+      (buttonIndex) => {
+        if (buttonIndex === 0) {
+          pickImageFromLibrary();
+        } else if (buttonIndex === 1) {
+          takePhotoWithCamera();
+        }
+      }
+    );
+  };
 
   const handleDoubleTap = (comment) => {
     if (!comment.self) return;
@@ -396,10 +516,7 @@ export const ChatSection = ({
         <View style={styles.chatInputWrapper}>
           <TouchableOpacity
             style={styles.chatAttachButton}
-            onPress={() => {
-              // TODO: Реализовать функционал добавления медиа
-              console.log('Attach media');
-            }}
+            onPress={showMediaOptions}
             activeOpacity={0.7}
           >
             <MaterialCommunityIcons
