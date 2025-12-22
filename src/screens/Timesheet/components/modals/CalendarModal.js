@@ -56,6 +56,20 @@ export const CalendarModal = ({ visible, selectedDate, availableDates, hasActive
     return `${year}-${month}-${day}`;
   }, []);
 
+  // Проверяем, является ли выбранная дата сегодняшней
+  const isTodaySelected = useMemo(() => {
+    if (!selectedDate) return false;
+
+    const todayDate = new Date();
+    const selected = new Date(selectedDate);
+
+    return (
+      todayDate.getFullYear() === selected.getFullYear() &&
+      todayDate.getMonth() === selected.getMonth() &&
+      todayDate.getDate() === selected.getDate()
+    );
+  }, [selectedDate]);
+
   // Формируем markedDates для выделения выбранной даты и сегодняшней
   const markedDates = useMemo(() => {
     const marked = {};
@@ -125,6 +139,11 @@ export const CalendarModal = ({ visible, selectedDate, availableDates, hasActive
     setPickerVisible(true);
   };
 
+  const handleToday = () => {
+    const today = new Date();
+    onDateSelect(today);
+  };
+
   return (
     <Modal
       visible={visible}
@@ -177,13 +196,24 @@ export const CalendarModal = ({ visible, selectedDate, availableDates, hasActive
             }}
           />
 
-          <TouchableHighlight
-            style={styles.modalCloseButton}
-            onPress={onClose}
-            underlayColor="#b8b8b8"
-          >
-            <Text style={styles.modalCloseText}>Закрыть</Text>
-          </TouchableHighlight>
+          <View style={styles.buttonsContainer}>
+            <TouchableHighlight
+              style={[styles.button, styles.closeButton]}
+              onPress={onClose}
+              underlayColor="#e8e8e8"
+            >
+              <Text style={styles.closeButtonText}>Закрыть</Text>
+            </TouchableHighlight>
+
+            <TouchableHighlight
+              style={[styles.button, styles.todayButton, isTodaySelected && styles.todayButtonDisabled]}
+              onPress={handleToday}
+              underlayColor="#7a7a7a"
+              disabled={isTodaySelected}
+            >
+              <Text style={[styles.todayButtonText, isTodaySelected && styles.todayButtonTextDisabled]}>Сегодня</Text>
+            </TouchableHighlight>
+          </View>
         </View>
       </View>
 
@@ -240,18 +270,40 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#555',
   },
-  modalCloseButton: {
-    backgroundColor: '#d0d0d0',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
+  buttonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
     marginTop: 25,
+  },
+  button: {
+    flex: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     alignItems: 'center',
   },
-  modalCloseText: {
+  todayButton: {
+    backgroundColor: '#999999',
+  },
+  todayButtonDisabled: {
+    backgroundColor: '#e0e0e0',
+    opacity: 0.6,
+  },
+  closeButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  todayButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  todayButtonTextDisabled: {
+    color: '#aaa',
+  },
+  closeButtonText: {
     color: '#777',
-    fontSize: 16,
-	lineHeight: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
 });

@@ -50,6 +50,51 @@ const formatDateTime = (dateString) => {
   return `${hours}:${minutes} ${day}.${month}.${year}`;
 };
 
+// Функция форматирования времени редактирования (с датой если день отличается)
+const formatEditTime = (createdAt, updatedAt) => {
+  if (!updatedAt) return '';
+
+  const updated = new Date(updatedAt);
+  if (isNaN(updated.getTime())) return '';
+
+  const hours = String(updated.getHours()).padStart(2, '0');
+  const minutes = String(updated.getMinutes()).padStart(2, '0');
+  const timeStr = `${hours}:${minutes}`;
+
+  // Если есть created_at, проверяем, в один ли день было создание и редактирование
+  if (createdAt) {
+    const created = new Date(createdAt);
+    if (!isNaN(created.getTime())) {
+      // Сравниваем даты (без времени)
+      const createdDate = created.toDateString();
+      const updatedDate = updated.toDateString();
+
+      // Если дни отличаются, добавляем дату
+      if (createdDate !== updatedDate) {
+        const day = String(updated.getDate()).padStart(2, '0');
+        const month = String(updated.getMonth() + 1).padStart(2, '0');
+        return `${timeStr} ${day}.${month}`;
+      }
+    }
+  }
+
+  return timeStr;
+};
+
+// Функция проверки, был ли комментарий отредактирован
+const isCommentEdited = (createdAt, updatedAt) => {
+  if (!createdAt || !updatedAt) return false;
+
+  const created = new Date(createdAt);
+  const updated = new Date(updatedAt);
+
+  // Проверяем валидность дат
+  if (isNaN(created.getTime()) || isNaN(updated.getTime())) return false;
+
+  // Сравниваем временные метки (разница больше 1 секунды = редактирование)
+  return Math.abs(updated.getTime() - created.getTime()) > 1000;
+};
+
 // Функция группировки реакций по emoji и подсчета количества
 const groupReactions = (reactions, currentUserId) => {
   if (!reactions || !Array.isArray(reactions)) return [];
@@ -154,8 +199,6 @@ export const ChatSection = ({
   };
 
   const handleCommentLongPress = (comment, event) => {
-    if (!comment.self) return;
-
     console.log('[Haptics] Heavy impact triggered');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
@@ -267,21 +310,20 @@ export const ChatSection = ({
                 onLongPress={(event) => handleCommentLongPress(comment, event)}
                 activeOpacity={0.7}
               >
+                {/* Хвостик */}
+                <View style={[
+                  styles.chatTail,
+                  comment.self && styles.chatTailSelf
+                ]} />
                 <View style={styles.chatHeader}>
-                  {comment.self ? (
-                    <>
-                      <Text style={styles.chatDateTime}>{formatDateTime(comment.created_at)}</Text>
-                      <Text style={styles.chatAuthor}>
-                        {formatShortName(comment.from)}
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Text style={styles.chatAuthor}>
-                        {formatShortName(comment.from)}
-                      </Text>
-                      <Text style={styles.chatDateTime}>{formatDateTime(comment.created_at)}</Text>
-                    </>
+                  <View style={styles.chatHeaderLeft}>
+                    <Text style={styles.chatAuthor}>
+                      {formatShortName(comment.from)}
+                    </Text>
+                    <Text style={styles.chatDateTime}>{formatDateTime(comment.created_at)}</Text>
+                  </View>
+                  {isCommentEdited(comment.created_at, comment.updated_at) && (
+                    <Text style={styles.chatEdited}>изменено {formatEditTime(comment.created_at, comment.updated_at)}</Text>
                   )}
                 </View>
                 {comment.reply_to_id && (() => {
@@ -352,6 +394,20 @@ export const ChatSection = ({
           </View>
         )}
         <View style={styles.chatInputWrapper}>
+          <TouchableOpacity
+            style={styles.chatAttachButton}
+            onPress={() => {
+              // TODO: Реализовать функционал добавления медиа
+              console.log('Attach media');
+            }}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons
+              name="paperclip"
+              size={22}
+              color="#999999"
+            />
+          </TouchableOpacity>
           <TextInput
             ref={inputRef}
             style={[
@@ -400,6 +456,7 @@ export const ChatSection = ({
                   onEdit={handleMenuEdit}
                   onDelete={handleMenuDelete}
                   onCopy={handleMenuCopy}
+                  isSelf={selectedComment?.self}
                 />
               </>
             )}
@@ -431,36 +488,82 @@ const styles = StyleSheet.create({
   },
   chatMessage: {
     marginBottom: 8,
-	width: '95%',
-	alignSelf: 'flex-end',
+    marginLeft: 8,
+	width: '90%',
+	alignSelf: 'flex-start',
+	backgroundColor: '#F0F3F7',
+	borderRadius: 8,
+	paddingVertical: 6,
+    paddingHorizontal: 10,
+	position: 'relative',
   },
   chatMessageSelf: {
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
+	alignSelf: 'flex-end',
+	marginLeft: 0,
+	marginRight: 8,
+	backgroundColor: '#E5E9F0', // мой коммент
+  },
+  chatTail: {
+    position: 'absolute',
+    left: -6,
+    bottom: 0,
+    width: 0,
+    height: 0,
+    borderTopWidth: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 12,
+    borderLeftWidth: 12,
+    borderTopColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: '#F0F3F7',
+    borderLeftColor: 'transparent',
+  },
+  chatTailSelf: {
+    left: 'auto',
+    right: -6,
+    borderRightWidth: 12,
+    borderLeftWidth: 0,
+	borderBottomColor: '#E5E9F0', // мой коммент
   },
   chatHeader: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     marginBottom: 0,
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  chatHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     gap: 6,
   },
   chatAuthor: {
     fontSize: 12,
     fontWeight: '300',
-    color: '#B0B0B0',
+    color: '#888',
   },
   chatDateTime: {
     fontSize: 10,
 	lineHeight: 10,
-    color: '#CDCDCD',
+    color: '#aaa',
 	position: 'relative',
 	top: -2
   },
+  chatEdited: {
+    fontSize: 10,
+    lineHeight: 10,
+    color: '#999',
+    fontStyle: 'italic',
+    position: 'relative',
+    top: -4
+  },
   chatText: {
     fontSize: 13,
-    color: '#333',
+    color: '#555',
   },
   chatTextSelf: {
-    textAlign: 'right',
+    textAlign: 'left',
   },
   chatInputWrapper: {
     position: 'relative',
@@ -472,6 +575,7 @@ const styles = StyleSheet.create({
     borderColor: '#e0e0e0',
     borderRadius: 8,
     padding: 10,
+    paddingLeft: 45,
     paddingRight: 45,
     fontSize: 14,
     minHeight: 40,
@@ -483,8 +587,7 @@ const styles = StyleSheet.create({
   chatSendButton: {
     position: 'absolute',
     right: 5,
-    top: '50%',
-    transform: [{ translateY: -15 }],
+    bottom: 5,
     width: 30,
     height: 30,
     justifyContent: 'center',
@@ -497,6 +600,16 @@ const styles = StyleSheet.create({
   },
   chatSendButtonIconDisabled: {
     color: '#D0D0D0',
+  },
+  chatAttachButton: {
+    position: 'absolute',
+    left: 5,
+    bottom: 7,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
   emptyText: {
     fontSize: 14,

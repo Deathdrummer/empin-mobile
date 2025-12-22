@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-export const CommentContextMenu = ({ position, onEdit, onDelete, onReply, onCopy }) => {
+export const CommentContextMenu = ({ position, onEdit, onDelete, onReply, onCopy, isSelf = true }) => {
   return (
     <View style={[styles.container, { top: position.top + 10 }]}>
       <TouchableOpacity
@@ -25,27 +25,31 @@ export const CommentContextMenu = ({ position, onEdit, onDelete, onReply, onCopy
         <Text style={styles.menuItemText}>Скопировать</Text>
       </TouchableOpacity>
 
-      <View style={styles.separator} />
+      {isSelf && (
+        <>
+          <View style={styles.separator} />
 
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={onEdit}
-        activeOpacity={0.7}
-      >
-        <MaterialCommunityIcons name="pencil-outline" size={20} color="#666666" />
-        <Text style={styles.menuItemText}>Редактировать</Text>
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={onEdit}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="pencil-outline" size={20} color="#666666" />
+            <Text style={styles.menuItemText}>Редактировать</Text>
+          </TouchableOpacity>
 
-      <View style={styles.separator} />
+          <View style={styles.separator} />
 
-      <TouchableOpacity
-        style={styles.menuItem}
-        onPress={onDelete}
-        activeOpacity={0.7}
-      >
-        <MaterialCommunityIcons name="delete-outline" size={20} color="#666666" />
-        <Text style={styles.menuItemText}>Удалить</Text>
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={onDelete}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="delete-outline" size={20} color="#666666" />
+            <Text style={styles.menuItemText}>Удалить</Text>
+          </TouchableOpacity>
+        </>
+      )}
     </View>
   );
 };

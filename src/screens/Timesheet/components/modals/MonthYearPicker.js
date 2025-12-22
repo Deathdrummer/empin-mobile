@@ -72,6 +72,26 @@ export const MonthYearPicker = ({ visible, currentDate, onClose, onSelect }) => 
     onClose();
   };
 
+  const handleToday = () => {
+    const today = new Date();
+    const monthIndex = today.getMonth();
+    const yearIndex = YEARS.indexOf(today.getFullYear());
+
+    if (yearIndex !== -1) {
+      setSelectedMonthIndex(monthIndex);
+      setSelectedYearIndex(yearIndex);
+
+      monthScrollRef.current?.scrollTo({
+        y: monthIndex * ITEM_HEIGHT,
+        animated: true,
+      });
+      yearScrollRef.current?.scrollTo({
+        y: yearIndex * ITEM_HEIGHT,
+        animated: true,
+      });
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -178,9 +198,17 @@ export const MonthYearPicker = ({ visible, currentDate, onClose, onSelect }) => 
             <TouchableHighlight
               style={[styles.button, styles.cancelButton]}
               onPress={onClose}
-              underlayColor="#b8b8b8"
+              underlayColor="#e8e8e8"
             >
               <Text style={styles.cancelButtonText}>Отмена</Text>
+            </TouchableHighlight>
+
+            <TouchableHighlight
+              style={[styles.button, styles.todayButton]}
+              onPress={handleToday}
+              underlayColor="#b8b8b8"
+            >
+              <Text style={styles.todayButtonText}>Сегодня</Text>
             </TouchableHighlight>
 
             <TouchableHighlight
@@ -314,11 +342,14 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     alignItems: 'center',
   },
   cancelButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  todayButton: {
     backgroundColor: '#d0d0d0',
   },
   confirmButton: {
@@ -326,12 +357,17 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: '#777',
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  todayButtonText: {
+    color: '#777',
+    fontSize: 14,
     fontWeight: '700',
   },
   confirmButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
 });
