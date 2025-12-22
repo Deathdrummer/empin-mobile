@@ -5,6 +5,9 @@ import permissionsEmitter from '../utils/permissionsEmitter';
 const API_BASE_URL = 'https://empin-pro.ru/api'; // Production
 // const API_BASE_URL = 'http://192.168.0.102/api'; // Local development
 
+// URL сервера без /api для доступа к файлам
+export const SERVER_URL = API_BASE_URL.replace('/api', '');
+
 // Создаем экземпляр axios
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -179,7 +182,48 @@ export const timesheetAPI = {
     return response.data;
   },
 
-  addComment: async (timesheetContractId, message, replyToId = null) => {
+  addComment: async (timesheetContractId, message, replyToId = null, mediaUri = null) => {
+    // Если есть медиа, используем FormData
+    if (mediaUri) {
+      const formData = new FormData();
+      formData.append('timesheet_contract_id', timesheetContractId);
+      formData.append('message', message);
+      if (replyToId) {
+        formData.append('reply_to_id', replyToId);
+      }
+
+      // Извлекаем имя файла и расширение из URI
+      const uriParts = mediaUri.split('/');
+      const filename = uriParts[uriParts.length - 1];
+
+      // Определяем MIME type по расширению
+      const extension = filename.split('.').pop().toLowerCase();
+      const mimeTypes = {
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        gif: 'image/gif',
+        mp4: 'video/mp4',
+        mov: 'video/quicktime',
+        avi: 'video/x-msvideo',
+      };
+      const mimeType = mimeTypes[extension] || 'application/octet-stream';
+
+      formData.append('media', {
+        uri: mediaUri,
+        name: filename,
+        type: mimeType,
+      });
+
+      const response = await api.post('/timesheet/comment', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    }
+
+    // Если медиа нет, используем обычный JSON
     const response = await api.post('/timesheet/comment', {
       timesheet_contract_id: timesheetContractId,
       message,

@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SERVER_URL } from '../../../services/api';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
@@ -139,6 +140,7 @@ export const ChatSection = ({
   const [menuPosition, setMenuPosition] = React.useState({ top: 0, left: 0 });
   const [selectedComment, setSelectedComment] = React.useState(null);
   const [currentUserId, setCurrentUserId] = React.useState(null);
+  const [selectedMedia, setSelectedMedia] = React.useState(null);
   const { can } = usePermissions();
   const { showActionSheetWithOptions } = useActionSheet();
   const inputRef = React.useRef(null);
@@ -171,6 +173,13 @@ export const ChatSection = ({
     }
   }, [replyingToComment]);
 
+  // Функция отправки комментария с медиа
+  const handleSendComment = async () => {
+    await onAddComment(selectedMedia);
+    // Очищаем выбранное медиа после отправки
+    setSelectedMedia(null);
+  };
+
   // Функция для выбора изображения из галереи
   const pickImageFromLibrary = async () => {
     try {
@@ -194,18 +203,18 @@ export const ChatSection = ({
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedMedia = result.assets[0];
-        console.log('Selected media from library:', selectedMedia);
+        const media = result.assets[0];
+        console.log('Selected media from library:', media);
+
+        setSelectedMedia(media);
 
         Toast.show({
           type: 'success',
           text1: 'Медиа выбрано',
-          text2: `Выбран файл: ${selectedMedia.fileName || 'файл'}`,
+          text2: `Выбран файл: ${media.fileName || 'файл'}`,
           position: 'top',
           visibilityTime: 2000,
         });
-
-        // TODO: Здесь будет логика прикрепления медиа к комментарию
       }
     } catch (error) {
       console.error('Error picking image from library:', error);
@@ -242,8 +251,10 @@ export const ChatSection = ({
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const capturedMedia = result.assets[0];
-        console.log('Captured media from camera:', capturedMedia);
+        const media = result.assets[0];
+        console.log('Captured media from camera:', media);
+
+        setSelectedMedia(media);
 
         Toast.show({
           type: 'success',
@@ -252,8 +263,6 @@ export const ChatSection = ({
           position: 'top',
           visibilityTime: 2000,
         });
-
-        // TODO: Здесь будет логика прикрепления медиа к комментарию
       }
     } catch (error) {
       console.error('Error taking photo with camera:', error);
@@ -463,6 +472,18 @@ export const ChatSection = ({
                   styles.chatText,
                   comment.self && styles.chatTextSelf
                 ]}>{comment.message}</Text>
+                {comment.media && comment.media.path && (
+                  <TouchableOpacity
+                    style={styles.commentMediaContainer}
+                    activeOpacity={0.9}
+                  >
+                    <Image
+                      source={{ uri: `${SERVER_URL}${comment.media.path}` }}
+                      style={styles.commentMediaImage}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                )}
                 {comment.reactions && comment.reactions.length > 0 && (
                   <View style={styles.reactionsContainer}>
                     {groupReactions(comment.reactions, currentUserId).map((reaction, index) => {
@@ -513,6 +534,27 @@ export const ChatSection = ({
             </TouchableOpacity>
           </View>
         )}
+        {selectedMedia && (
+          <View style={styles.mediaPreviewContainer}>
+            <Image
+              source={{ uri: selectedMedia.uri }}
+              style={styles.mediaPreviewImage}
+              resizeMode="cover"
+            />
+            <TouchableOpacity
+              style={styles.mediaPreviewClose}
+              onPress={() => setSelectedMedia(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.mediaPreviewCloseText}>✕</Text>
+            </TouchableOpacity>
+            <View style={styles.mediaPreviewInfo}>
+              <Text style={styles.mediaPreviewInfoText} numberOfLines={1}>
+                {selectedMedia.fileName || 'Медиа файл'}
+              </Text>
+            </View>
+          </View>
+        )}
         <View style={styles.chatInputWrapper}>
           <TouchableOpacity
             style={styles.chatAttachButton}
@@ -540,8 +582,8 @@ export const ChatSection = ({
           />
           <TouchableOpacity
             style={styles.chatSendButton}
-            onPress={onAddComment}
-            disabled={!commentText.trim()}
+            onPress={handleSendComment}
+            disabled={!commentText.trim() && !selectedMedia}
             activeOpacity={0.7}
           >
             <Text style={[
@@ -727,6 +769,52 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
+  },
+  mediaPreviewContainer: {
+    position: 'relative',
+    marginBottom: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#F0F3F7',
+  },
+  mediaPreviewImage: {
+    width: '100%',
+    height: 150,
+    backgroundColor: '#E5E9F0',
+  },
+  mediaPreviewClose: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mediaPreviewCloseText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  mediaPreviewInfo: {
+    padding: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  mediaPreviewInfoText: {
+    fontSize: 12,
+    color: '#666666',
+  },
+  commentMediaContainer: {
+    marginTop: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#E5E9F0',
+  },
+  commentMediaImage: {
+    width: '100%',
+    height: 200,
   },
   emptyText: {
     fontSize: 14,

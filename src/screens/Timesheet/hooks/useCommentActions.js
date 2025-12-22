@@ -14,12 +14,12 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
   const [deleteData, setDeleteData] = useState({ id: null });
   const [deletingComment, setDeletingComment] = useState(null);
 
-  const handleAddComment = async (timesheetContractId) => {
-    if (!commentText.trim()) {
+  const handleAddComment = async (timesheetContractId, selectedMedia = null) => {
+    if (!commentText.trim() && !selectedMedia) {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: 'Введите текст комментария',
+        text2: 'Введите текст комментария или выберите медиа',
         position: 'top',
         visibilityTime: 2000,
       });
@@ -44,7 +44,9 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
       }
 
       const replyToId = replyingToComment ? replyingToComment.id : null;
-      await timesheetAPI.addComment(timesheetContractId, commentText.trim(), replyToId);
+      const mediaUri = selectedMedia ? selectedMedia.uri : null;
+
+      await timesheetAPI.addComment(timesheetContractId, commentText.trim() || ' ', replyToId, mediaUri);
       setCommentText('');
       setReplyingToComment(null);
       await loadDays(minIndex, maxIndex, true);
