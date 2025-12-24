@@ -141,6 +141,7 @@ export const ChatSection = ({
   const [selectedComment, setSelectedComment] = React.useState(null);
   const [currentUserId, setCurrentUserId] = React.useState(null);
   const [selectedMediaArray, setSelectedMediaArray] = React.useState([]);
+  const [loadingImages, setLoadingImages] = React.useState({});
   const { can } = usePermissions();
   const { showActionSheetWithOptions } = useActionSheet();
   const inputRef = React.useRef(null);
@@ -457,16 +458,26 @@ export const ChatSection = ({
                   styles.chatText,
                   comment.self && styles.chatTextSelf
                 ]}>{comment.message}</Text>
-                {comment.media && (Array.isArray(comment.media) ? comment.media : [comment.media]).map((media, index) => (
-                  media.path && (
-                    <Image
-                      key={index}
-                      source={{ uri: `${SERVER_URL}${media.path}` }}
-                      style={styles.commentMediaImage}
-                      resizeMode="cover"
-                    />
-                  )
-                ))}
+                {comment.media && (Array.isArray(comment.media) ? comment.media : [comment.media]).map((media, index) => {
+                  const imageKey = `${comment.id}-${index}`;
+                  return media.path && (
+                    <View key={index} style={styles.commentMediaContainer}>
+                      {loadingImages[imageKey] !== false && (
+                        <View style={styles.commentMediaPlaceholder}>
+                          <ActivityIndicator size="large" color="#999999" />
+                        </View>
+                      )}
+                      <Image
+                        source={{ uri: `${SERVER_URL}${media.path}` }}
+                        style={styles.commentMediaImage}
+                        resizeMode="cover"
+                        onLoadStart={() => setLoadingImages(prev => ({ ...prev, [imageKey]: true }))}
+                        onLoad={() => setLoadingImages(prev => ({ ...prev, [imageKey]: false }))}
+                        onError={() => setLoadingImages(prev => ({ ...prev, [imageKey]: false }))}
+                      />
+                    </View>
+                  );
+                })}
                 {comment.reactions && comment.reactions.length > 0 && (
                   <View style={styles.reactionsContainer}>
                     {groupReactions(comment.reactions, currentUserId).map((reaction, index) => {
@@ -796,10 +807,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666666',
   },
+  commentMediaContainer: {
+    marginTop: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#E5E9F0',
+    alignSelf: 'stretch',
+    position: 'relative',
+  },
+  commentMediaPlaceholder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F3F7',
+    zIndex: 1,
+  },
   commentMediaImage: {
     width: '100%',
     height: 200,
-    marginTop: 8,
   },
   emptyText: {
     fontSize: 14,
