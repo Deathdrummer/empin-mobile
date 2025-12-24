@@ -27,7 +27,6 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
 
   useEffect(() => {
     refreshPermissions().catch(err => {
-      console.error('Failed to refresh permissions on mount:', err);
     });
     loadDays();
   }, []);
@@ -59,13 +58,6 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
 
         // Вычисляем целевой индекс ДО установки данных, чтобы избежать скачков
         let targetIdx = -1;
-
-        console.log('🔍 [loadDays] Поиск целевого дня:', {
-          preserveScrollPosition,
-          currentDayIndex,
-          totalDays: data.length,
-          dayIndexes: data.map(d => d.index),
-        });
 
         if (preserveScrollPosition && currentDayIndex !== null) {
           // Пытаемся найти текущий день в новых данных
@@ -103,11 +95,9 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
 
             data.forEach((day, idx) => {
               const distance = Math.abs(day.index);
-              console.log(`  День ${idx}: index=${day.index}, distance=${distance}, minDistance=${minDistance}`);
               if (distance < minDistance) {
                 minDistance = distance;
                 closestIdx = idx;
-                console.log(`    ✓ Новый минимум! closestIdx=${closestIdx}`);
               }
             });
 
@@ -115,16 +105,9 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
           }
         }
 
-        console.log('✅ [loadDays] Целевой день найден:', {
-          targetIdx,
-          targetDayIndex: targetIdx !== -1 ? data[targetIdx]?.index : null,
-          targetDate: targetIdx !== -1 ? data[targetIdx]?.day : null,
-        });
-
         // При изменении фильтров - используем ремонтирование FlatList с initialScrollIndex
         // Это избегает визуального "прыжка" и не требует setTimeout
         if (!preserveScrollPosition && targetIdx !== -1) {
-          console.log('🔄 [loadDays] Ремонтирование FlatList с новой позицией:', targetIdx);
 
           // Устанавливаем начальную позицию скролла
           setInitialScrollIndex(targetIdx);
@@ -191,28 +174,15 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
       await refreshPermissions();
       await loadDays(minIndex, maxIndex, true);
     } catch (error) {
-      console.error('Error refreshing data:', error);
     }
   };
 
   const loadMoreForward = async () => {
     if (loadingMore || isLoadingRef.current) {
-      console.log('🚫 [LOAD FORWARD] Заблокировано:', {
-        loadingMore,
-        isLoadingRef: isLoadingRef.current,
-      });
       return;
     }
 
     const currentDayIndex = days[currentIndex]?.index;
-
-    console.log('🔄 [LOAD FORWARD] Начало подгрузки:', {
-      currentArrayIndex: currentIndex,
-      currentDayIndex,
-      currentRange: `${minIndex} .. ${maxIndex}`,
-      willLoadRange: `${maxIndex + 1} .. ${maxIndex + DAYS_RANGE}`,
-      totalDaysBefore: days.length,
-    });
 
     isLoadingRef.current = true;
     setLoadingMore(true);
@@ -226,13 +196,6 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
 
       const newData = await timesheetAPI.getSlides(indexes, filters);
       if (newData && Array.isArray(newData)) {
-        console.log('✅ [LOAD FORWARD] Данные загружены:', {
-          loadedDays: newData.length,
-          expectedDays: DAYS_RANGE,
-          totalDaysAfter: days.length + newData.length,
-          newRange: `${minIndex} .. ${newMaxIndex}`,
-        });
-
         setDays(prev => [...prev, ...newData]);
         setMaxIndex(newMaxIndex);
 
@@ -242,7 +205,6 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
         }, 100);
       }
     } catch (error) {
-      console.error('Error loading more days:', error);
       setIsPrepending(false);
     } finally {
       setLoadingMore(false);
@@ -252,11 +214,6 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
 
   const loadMoreBackward = async (scrollIndex = currentIndex) => {
     if (loadingMore || isLoadingRef.current || (isPrependingRef && isPrependingRef.current)) {
-      console.log('🚫 [LOAD BACKWARD] Заблокировано:', {
-        loadingMore,
-        isLoadingRef: isLoadingRef.current,
-        isPrepending: isPrependingRef?.current,
-      });
       return;
     }
 
@@ -265,14 +222,6 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
     if (currentDayIndex === undefined) {
       return;
     }
-
-    console.log('🔄 [LOAD BACKWARD] Начало подгрузки:', {
-      currentArrayIndex: scrollIndex,
-      currentDayIndex,
-      currentRange: `${minIndex} .. ${maxIndex}`,
-      willLoadRange: `${minIndex - DAYS_RANGE} .. ${minIndex - 1}`,
-      totalDaysBefore: days.length,
-    });
 
     isLoadingRef.current = true;
     if (isPrependingRef) {
@@ -289,24 +238,11 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
 
       const newData = await timesheetAPI.getSlides(indexes, filters);
       if (newData && Array.isArray(newData)) {
-        console.log('✅ [LOAD BACKWARD] Данные загружены:', {
-          loadedDays: newData.length,
-          expectedDays: DAYS_RANGE,
-        });
-
         // Формируем новый массив
         const updatedDays = [...newData, ...days];
 
         // Находим новый индекс для того же дня (по day.index)
         const newIdx = updatedDays.findIndex(day => day.index === currentDayIndex);
-
-        console.log('🎯 [LOAD BACKWARD] Новая позиция:', {
-          oldArrayIndex: scrollIndex,
-          newArrayIndex: newIdx,
-          dayIndex: currentDayIndex,
-          totalDaysAfter: updatedDays.length,
-          newRange: `${newMinIndex} .. ${maxIndex}`,
-        });
 
         if (newIdx === -1) {
           if (isPrependingRef) {
@@ -327,15 +263,9 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
         setMinIndex(newMinIndex);
         setCurrentIndex(newIdx);
 
-        console.log('🚀 [LOAD BACKWARD] Запланирован immediate scroll к индексу:', {
-          arrayIndex: newIdx,
-          dayIndex: currentDayIndex,
-        });
-
         // Скроллим сразу после обновления данных
         setTimeout(() => {
           if (flatListRef.current) {
-            console.log('📍 [LOAD BACKWARD] Выполняется immediate scrollToIndex:', newIdx);
 
             flatListRef.current.scrollToIndex({
               index: newIdx,
@@ -345,7 +275,6 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
 
             // КРИТИЧНО: очищаем pendingScrollRef, чтобы fallback не сработал
             pendingScrollRef.current = null;
-            console.log('🗑️ [LOAD BACKWARD] pendingScrollRef очищен, fallback отменен');
 
             // Снимаем флаг prepending после скролла
             setTimeout(() => {
@@ -353,13 +282,11 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
                 isPrependingRef.current = false;
               }
               setIsPrepending(false);
-              console.log('✨ [LOAD BACKWARD] Prepending завершен');
             }, 300);
           }
         }, 0);
       }
     } catch (error) {
-      console.error('Error loading previous days:', error);
       if (isPrependingRef) {
         isPrependingRef.current = false;
       }
@@ -443,12 +370,6 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
     if (pendingScrollRef.current && flatListRef.current) {
       const { index, dayIndex } = pendingScrollRef.current;
 
-      console.log('⚠️ [handleContentSizeChange] FALLBACK scroll срабатывает!', {
-        arrayIndex: index,
-        dayIndex: dayIndex,
-        warning: 'Immediate scroll не сработал, используем fallback',
-      });
-
       // Используем scrollToIndex вместо scrollToOffset - более надежный метод
       flatListRef.current.scrollToIndex({
         index,
@@ -462,7 +383,6 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
         setTimeout(() => {
           isPrependingRef.current = false;
           setIsPrepending(false);
-          console.log('✨ [handleContentSizeChange] Prepending завершен (fallback)');
         }, 500);
       }
     }

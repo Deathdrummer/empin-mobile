@@ -140,7 +140,7 @@ export const ChatSection = ({
   const [menuPosition, setMenuPosition] = React.useState({ top: 0, left: 0 });
   const [selectedComment, setSelectedComment] = React.useState(null);
   const [currentUserId, setCurrentUserId] = React.useState(null);
-  const [selectedMedia, setSelectedMedia] = React.useState(null);
+  const [selectedMediaArray, setSelectedMediaArray] = React.useState([]);
   const { can } = usePermissions();
   const { showActionSheetWithOptions } = useActionSheet();
   const inputRef = React.useRef(null);
@@ -175,9 +175,14 @@ export const ChatSection = ({
 
   // Функция отправки комментария с медиа
   const handleSendComment = async () => {
-    await onAddComment(selectedMedia);
-    // Очищаем выбранное медиа после отправки
-    setSelectedMedia(null);
+    try {
+      await onAddComment(selectedMediaArray);
+      // Очищаем выбранное медиа только после успешной отправки
+      setSelectedMediaArray([]);
+    } catch (error) {
+      // Ошибка уже обработана в onAddComment, медиа не очищаем
+      console.error('Failed to send comment:', error);
+    }
   };
 
   // Функция для выбора изображения из галереи
@@ -198,23 +203,13 @@ export const ChatSection = ({
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
-        allowsEditing: true,
         quality: 0.8,
+        allowsMultipleSelection: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const media = result.assets[0];
-        console.log('Selected media from library:', media);
-
-        setSelectedMedia(media);
-
-        Toast.show({
-          type: 'success',
-          text1: 'Медиа выбрано',
-          text2: `Выбран файл: ${media.fileName || 'файл'}`,
-          position: 'top',
-          visibilityTime: 2000,
-        });
+        // Добавляем все выбранные медиа к существующим
+        setSelectedMediaArray(prev => [...prev, ...result.assets]);
       }
     } catch (error) {
       console.error('Error picking image from library:', error);
@@ -246,23 +241,13 @@ export const ChatSection = ({
 
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images', 'videos'],
-        allowsEditing: true,
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const media = result.assets[0];
-        console.log('Captured media from camera:', media);
-
-        setSelectedMedia(media);
-
-        Toast.show({
-          type: 'success',
-          text1: 'Снимок сделан',
-          text2: 'Медиа готово к отправке',
-          position: 'top',
-          visibilityTime: 2000,
-        });
+        // Добавляем снимок к массиву медиа
+        setSelectedMediaArray(prev => [...prev, media]);
       }
     } catch (error) {
       console.error('Error taking photo with camera:', error);
@@ -472,18 +457,16 @@ export const ChatSection = ({
                   styles.chatText,
                   comment.self && styles.chatTextSelf
                 ]}>{comment.message}</Text>
-                {comment.media && comment.media.path && (
-                  <TouchableOpacity
-                    style={styles.commentMediaContainer}
-                    activeOpacity={0.9}
-                  >
+                {comment.media && (Array.isArray(comment.media) ? comment.media : [comment.media]).map((media, index) => (
+                  media.path && (
                     <Image
-                      source={{ uri: `${SERVER_URL}${comment.media.path}` }}
+                      key={index}
+                      source={{ uri: `${SERVER_URL}${media.path}` }}
                       style={styles.commentMediaImage}
                       resizeMode="cover"
                     />
-                  </TouchableOpacity>
-                )}
+                  )
+                ))}
                 {comment.reactions && comment.reactions.length > 0 && (
                   <View style={styles.reactionsContainer}>
                     {groupReactions(comment.reactions, currentUserId).map((reaction, index) => {
@@ -534,25 +517,29 @@ export const ChatSection = ({
             </TouchableOpacity>
           </View>
         )}
-        {selectedMedia && (
-          <View style={styles.mediaPreviewContainer}>
-            <Image
-              source={{ uri: selectedMedia.uri }}
-              style={styles.mediaPreviewImage}
-              resizeMode="cover"
-            />
-            <TouchableOpacity
-              style={styles.mediaPreviewClose}
-              onPress={() => setSelectedMedia(null)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.mediaPreviewCloseText}>✕</Text>
-            </TouchableOpacity>
-            <View style={styles.mediaPreviewInfo}>
-              <Text style={styles.mediaPreviewInfoText} numberOfLines={1}>
-                {selectedMedia.fileName || 'Медиа файл'}
-              </Text>
-            </View>
+        {selectedMediaArray.length > 0 && (
+          <View style={styles.mediaPreviewListContainer}>
+            {selectedMediaArray.map((media, index) => (
+              <View key={index} style={styles.mediaPreviewContainer}>
+                <Image
+                  source={{ uri: media.uri }}
+                  style={styles.mediaPreviewImage}
+                  resizeMode="cover"
+                />
+                <TouchableOpacity
+                  style={styles.mediaPreviewClose}
+                  onPress={() => setSelectedMediaArray(prev => prev.filter((_, i) => i !== index))}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.mediaPreviewCloseText}>✕</Text>
+                </TouchableOpacity>
+                <View style={styles.mediaPreviewInfo}>
+                  <Text style={styles.mediaPreviewInfoText} numberOfLines={1}>
+                    {media.fileName || `Медиа ${index + 1}`}
+                  </Text>
+                </View>
+              </View>
+            ))}
           </View>
         )}
         <View style={styles.chatInputWrapper}>
@@ -583,12 +570,12 @@ export const ChatSection = ({
           <TouchableOpacity
             style={styles.chatSendButton}
             onPress={handleSendComment}
-            disabled={!commentText.trim() && !selectedMedia}
+            disabled={!commentText.trim() && selectedMediaArray.length === 0}
             activeOpacity={0.7}
           >
             <Text style={[
               styles.chatSendButtonIcon,
-              !commentText.trim() && styles.chatSendButtonIconDisabled
+              (!commentText.trim() && selectedMediaArray.length === 0) && styles.chatSendButtonIconDisabled
             ]}>➤</Text>
           </TouchableOpacity>
         </View>
@@ -770,9 +757,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1,
   },
+  mediaPreviewListContainer: {
+    marginBottom: 8,
+    gap: 8,
+  },
   mediaPreviewContainer: {
     position: 'relative',
-    marginBottom: 8,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#F0F3F7',
@@ -806,15 +796,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666666',
   },
-  commentMediaContainer: {
-    marginTop: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#E5E9F0',
-  },
   commentMediaImage: {
     width: '100%',
     height: 200,
+    marginTop: 8,
   },
   emptyText: {
     fontSize: 14,

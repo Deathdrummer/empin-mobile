@@ -17,12 +17,7 @@ export const useFilterData = () => {
 
     setLoading(true);
     try {
-      console.log('Loading filter options...');
       const data = await timesheetAPI.getFilterOptions();
-      console.log('Filter options loaded:', {
-        teams: data.teams?.length || 0,
-        contracts: data.contracts?.length || 0,
-      });
 
       if (!data || (!data.teams && !data.contracts)) {
         throw new Error('Пустой ответ от сервера');
@@ -32,7 +27,6 @@ export const useFilterData = () => {
       setAllContracts(data.contracts || []);
       dataLoadedRef.current = true;
     } catch (error) {
-      console.error('Error loading filter options:', error);
       Toast.show({
         type: 'error',
         text1: 'Ошибка загрузки фильтров',

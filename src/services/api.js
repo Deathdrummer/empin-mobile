@@ -182,9 +182,9 @@ export const timesheetAPI = {
     return response.data;
   },
 
-  addComment: async (timesheetContractId, message, replyToId = null, mediaUri = null) => {
+  addComment: async (timesheetContractId, message, replyToId = null, mediaArray = []) => {
     // Если есть медиа, используем FormData
-    if (mediaUri) {
+    if (mediaArray && mediaArray.length > 0) {
       const formData = new FormData();
       formData.append('timesheet_contract_id', timesheetContractId);
       formData.append('message', message);
@@ -192,27 +192,33 @@ export const timesheetAPI = {
         formData.append('reply_to_id', replyToId);
       }
 
-      // Извлекаем имя файла и расширение из URI
-      const uriParts = mediaUri.split('/');
-      const filename = uriParts[uriParts.length - 1];
+      // Добавляем все медиа файлы в FormData
+      mediaArray.forEach((media, index) => {
+        // Извлекаем имя файла и расширение из URI
+        const uriParts = media.uri.split('/');
+        const filename = uriParts[uriParts.length - 1];
 
-      // Определяем MIME type по расширению
-      const extension = filename.split('.').pop().toLowerCase();
-      const mimeTypes = {
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        png: 'image/png',
-        gif: 'image/gif',
-        mp4: 'video/mp4',
-        mov: 'video/quicktime',
-        avi: 'video/x-msvideo',
-      };
-      const mimeType = mimeTypes[extension] || 'application/octet-stream';
+        // Определяем MIME type по расширению
+        const extension = filename.split('.').pop().toLowerCase();
+        const mimeTypes = {
+          jpg: 'image/jpeg',
+          jpeg: 'image/jpeg',
+          png: 'image/png',
+          gif: 'image/gif',
+          mp4: 'video/mp4',
+          mov: 'video/quicktime',
+          avi: 'video/x-msvideo',
+        };
+        const mimeType = mimeTypes[extension] || 'application/octet-stream';
 
-      formData.append('media', {
-        uri: mediaUri,
-        name: filename,
-        type: mimeType,
+        const mediaFile = {
+          uri: media.uri,
+          name: media.fileName || filename,
+          type: mimeType,
+        };
+
+        // Используем media[] для отправки массива
+        formData.append('media[]', mediaFile);
       });
 
       const response = await api.post('/timesheet/comment', formData, {

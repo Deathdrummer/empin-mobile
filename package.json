@@ -41,6 +41,7 @@
   },
   "private": true,
   "devDependencies": {
+    "baseline-browser-mapping": "^2.9.11",
     "patch-package": "^8.0.1"
   }
 }

@@ -1,0 +1,5 @@
+npx expo start --clear
+eas build --platform android --profile preview
+
+
+API: Z:\empin.loc\app\Http\Controllers\api\TimesheetApiController.php

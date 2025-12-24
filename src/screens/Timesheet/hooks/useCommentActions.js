@@ -14,8 +14,8 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
   const [deleteData, setDeleteData] = useState({ id: null });
   const [deletingComment, setDeletingComment] = useState(null);
 
-  const handleAddComment = async (timesheetContractId, selectedMedia = null) => {
-    if (!commentText.trim() && !selectedMedia) {
+  const handleAddComment = async (timesheetContractId, selectedMediaArray = []) => {
+    if (!commentText.trim() && selectedMediaArray.length === 0) {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
@@ -44,9 +44,8 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
       }
 
       const replyToId = replyingToComment ? replyingToComment.id : null;
-      const mediaUri = selectedMedia ? selectedMedia.uri : null;
 
-      await timesheetAPI.addComment(timesheetContractId, commentText.trim() || ' ', replyToId, mediaUri);
+      await timesheetAPI.addComment(timesheetContractId, commentText.trim() || ' ', replyToId, selectedMediaArray);
       setCommentText('');
       setReplyingToComment(null);
       await loadDays(minIndex, maxIndex, true);

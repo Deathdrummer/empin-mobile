@@ -131,7 +131,7 @@ export const ContractCard = ({
               replyingToComment={replyingToComment}
               deletingComment={deletingComment}
               onCommentChange={onCommentChange}
-              onAddComment={() => onAddComment(contract.timesheet_contract_id)}
+              onAddComment={async (selectedMedia) => await onAddComment(contract.timesheet_contract_id, selectedMedia)}
               onDeleteComment={onDeleteComment}
               onEditComment={onEditComment}
               onReplyComment={onReplyComment}
