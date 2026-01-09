@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, Image, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SERVER_URL } from '../../../services/api';
 import * as Haptics from 'expo-haptics';
@@ -207,6 +207,9 @@ export const ChatSection = ({
         allowsMultipleSelection: true,
       });
 
+      // Принудительно скрываем StatusBar после закрытия системного диалога
+      StatusBar.setHidden(true);
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         // Добавляем все выбранные медиа к существующим
         setSelectedMediaArray(prev => [...prev, ...result.assets]);
@@ -243,6 +246,9 @@ export const ChatSection = ({
         mediaTypes: ['images', 'videos'],
         quality: 0.8,
       });
+
+      // Принудительно скрываем StatusBar после закрытия камеры
+      StatusBar.setHidden(true);
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const media = result.assets[0];
