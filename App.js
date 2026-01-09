@@ -72,16 +72,18 @@ export default function App() {
 
   return (
     <ActionSheetProvider>
-      <StatusBar hidden={true} />
-      <View style={styles.appContainer}>
-        {isLoggedIn ? (
-          <TimesheetScreen onLogout={handleLogout} />
-        ) : (
-          <LoginScreen onLoginSuccess={handleLoginSuccess} />
-        )}
-        <Toast />
-        <ApiBlockModal visible={isApiBlocked} onRetry={handleRetryApi} />
-      </View>
+      <>
+        <StatusBar hidden={true} />
+        <View style={styles.appContainer}>
+          {isLoggedIn ? (
+            <TimesheetScreen onLogout={handleLogout} />
+          ) : (
+            <LoginScreen onLoginSuccess={handleLoginSuccess} />
+          )}
+          <Toast />
+          <ApiBlockModal visible={isApiBlocked} onRetry={handleRetryApi} />
+        </View>
+      </>
     </ActionSheetProvider>
   );
 }
