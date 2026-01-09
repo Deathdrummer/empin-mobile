@@ -21,7 +21,7 @@ export const useAppStatePermissions = () => {
           await refreshPermissions();
           console.log('Permissions refreshed on app focus');
         } catch (error) {
-          console.error('Failed to refresh permissions on app focus:', error);
+          console.error('Failed to refresh permissions on app focus', { error: error.message });
         }
       }
 

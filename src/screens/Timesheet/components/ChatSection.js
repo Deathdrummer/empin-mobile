@@ -141,7 +141,6 @@ export const ChatSection = ({
   const [selectedComment, setSelectedComment] = React.useState(null);
   const [currentUserId, setCurrentUserId] = React.useState(null);
   const [selectedMediaArray, setSelectedMediaArray] = React.useState([]);
-  const [loadingImages, setLoadingImages] = React.useState({});
   const { can } = usePermissions();
   const { showActionSheetWithOptions } = useActionSheet();
   const inputRef = React.useRef(null);
@@ -161,7 +160,7 @@ export const ChatSection = ({
           setCurrentUserId(user.id);
         }
       } catch (error) {
-        console.error('Failed to load current user:', error);
+        console.error('Failed to load current user', { error: error.message });
       }
     };
     loadCurrentUser();
@@ -182,7 +181,7 @@ export const ChatSection = ({
       setSelectedMediaArray([]);
     } catch (error) {
       // Ошибка уже обработана в onAddComment, медиа не очищаем
-      console.error('Failed to send comment:', error);
+      console.error('Failed to send comment', { error: error.message });
     }
   };
 
@@ -213,7 +212,7 @@ export const ChatSection = ({
         setSelectedMediaArray(prev => [...prev, ...result.assets]);
       }
     } catch (error) {
-      console.error('Error picking image from library:', error);
+      console.error('Error picking image from library', { error: error.message });
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
@@ -251,7 +250,7 @@ export const ChatSection = ({
         setSelectedMediaArray(prev => [...prev, media]);
       }
     } catch (error) {
-      console.error('Error taking photo with camera:', error);
+      console.error('Error taking photo with camera', { error: error.message });
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
@@ -385,7 +384,7 @@ export const ChatSection = ({
           visibilityTime: 2000,
         });
       } catch (error) {
-        console.error('Failed to copy comment:', error);
+        console.error('Failed to copy comment', { error: error.message });
         Toast.show({
           type: 'error',
           text1: 'Ошибка',
@@ -458,26 +457,18 @@ export const ChatSection = ({
                   styles.chatText,
                   comment.self && styles.chatTextSelf
                 ]}>{comment.message}</Text>
-                {comment.media && (Array.isArray(comment.media) ? comment.media : [comment.media]).map((media, index) => {
-                  const imageKey = `${comment.id}-${index}`;
-                  return media.path && (
-                    <View key={index} style={styles.commentMediaContainer}>
-                      {loadingImages[imageKey] !== false && (
-                        <View style={styles.commentMediaPlaceholder}>
-                          <ActivityIndicator size="large" color="#999999" />
-                        </View>
-                      )}
-                      <Image
-                        source={{ uri: `${SERVER_URL}${media.path}` }}
-                        style={styles.commentMediaImage}
-                        resizeMode="cover"
-                        onLoadStart={() => setLoadingImages(prev => ({ ...prev, [imageKey]: true }))}
-                        onLoad={() => setLoadingImages(prev => ({ ...prev, [imageKey]: false }))}
-                        onError={() => setLoadingImages(prev => ({ ...prev, [imageKey]: false }))}
-                      />
-                    </View>
-                  );
-                })}
+                {comment.media && comment.media.path && (
+                  <TouchableOpacity
+                    style={styles.commentMediaContainer}
+                    activeOpacity={0.9}
+                  >
+                    <Image
+                      source={{ uri: `${SERVER_URL}${comment.media.path}` }}
+                      style={styles.commentMediaImage}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                )}
                 {comment.reactions && comment.reactions.length > 0 && (
                   <View style={styles.reactionsContainer}>
                     {groupReactions(comment.reactions, currentUserId).map((reaction, index) => {
@@ -531,7 +522,12 @@ export const ChatSection = ({
         {selectedMediaArray.length > 0 && (
           <View style={styles.mediaPreviewListContainer}>
             {selectedMediaArray.map((media, index) => (
-              <View key={index} style={styles.mediaPreviewContainer}>
+              <TouchableOpacity
+                key={index}
+                style={styles.mediaPreviewContainer}
+                activeOpacity={1}
+                onPress={() => {}}
+              >
                 <Image
                   source={{ uri: media.uri }}
                   style={styles.mediaPreviewImage}
@@ -546,10 +542,10 @@ export const ChatSection = ({
                 </TouchableOpacity>
                 <View style={styles.mediaPreviewInfo}>
                   <Text style={styles.mediaPreviewInfoText} numberOfLines={1}>
-                    {media.fileName || `Медиа ${index + 1}`}
+                    {media.fileName || 'Медиа файл'}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -770,10 +766,10 @@ const styles = StyleSheet.create({
   },
   mediaPreviewListContainer: {
     marginBottom: 8,
-    gap: 8,
   },
   mediaPreviewContainer: {
     position: 'relative',
+    marginBottom: 8,
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#F0F3F7',
@@ -812,19 +808,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#E5E9F0',
-    alignSelf: 'stretch',
-    position: 'relative',
-  },
-  commentMediaPlaceholder: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F0F3F7',
-    zIndex: 1,
   },
   commentMediaImage: {
     width: '100%',

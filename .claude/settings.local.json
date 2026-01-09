@@ -1,3 +1,9 @@
 {
+  "permissions": {
+    "allow": [
+      "Skill(ddr:context7)",
+      "Skill(ddr:context7:*)"
+    ]
+  },
   "outputStyle": "right-style"
 }

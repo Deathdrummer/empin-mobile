@@ -23,7 +23,7 @@ export const usePermissions = () => {
       const perms = await getPermissions();
       setPermissions(perms);
     } catch (error) {
-      console.error('Error loading permissions:', error);
+      console.error('Error loading permissions', { error: error.message });
       setPermissions([]);
     } finally {
       setLoading(false);
@@ -86,7 +86,7 @@ export const usePermissions = () => {
       await refreshPermissions();
       // refreshPermissions уже обновит права через EventEmitter
     } catch (error) {
-      console.error('Error refreshing permissions:', error);
+      console.error('Error refreshing permissions', { error: error.message });
     } finally {
       setLoading(false);
     }

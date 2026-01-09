@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import LoginScreen from './src/screens/LoginScreen';
 import TimesheetScreen from './src/screens/TimesheetScreen';
-import { setUnauthorizedCallback } from './src/services/api';
+import { setUnauthorizedCallback, checkApiAvailability } from './src/services/api';
 import { useAppStatePermissions } from './src/hooks/useAppStatePermissions';
+import apiBlockEmitter from './src/utils/apiBlockEmitter';
+import { ApiBlockModal } from './src/components/ApiBlockModal';
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isApiBlocked, setIsApiBlocked] = useState(false);
 
   // Автоматическое обновление прав при возврате в приложение
   useAppStatePermissions();
@@ -23,15 +25,20 @@ export default function App() {
     setUnauthorizedCallback(() => {
       setIsLoggedIn(false);
     });
+
+    // Подписываемся на события блокировки API
+    const unsubscribe = apiBlockEmitter.subscribe((isBlocked) => {
+      setIsApiBlocked(isBlocked);
+    });
+
+    return unsubscribe;
   }, []);
 
   const checkAuth = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      console.log('Token from storage:', token);
       setIsLoggedIn(!!token);
     } catch (error) {
-      console.error('Ошибка проверки авторизации:', error);
       setIsLoggedIn(false);
     } finally {
       setLoading(false);
@@ -47,8 +54,12 @@ export default function App() {
       await AsyncStorage.removeItem('token');
       setIsLoggedIn(false);
     } catch (error) {
-      console.error('Ошибка при выходе:', error);
+      // Игнорируем ошибку
     }
+  };
+
+  const handleRetryApi = async () => {
+    await checkApiAvailability();
   };
 
   if (loading) {
@@ -61,14 +72,15 @@ export default function App() {
 
   return (
     <ActionSheetProvider>
+      <StatusBar hidden={true} />
       <View style={styles.appContainer}>
         {isLoggedIn ? (
           <TimesheetScreen onLogout={handleLogout} />
         ) : (
           <LoginScreen onLoginSuccess={handleLoginSuccess} />
         )}
-        <StatusBar hidden={true} /* style="auto" */ />
         <Toast />
+        <ApiBlockModal visible={isApiBlocked} onRetry={handleRetryApi} />
       </View>
     </ActionSheetProvider>
   );

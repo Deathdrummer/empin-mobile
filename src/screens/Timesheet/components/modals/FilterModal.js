@@ -54,7 +54,7 @@ export const FilterModal = ({
           const results = await timesheetAPI.searchFilterTeams(searchTeam.trim());
           setFilteredTeams(results);
         } catch (error) {
-          console.error('Error searching teams:', error);
+          console.error('Error searching teams', { error: error.message });
           Toast.show({
             type: 'error',
             text1: 'Ошибка поиска',
@@ -88,7 +88,7 @@ export const FilterModal = ({
 
           // Проверяем, что results - массив
           if (!Array.isArray(results)) {
-            console.error('Results is not an array:', results);
+            console.error('Results is not an array', { results });
             setFilteredContracts(allContracts);
             return;
           }
@@ -101,7 +101,7 @@ export const FilterModal = ({
 
           setFilteredContracts(sortedResults);
         } catch (error) {
-          console.error('Error searching all contracts:', error);
+          console.error('Error searching all contracts', { error: error.message });
           Toast.show({
             type: 'error',
             text1: 'Ошибка поиска',

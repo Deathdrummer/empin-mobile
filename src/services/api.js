@@ -1,6 +1,10 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
+import * as Updates from 'expo-updates';
+import { Platform } from 'react-native';
 import permissionsEmitter from '../utils/permissionsEmitter';
+import apiBlockEmitter from '../utils/apiBlockEmitter';
 
 const API_BASE_URL = 'https://empin-pro.ru/api'; // Production
 // const API_BASE_URL = 'http://192.168.0.102/api'; // Local development
@@ -37,11 +41,17 @@ export const setUnauthorizedCallback = (callback) => {
   onUnauthorizedCallback = callback;
 };
 
-// Перехватчик ответов для обработки ошибок авторизации
+// Перехватчик ответов для обработки ошибок авторизации и сети
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    // Network Error - сервер недоступен
+    if (error.message === 'Network Error') {
+      // Блокируем приложение
+      apiBlockEmitter.block();
+    }
+    // 401 - невалидный токен
+    else if (error.response?.status === 401) {
       // Удаляем невалидный токен
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('user');
@@ -54,6 +64,39 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+/**
+ * Проверить доступность API сервера
+ * @returns {Promise<boolean>} true если сервер доступен
+ */
+export const checkApiAvailability = async () => {
+  try {
+    await api.get('/health', { timeout: 5000 });
+    apiBlockEmitter.unblock();
+
+    // Перезагружаем приложение после восстановления соединения
+    try {
+      if (__DEV__) {
+        // В DEV режиме используем DevSettings
+        const DevSettings = require('react-native').DevSettings;
+        DevSettings.reload();
+      } else {
+        // В production используем expo-updates
+        await Updates.reloadAsync();
+      }
+    } catch (reloadError) {
+      // Если перезагрузка не удалась, просто разблокируем
+      console.warn('Перезагрузка не удалась, приложение разблокировано', { error: reloadError.message });
+    }
+
+    return true;
+  } catch (error) {
+    if (error.message === 'Network Error') {
+      apiBlockEmitter.block();
+    }
+    return false;
+  }
+};
 
 // API методы
 export const authAPI = {
@@ -78,7 +121,7 @@ export const authAPI = {
       await api.post('/auth/logout');
     } catch (error) {
       // Игнорируем ошибки logout на сервере
-      console.log('Logout error (ignored):', error);
+      console.log('Logout error (ignored)', { error: error.message });
     }
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('user');

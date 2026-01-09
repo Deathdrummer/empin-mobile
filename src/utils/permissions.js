@@ -10,7 +10,7 @@ export const getPermissions = async () => {
     const permissionsJson = await AsyncStorage.getItem('permissions');
     return permissionsJson ? JSON.parse(permissionsJson) : [];
   } catch (error) {
-    console.error('Error getting permissions:', error);
+    console.error('Error getting permissions', { error: error.message });
     return [];
   }
 };
@@ -25,7 +25,7 @@ export const refreshPermissions = async () => {
     const userData = await authAPI.me();
     return userData.permissions || [];
   } catch (error) {
-    console.error('Error refreshing permissions:', error);
+    console.error('Error refreshing permissions', { error: error.message });
     throw error;
   }
 };

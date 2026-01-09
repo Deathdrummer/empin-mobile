@@ -38,7 +38,7 @@ class PermissionsEmitter {
       try {
         listener(permissions);
       } catch (error) {
-        console.error('Error in permissions listener:', error);
+        console.error('Error in permissions listener', { error: error.message });
       }
     });
   }
