@@ -357,6 +357,9 @@ export const ChatSection = ({
         copyToCacheDirectory: true,
       });
 
+      // Принудительно скрываем StatusBar после закрытия системного диалога
+      StatusBar.setHidden(true);
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         // Добавляем выбранные документы к массиву медиа
         setSelectedMediaArray(prev => [...prev, ...result.assets]);
@@ -560,21 +563,31 @@ export const ChatSection = ({
                 </View>
                 {comment.reply_to_id && (() => {
                   const parentComment = findParentComment(comment.reply_to_id);
-                  return parentComment ? (
+                  if (!parentComment) return null;
+
+                  const hasText = parentComment.message && parentComment.message.trim();
+                  const hasMedia = parentComment.media && parentComment.media.length > 0;
+
+                  if (!hasText && !hasMedia) return null;
+
+                  return (
                     <View style={[
                       styles.replyQuote,
                       comment.self && styles.replyQuoteSelf
                     ]}>
                       <Text style={styles.replyQuoteText} numberOfLines={2}>
-                        <Text style={styles.replyQuoteAuthor}>{formatShortName(parentComment.from)}</Text>: {parentComment.message}
+                        <Text style={styles.replyQuoteAuthor}>{formatShortName(parentComment.from)}</Text>
+                        {hasText ? `: ${parentComment.message}` : ': [медиа]'}
                       </Text>
                     </View>
-                  ) : null;
+                  );
                 })()}
-                <Text style={[
-                  styles.chatText,
-                  comment.self && styles.chatTextSelf
-                ]}>{comment.message}</Text>
+                {comment.message && comment.message.trim() && (
+                  <Text style={[
+                    styles.chatText,
+                    comment.self && styles.chatTextSelf
+                  ]}>{comment.message}</Text>
+                )}
                 {comment.media && comment.media.length > 0 && (() => {
                   const mappedMedia = comment.media.map(m => ({
                     uri: `${SERVER_URL}${m.path}`,
@@ -658,7 +671,10 @@ export const ChatSection = ({
             <View style={styles.replyBannerContent}>
               <Text style={styles.replyBannerTitle}>Ответ на комментарий:</Text>
               <Text style={styles.replyBannerText} numberOfLines={1}>
-                {formatShortName(replyingToComment.from)}: {replyingToComment.message}
+                {formatShortName(replyingToComment.from)}
+                {replyingToComment.message && replyingToComment.message.trim()
+                  ? `: ${replyingToComment.message}`
+                  : ': [медиа]'}
               </Text>
             </View>
             <TouchableOpacity onPress={onCancelReply} style={styles.replyBannerClose}>
