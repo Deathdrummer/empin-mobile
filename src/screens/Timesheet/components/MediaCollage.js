@@ -1,0 +1,327 @@
+import React from 'react';
+import { View, Image, TouchableOpacity, StyleSheet, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { VideoView, useVideoPlayer } from 'expo-video';
+
+const GAP = 2; // Промежуток между картинками
+const ITEMS_PER_ROW = 3;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// Функция определения типа медиа
+const isVideo = (media) => {
+  if (media.mimeType) {
+    return media.mimeType.startsWith('video/');
+  }
+  const uri = media.uri || '';
+  const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm'];
+  return videoExtensions.some(ext => uri.toLowerCase().endsWith(ext));
+};
+
+// Компонент превью видео
+const VideoPreview = ({ uri, style, showPlayIcon }) => {
+  const [showSpinner, setShowSpinner] = React.useState(true);
+
+  const player = useVideoPlayer(uri, (player) => {
+    player.pause();
+  });
+
+  React.useEffect(() => {
+    // Скрываем спиннер через 1.5 секунды, даже если onFirstFrame не сработал
+    const timeout = setTimeout(() => {
+      setShowSpinner(false);
+    }, 1500);
+
+    return () => clearTimeout(timeout);
+  }, [uri]);
+
+  const handleFirstFrame = () => {
+    console.log('[VideoPreview] First frame loaded for URI:', uri);
+    setShowSpinner(false);
+  };
+
+  return (
+    <View style={style}>
+      <VideoView
+        player={player}
+        style={styles.mediaImage}
+        nativeControls={false}
+        contentFit="cover"
+        onFirstFrame={handleFirstFrame}
+      />
+      {showSpinner && (
+        <View style={styles.videoPreviewLoading}>
+          <ActivityIndicator size="large" color="#999999" animating={true} />
+        </View>
+      )}
+      {showPlayIcon && (
+        <View style={styles.videoPlayIcon}>
+          <MaterialCommunityIcons name="play-circle" size={32} color="rgba(255, 255, 255, 0.9)" />
+        </View>
+      )}
+    </View>
+  );
+};
+
+// Компонент отдельной картинки/видео
+const MediaItem = ({ uri, mimeType, onRemove, index, showControls = true, isLast = false, onPress }) => {
+  const mediaIsVideo = isVideo({ uri, mimeType });
+  return (
+    <>
+      <TouchableOpacity
+        activeOpacity={showControls ? 1 : 0.7}
+        onPress={() => !showControls && onPress && onPress(index)}
+        disabled={showControls}
+        style={styles.mediaItemTouchable}
+      >
+        {mediaIsVideo ? (
+          <VideoPreview uri={uri} style={styles.mediaImage} showPlayIcon={!showControls} />
+        ) : (
+          <Image
+            source={{ uri }}
+            style={styles.mediaImage}
+            resizeMode="cover"
+          />
+        )}
+      </TouchableOpacity>
+      {showControls && onRemove && (
+        <TouchableOpacity
+          style={styles.mediaControlButton}
+          onPress={() => onRemove(index)}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons name="close" size={16} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+    </>
+  );
+};
+
+// Компонент полноэкранного видео
+const FullscreenVideo = ({ uri }) => {
+  const player = useVideoPlayer(uri, (player) => {
+    player.play();
+  });
+
+  return (
+    <VideoView
+      player={player}
+      style={styles.fullscreenVideo}
+      nativeControls={true}
+      contentFit="contain"
+    />
+  );
+};
+
+// Основной компонент сетки 3x3
+export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
+  const [viewerVisible, setViewerVisible] = React.useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
+
+  if (!mediaArray || mediaArray.length === 0) {
+    return null;
+  }
+
+  const handleImagePress = (index) => {
+    setSelectedImageIndex(index);
+    setViewerVisible(true);
+  };
+
+  const handleCloseViewer = () => {
+    setViewerVisible(false);
+  };
+
+  // Динамическое определение количества элементов в ряду
+  const totalItems = mediaArray.length;
+  let itemsPerRow;
+
+  if (totalItems === 1) {
+    itemsPerRow = 1; // одна картинка на всю ширину
+  } else if (totalItems === 2) {
+    itemsPerRow = 2; // две картинки в ряд
+  } else {
+    itemsPerRow = 3; // три и более - по 3 в ряд
+  }
+
+  // Разбиваем массив медиа на ряды
+  const rows = [];
+  for (let i = 0; i < mediaArray.length; i += itemsPerRow) {
+    rows.push(mediaArray.slice(i, i + itemsPerRow));
+  }
+
+  return (
+    <>
+      <View style={styles.collageContainer}>
+        {rows.map((row, rowIndex) => (
+          <View key={rowIndex} style={styles.row}>
+            {row.map((media, colIndex) => {
+              const globalIndex = rowIndex * itemsPerRow + colIndex;
+              const isLast = colIndex === row.length - 1 || colIndex === itemsPerRow - 1;
+
+              // Вычисляем ширину элемента в зависимости от количества в ряду
+              const itemWidth = `${(100 / itemsPerRow).toFixed(2)}%`;
+
+              return (
+                <View
+                  key={globalIndex}
+                  style={[
+                    styles.mediaItem,
+                    { width: itemWidth },
+                    !isLast && styles.mediaItemWithMargin
+                  ]}
+                >
+                  <MediaItem
+                    uri={media.uri}
+                    mimeType={media.mimeType}
+                    onRemove={onRemove}
+                    onPress={handleImagePress}
+                    index={globalIndex}
+                    showControls={showControls}
+                    isLast={isLast}
+                  />
+                </View>
+              );
+            })}
+            {/* Добавляем пустые элементы для выравнивания последнего ряда */}
+            {row.length < itemsPerRow && [...Array(itemsPerRow - row.length)].map((_, i) => (
+              <View
+                key={`empty-${i}`}
+                style={[
+                  styles.emptyItem,
+                  { width: `${(100 / itemsPerRow).toFixed(2)}%` },
+                  i < itemsPerRow - row.length - 1 && styles.mediaItemWithMargin
+                ]}
+              />
+            ))}
+          </View>
+        ))}
+      </View>
+
+      {/* Modal для полноэкранного просмотра */}
+      <Modal
+        visible={viewerVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseViewer}
+      >
+        <View style={styles.viewerContainer}>
+          <Pressable
+            style={styles.viewerBackdrop}
+            onPress={handleCloseViewer}
+          />
+
+          {isVideo(mediaArray[selectedImageIndex] || {}) ? (
+            <FullscreenVideo uri={mediaArray[selectedImageIndex]?.uri} />
+          ) : (
+            <Image
+              source={{ uri: mediaArray[selectedImageIndex]?.uri }}
+              style={styles.fullscreenImage}
+              resizeMode="contain"
+            />
+          )}
+
+          {/* Кнопка закрытия */}
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={handleCloseViewer}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="close" size={28} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    </>
+  );
+};
+
+const styles = StyleSheet.create({
+  collageContainer: {
+    marginTop: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    marginBottom: GAP,
+  },
+  mediaItem: {
+    position: 'relative',
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#E5E9F0',
+  },
+  mediaItemWithMargin: {
+    marginRight: GAP,
+  },
+  mediaItemTouchable: {
+    width: '100%',
+    height: '100%',
+  },
+  emptyItem: {
+    // width задается динамически
+  },
+  mediaImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaControlButton: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewerBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  fullscreenImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  },
+  fullscreenVideo: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.8,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  videoPreviewLoading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#C5C4C5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  videoPlayIcon: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -16 }, { translateY: -16 }],
+    zIndex: 2,
+  },
+});

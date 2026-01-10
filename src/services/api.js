@@ -237,26 +237,56 @@ export const timesheetAPI = {
 
       // Добавляем все медиа файлы в FormData
       mediaArray.forEach((media, index) => {
-        // Извлекаем имя файла и расширение из URI
-        const uriParts = media.uri.split('/');
-        const filename = uriParts[uriParts.length - 1];
+        // Извлекаем имя файла и расширение из URI или name
+        const fileName = media.name || media.fileName || media.uri.split('/').pop();
 
-        // Определяем MIME type по расширению
-        const extension = filename.split('.').pop().toLowerCase();
-        const mimeTypes = {
-          jpg: 'image/jpeg',
-          jpeg: 'image/jpeg',
-          png: 'image/png',
-          gif: 'image/gif',
-          mp4: 'video/mp4',
-          mov: 'video/quicktime',
-          avi: 'video/x-msvideo',
-        };
-        const mimeType = mimeTypes[extension] || 'application/octet-stream';
+        // Используем mimeType из media, если есть, иначе определяем по расширению
+        let mimeType = media.mimeType;
+
+        if (!mimeType) {
+          const extension = fileName.split('.').pop().toLowerCase();
+          const mimeTypes = {
+            // Изображения
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            png: 'image/png',
+            gif: 'image/gif',
+            bmp: 'image/bmp',
+            webp: 'image/webp',
+            // Видео
+            mp4: 'video/mp4',
+            mov: 'video/quicktime',
+            avi: 'video/x-msvideo',
+            mkv: 'video/x-matroska',
+            // Документы
+            pdf: 'application/pdf',
+            doc: 'application/msword',
+            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            xls: 'application/vnd.ms-excel',
+            xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ppt: 'application/vnd.ms-powerpoint',
+            pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            // Архивы
+            zip: 'application/zip',
+            rar: 'application/x-rar-compressed',
+            '7z': 'application/x-7z-compressed',
+            // Текст
+            txt: 'text/plain',
+            csv: 'text/csv',
+            // Аудио
+            mp3: 'audio/mpeg',
+            wav: 'audio/wav',
+            ogg: 'audio/ogg',
+            aac: 'audio/aac',
+            flac: 'audio/flac',
+            m4a: 'audio/x-m4a',
+          };
+          mimeType = mimeTypes[extension] || 'application/octet-stream';
+        }
 
         const mediaFile = {
           uri: media.uri,
-          name: media.fileName || filename,
+          name: fileName,
           type: mimeType,
         };
 

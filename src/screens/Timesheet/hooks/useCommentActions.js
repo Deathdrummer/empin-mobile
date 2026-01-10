@@ -15,17 +15,6 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
   const [deletingComment, setDeletingComment] = useState(null);
 
   const handleAddComment = async (timesheetContractId, selectedMediaArray = []) => {
-    if (!commentText.trim() && selectedMediaArray.length === 0) {
-      Toast.show({
-        type: 'error',
-        text1: 'Ошибка',
-        text2: 'Введите текст комментария или выберите медиа',
-        position: 'top',
-        visibilityTime: 2000,
-      });
-      return;
-    }
-
     setAddingComment(timesheetContractId);
     try {
       const permissions = await refreshPermissions();
@@ -44,8 +33,10 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
       }
 
       const replyToId = replyingToComment ? replyingToComment.id : null;
+      const messageText = commentText.trim();
 
-      await timesheetAPI.addComment(timesheetContractId, commentText.trim() || ' ', replyToId, selectedMediaArray);
+      await timesheetAPI.addComment(timesheetContractId, messageText, replyToId, selectedMediaArray);
+
       setCommentText('');
       setReplyingToComment(null);
       await loadDays(minIndex, maxIndex, true);

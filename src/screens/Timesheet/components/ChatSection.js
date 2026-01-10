@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, Image, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SERVER_URL } from '../../../services/api';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import Toast from 'react-native-toast-message';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
@@ -13,6 +14,8 @@ import { usePermissions } from '../../../hooks/usePermissions';
 import { formatShortName } from '../../../utils/formatName';
 import { EmojiPicker } from './EmojiPicker';
 import { CommentContextMenu } from './CommentContextMenu';
+import { MediaCollage } from './MediaCollage';
+import { DocumentList } from './DocumentList';
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -121,6 +124,37 @@ const groupReactions = (reactions, currentUserId) => {
   return Object.values(grouped);
 };
 
+// Функция для определения типа медиа (изображение/видео или документ)
+const isMediaFile = (media) => {
+  if (!media) return false;
+
+  // Проверяем по mimeType
+  if (media.mimeType) {
+    return media.mimeType.startsWith('image/') || media.mimeType.startsWith('video/');
+  }
+
+  // Fallback: проверяем по расширению файла
+  if (media.uri || media.name) {
+    const fileName = (media.uri || media.name).toLowerCase();
+    const mediaExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.mp4', '.mov', '.avi', '.mkv'];
+    return mediaExtensions.some(ext => fileName.endsWith(ext));
+  }
+
+  return false;
+};
+
+// Функция для разделения массива на медиа (изображения/видео) и документы
+const separateMediaAndDocuments = (array) => {
+  if (!array || array.length === 0) {
+    return { media: [], documents: [] };
+  }
+
+  const media = array.filter(item => isMediaFile(item));
+  const documents = array.filter(item => !isMediaFile(item));
+
+  return { media, documents };
+};
+
 export const ChatSection = ({
   chat,
   commentText,
@@ -141,6 +175,7 @@ export const ChatSection = ({
   const [selectedComment, setSelectedComment] = React.useState(null);
   const [currentUserId, setCurrentUserId] = React.useState(null);
   const [selectedMediaArray, setSelectedMediaArray] = React.useState([]);
+  const [hasValidationError, setHasValidationError] = React.useState(false);
   const { can } = usePermissions();
   const { showActionSheetWithOptions } = useActionSheet();
   const inputRef = React.useRef(null);
@@ -175,10 +210,24 @@ export const ChatSection = ({
 
   // Функция отправки комментария с медиа
   const handleSendComment = async () => {
+    // Валидация: должен быть текст или медиа
+    if (!commentText.trim() && selectedMediaArray.length === 0) {
+      setHasValidationError(true);
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка валидации',
+        text2: 'Введите текст комментария или прикрепите медиа',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
     try {
       await onAddComment(selectedMediaArray);
       // Очищаем выбранное медиа только после успешной отправки
       setSelectedMediaArray([]);
+      setHasValidationError(false);
     } catch (error) {
       // Ошибка уже обработана в onAddComment, медиа не очищаем
       console.error('Failed to send comment', { error: error.message });
@@ -213,6 +262,10 @@ export const ChatSection = ({
       if (!result.canceled && result.assets && result.assets.length > 0) {
         // Добавляем все выбранные медиа к существующим
         setSelectedMediaArray(prev => [...prev, ...result.assets]);
+        // Сбрасываем ошибку валидации, так как теперь есть медиа
+        if (hasValidationError) {
+          setHasValidationError(false);
+        }
       }
     } catch (error) {
       console.error('Error picking image from library', { error: error.message });
@@ -254,6 +307,10 @@ export const ChatSection = ({
         const media = result.assets[0];
         // Добавляем снимок к массиву медиа
         setSelectedMediaArray(prev => [...prev, media]);
+        // Сбрасываем ошибку валидации, так как теперь есть медиа
+        if (hasValidationError) {
+          setHasValidationError(false);
+        }
       }
     } catch (error) {
       console.error('Error taking photo with camera', { error: error.message });
@@ -267,22 +324,53 @@ export const ChatSection = ({
     }
   };
 
+  // Функция для выбора документов
+  const pickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*', // все типы файлов
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        // Добавляем выбранные документы к массиву медиа
+        setSelectedMediaArray(prev => [...prev, ...result.assets]);
+        // Сбрасываем ошибку валидации, так как теперь есть медиа
+        if (hasValidationError) {
+          setHasValidationError(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error picking document', { error: error.message });
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось выбрать документ',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
   // Функция для показа Action Sheet с выбором медиа
   const showMediaOptions = () => {
-    const options = ['Выбрать из галереи', 'Снять фото/видео', 'Отмена'];
-    const cancelButtonIndex = 2;
+    const options = ['Выбрать из галереи', 'Снять фото/видео', 'Выбрать документ', 'Отмена'];
+    const cancelButtonIndex = 3;
 
     showActionSheetWithOptions(
       {
         options,
         cancelButtonIndex,
-        title: 'Добавить медиа',
+        title: 'Добавить вложение',
       },
       (buttonIndex) => {
         if (buttonIndex === 0) {
           pickImageFromLibrary();
         } else if (buttonIndex === 1) {
           takePhotoWithCamera();
+        } else if (buttonIndex === 2) {
+          pickDocument();
         }
       }
     );
@@ -463,18 +551,34 @@ export const ChatSection = ({
                   styles.chatText,
                   comment.self && styles.chatTextSelf
                 ]}>{comment.message}</Text>
-                {comment.media && comment.media.path && (
-                  <TouchableOpacity
-                    style={styles.commentMediaContainer}
-                    activeOpacity={0.9}
-                  >
-                    <Image
-                      source={{ uri: `${SERVER_URL}${comment.media.path}` }}
-                      style={styles.commentMediaImage}
-                      resizeMode="cover"
-                    />
-                  </TouchableOpacity>
-                )}
+                {comment.media && comment.media.length > 0 && (() => {
+                  const mappedMedia = comment.media.map(m => ({
+                    uri: `${SERVER_URL}${m.path}`,
+                    path: m.path,
+                    name: m.name,
+                    mimeType: m.mime_type,
+                    size: m.size
+                  }));
+
+                  const { media, documents } = separateMediaAndDocuments(mappedMedia);
+
+                  return (
+                    <>
+                      {media.length > 0 && (
+                        <MediaCollage
+                          mediaArray={media}
+                          showControls={false}
+                        />
+                      )}
+                      {documents.length > 0 && (
+                        <DocumentList
+                          documents={documents}
+                          showControls={false}
+                        />
+                      )}
+                    </>
+                  );
+                })()}
                 {comment.reactions && comment.reactions.length > 0 && (
                   <View style={styles.reactionsContainer}>
                     {groupReactions(comment.reactions, currentUserId).map((reaction, index) => {
@@ -525,36 +629,45 @@ export const ChatSection = ({
             </TouchableOpacity>
           </View>
         )}
-        {selectedMediaArray.length > 0 && (
-          <View style={styles.mediaPreviewListContainer}>
-            {selectedMediaArray.map((media, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.mediaPreviewContainer}
-                activeOpacity={1}
-                onPress={() => {}}
-              >
-                <Image
-                  source={{ uri: media.uri }}
-                  style={styles.mediaPreviewImage}
-                  resizeMode="cover"
+        {selectedMediaArray.length > 0 && (() => {
+          const { media, documents } = separateMediaAndDocuments(selectedMediaArray);
+
+          return (
+            <View
+              onStartShouldSetResponder={() => true}
+              onResponderRelease={() => {}}
+            >
+              {media.length > 0 && (
+                <MediaCollage
+                  mediaArray={media}
+                  onRemove={(index) => {
+                    // Находим глобальный индекс в selectedMediaArray
+                    const mediaItem = media[index];
+                    const globalIndex = selectedMediaArray.findIndex(item => item === mediaItem);
+                    if (globalIndex !== -1) {
+                      setSelectedMediaArray(prev => prev.filter((_, i) => i !== globalIndex));
+                    }
+                  }}
+                  showControls={true}
                 />
-                <TouchableOpacity
-                  style={styles.mediaPreviewClose}
-                  onPress={() => setSelectedMediaArray(prev => prev.filter((_, i) => i !== index))}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.mediaPreviewCloseText}>✕</Text>
-                </TouchableOpacity>
-                <View style={styles.mediaPreviewInfo}>
-                  <Text style={styles.mediaPreviewInfoText} numberOfLines={1}>
-                    {media.fileName || 'Медиа файл'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+              )}
+              {documents.length > 0 && (
+                <DocumentList
+                  documents={documents}
+                  onRemove={(index) => {
+                    // Находим глобальный индекс в selectedMediaArray
+                    const documentItem = documents[index];
+                    const globalIndex = selectedMediaArray.findIndex(item => item === documentItem);
+                    if (globalIndex !== -1) {
+                      setSelectedMediaArray(prev => prev.filter((_, i) => i !== globalIndex));
+                    }
+                  }}
+                  showControls={true}
+                />
+              )}
+            </View>
+          );
+        })()}
         <View style={styles.chatInputWrapper}>
           <TouchableOpacity
             style={styles.chatAttachButton}
@@ -571,11 +684,17 @@ export const ChatSection = ({
             ref={inputRef}
             style={[
               styles.chatTextInput,
-              isFocused && styles.chatTextInputFocused
+              isFocused && styles.chatTextInputFocused,
+              hasValidationError && styles.chatTextInputError
             ]}
             placeholder={replyingToComment ? "Ваш ответ..." : "Ваш комментарий..."}
             value={commentText}
-            onChangeText={onCommentChange}
+            onChangeText={(text) => {
+              onCommentChange(text);
+              if (hasValidationError) {
+                setHasValidationError(false);
+              }
+            }}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             multiline
@@ -583,13 +702,9 @@ export const ChatSection = ({
           <TouchableOpacity
             style={styles.chatSendButton}
             onPress={handleSendComment}
-            disabled={!commentText.trim() && selectedMediaArray.length === 0}
             activeOpacity={0.7}
           >
-            <Text style={[
-              styles.chatSendButtonIcon,
-              (!commentText.trim() && selectedMediaArray.length === 0) && styles.chatSendButtonIconDisabled
-            ]}>➤</Text>
+            <Text style={styles.chatSendButtonIcon}>➤</Text>
           </TouchableOpacity>
         </View>
       </Can>
@@ -743,6 +858,9 @@ const styles = StyleSheet.create({
   chatTextInputFocused: {
     borderColor: '#999999',
   },
+  chatTextInputError: {
+    borderColor: '#FF4444',
+  },
   chatSendButton: {
     position: 'absolute',
     right: 5,
@@ -769,60 +887,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
-  },
-  mediaPreviewListContainer: {
-    marginBottom: 8,
-  },
-  mediaPreviewContainer: {
-    position: 'relative',
-    marginBottom: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#F0F3F7',
-  },
-  mediaPreviewImage: {
-    width: '100%',
-    height: 150,
-    backgroundColor: '#E5E9F0',
-  },
-  mediaPreviewClose: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mediaPreviewCloseText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  mediaPreviewInfo: {
-    padding: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  mediaPreviewInfoText: {
-    fontSize: 12,
-    color: '#666666',
-  },
-  commentMediaContainer: {
-    marginTop: 8,
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#E5E9F0',
-  },
-  commentMediaImage: {
-    width: '100%',
-    height: 200,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#AEAEAE',
-    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
