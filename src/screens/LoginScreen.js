@@ -9,7 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { authAPI } from '../services/api';
 
@@ -19,6 +21,7 @@ export default function LoginScreen({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     // Валидация полей
@@ -92,8 +95,12 @@ export default function LoginScreen({ onLoginSuccess }) {
       style={styles.container}
     >
       <View style={styles.content}>
-        <Text style={styles.title}>ЭМПИН</Text>
-        <Text style={styles.subtitle}>Timesheet</Text>
+        <Image
+          source={require('../../assets/logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <Text style={styles.subtitle}>план-график работ</Text>
 
         <View style={styles.form}>
           <TextInput
@@ -102,6 +109,7 @@ export default function LoginScreen({ onLoginSuccess }) {
               { borderColor: emailError ? '#ff4444' : '#e2dde7' },
             ]}
             placeholder="Email"
+            placeholderTextColor="#999"
             value={email}
             onChangeText={(text) => {
               setEmail(text);
@@ -112,20 +120,35 @@ export default function LoginScreen({ onLoginSuccess }) {
             editable={!loading}
           />
 
-          <TextInput
-            style={[
-              styles.input,
-              { borderColor: passwordError ? '#ff4444' : '#e2dde7' },
-            ]}
-            placeholder="Пароль"
-            value={password}
-            onChangeText={(text) => {
-              setPassword(text);
-              setPasswordError(false);
-            }}
-            secureTextEntry
-            editable={!loading}
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={[
+                styles.input,
+                styles.passwordInput,
+                { borderColor: passwordError ? '#ff4444' : '#e2dde7' },
+              ]}
+              placeholder="Пароль"
+              placeholderTextColor="#999"
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                setPasswordError(false);
+              }}
+              secureTextEntry={!showPassword}
+              editable={!loading}
+            />
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(!showPassword)}
+              disabled={loading}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off' : 'eye'}
+                size={24}
+                color="#999"
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableHighlight
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -136,7 +159,10 @@ export default function LoginScreen({ onLoginSuccess }) {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Войти</Text>
+              <View style={styles.buttonContent}>
+                <Ionicons name="log-in-outline" size={20} color="#fff" style={styles.buttonIcon} />
+                <Text style={styles.buttonText}>Войти</Text>
+              </View>
             )}
           </TouchableHighlight>
         </View>
@@ -155,12 +181,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 30,
   },
-  title: {
-    fontSize: 42,
-    fontWeight: 'bold',
-    color: '#555',
-    textAlign: 'center',
-    marginBottom: 8,
+  logo: {
+    width: '100%',
+    height: 80,
+    marginBottom: 25,
   },
   subtitle: {
     fontSize: 24,
@@ -179,6 +203,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 15,
     borderWidth: 2,
+    color: '#000',
+  },
+  passwordContainer: {
+    position: 'relative',
+    marginBottom: 15,
+  },
+  passwordInput: {
+    marginBottom: 0,
+    paddingRight: 50,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 15,
+    top: 0,
+    marginTop: 12,
+    padding: 5,
   },
   button: {
     backgroundColor: '#999999',
@@ -190,6 +230,14 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  buttonIcon: {
+    marginTop: 1,
   },
   buttonText: {
     color: '#fff',

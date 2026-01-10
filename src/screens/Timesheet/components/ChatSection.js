@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, StatusBar, Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SERVER_URL } from '../../../services/api';
 import * as Haptics from 'expo-haptics';
@@ -319,22 +319,51 @@ export const ChatSection = ({
         return;
       }
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images', 'videos'],
-        quality: 0.8,
-      });
+      // На Android нужно явно выбирать тип медиа (фото или видео)
+      // На iOS можно использовать оба типа одновременно
+      const launchCamera = async (mediaTypes) => {
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes,
+          quality: 0.8,
+        });
 
-      // Принудительно скрываем StatusBar после закрытия камеры
-      StatusBar.setHidden(true);
+        // Принудительно скрываем StatusBar после закрытия камеры
+        StatusBar.setHidden(true);
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const media = result.assets[0];
-        // Добавляем снимок к массиву медиа
-        setSelectedMediaArray(prev => [...prev, media]);
-        // Сбрасываем ошибку валидации, так как теперь есть медиа
-        if (hasValidationError) {
-          setHasValidationError(false);
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          const media = result.assets[0];
+          // Добавляем снимок к массиву медиа
+          setSelectedMediaArray(prev => [...prev, media]);
+          // Сбрасываем ошибку валидации, так как теперь есть медиа
+          if (hasValidationError) {
+            setHasValidationError(false);
+          }
         }
+      };
+
+      if (Platform.OS === 'android') {
+        // На Android показываем диалог выбора типа
+        Alert.alert(
+          'Выберите тип',
+          'Что вы хотите снять?',
+          [
+            {
+              text: 'Фото',
+              onPress: () => launchCamera(['images']),
+            },
+            {
+              text: 'Видео',
+              onPress: () => launchCamera(['videos']),
+            },
+            {
+              text: 'Отмена',
+              style: 'cancel',
+            },
+          ]
+        );
+      } else {
+        // На iOS можно использовать оба типа
+        await launchCamera(['images', 'videos']);
       }
     } catch (error) {
       console.error('Error taking photo with camera', { error: error.message });
