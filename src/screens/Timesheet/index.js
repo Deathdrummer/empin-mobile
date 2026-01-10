@@ -116,6 +116,7 @@ export default function TimesheetScreen({ onLogout }) {
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [calendarModalVisible, setCalendarModalVisible] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [isAudioInteracting, setIsAudioInteracting] = useState(false);
   const scrollStartX = useRef(0);
   const isScrolling = useRef(false);
   const lastScrollTime = useRef(0);
@@ -268,6 +269,7 @@ export default function TimesheetScreen({ onLogout }) {
       onReplyComment={handleReplyComment}
       onToggleReaction={handleToggleReaction}
       onCancelReply={handleCancelReply}
+      onAudioInteractionChange={(enabled) => setIsAudioInteracting(!enabled)}
     />
   );
 
@@ -377,7 +379,7 @@ export default function TimesheetScreen({ onLogout }) {
         initialScrollIndex={initialScrollIndex}
         horizontal
         pagingEnabled={false}
-        scrollEnabled={true}
+        scrollEnabled={!isAudioInteracting}
         directionalLockEnabled={true}
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"

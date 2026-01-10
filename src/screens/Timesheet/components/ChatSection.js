@@ -16,6 +16,7 @@ import { EmojiPicker } from './EmojiPicker';
 import { CommentContextMenu } from './CommentContextMenu';
 import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
+import { AudioPlayer } from './AudioPlayer';
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -143,16 +144,38 @@ const isMediaFile = (media) => {
   return false;
 };
 
-// Функция для разделения массива на медиа (изображения/видео) и документы
+// Функция для определения типа аудио
+const isAudioFile = (media) => {
+  if (!media) return false;
+
+  // Проверяем по mimeType
+  if (media.mimeType) {
+    if (media.mimeType.startsWith('audio/') || media.mimeType === 'application/ogg') {
+      return true;
+    }
+  }
+
+  // Fallback: проверяем по расширению файла (приоритет name, потом uri)
+  if (media.name || media.uri) {
+    const fileName = (media.name || media.uri).toLowerCase();
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.oga', '.opus', '.m4a', '.aac', '.flac', '.wma', '.webm', '.amr', '.3gp'];
+    return audioExtensions.some(ext => fileName.endsWith(ext));
+  }
+
+  return false;
+};
+
+// Функция для разделения массива на медиа (изображения/видео), аудио и документы
 const separateMediaAndDocuments = (array) => {
   if (!array || array.length === 0) {
-    return { media: [], documents: [] };
+    return { media: [], audio: [], documents: [] };
   }
 
   const media = array.filter(item => isMediaFile(item));
-  const documents = array.filter(item => !isMediaFile(item));
+  const audio = array.filter(item => isAudioFile(item));
+  const documents = array.filter(item => !isMediaFile(item) && !isAudioFile(item));
 
-  return { media, documents };
+  return { media, audio, documents };
 };
 
 export const ChatSection = ({
@@ -166,7 +189,8 @@ export const ChatSection = ({
   onEditComment,
   onReplyComment,
   onToggleReaction,
-  onCancelReply
+  onCancelReply,
+  onAudioInteractionChange
 }) => {
   const [lastTap, setLastTap] = React.useState(null);
   const [isFocused, setIsFocused] = React.useState(false);
@@ -560,7 +584,7 @@ export const ChatSection = ({
                     size: m.size
                   }));
 
-                  const { media, documents } = separateMediaAndDocuments(mappedMedia);
+                  const { media, audio, documents } = separateMediaAndDocuments(mappedMedia);
 
                   return (
                     <>
@@ -569,6 +593,19 @@ export const ChatSection = ({
                           mediaArray={media}
                           showControls={false}
                         />
+                      )}
+                      {audio.length > 0 && (
+                        <>
+                          {audio.map((audioFile, index) => (
+                            <AudioPlayer
+                              key={index}
+                              audioUri={audioFile.uri}
+                              fileName={audioFile.name}
+                              onInteractionStart={() => onAudioInteractionChange?.(false)}
+                              onInteractionEnd={() => onAudioInteractionChange?.(true)}
+                            />
+                          ))}
+                        </>
                       )}
                       {documents.length > 0 && (
                         <DocumentList
@@ -630,7 +667,7 @@ export const ChatSection = ({
           </View>
         )}
         {selectedMediaArray.length > 0 && (() => {
-          const { media, documents } = separateMediaAndDocuments(selectedMediaArray);
+          const { media, audio, documents } = separateMediaAndDocuments(selectedMediaArray);
 
           return (
             <View
@@ -650,6 +687,31 @@ export const ChatSection = ({
                   }}
                   showControls={true}
                 />
+              )}
+              {audio.length > 0 && (
+                <View style={styles.audioListContainer}>
+                  {audio.map((audioFile, index) => (
+                    <View key={index} style={styles.audioItemContainer}>
+                      <AudioPlayer
+                        audioUri={audioFile.uri}
+                        fileName={audioFile.name}
+                        onInteractionStart={() => onAudioInteractionChange?.(false)}
+                        onInteractionEnd={() => onAudioInteractionChange?.(true)}
+                      />
+                      <TouchableOpacity
+                        style={styles.audioRemoveButton}
+                        onPress={() => {
+                          const globalIndex = selectedMediaArray.findIndex(item => item === audioFile);
+                          if (globalIndex !== -1) {
+                            setSelectedMediaArray(prev => prev.filter((_, i) => i !== globalIndex));
+                          }
+                        }}
+                      >
+                        <MaterialCommunityIcons name="close" size={16} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
               )}
               {documents.length > 0 && (
                 <DocumentList
@@ -972,5 +1034,23 @@ const styles = StyleSheet.create({
   },
   reactionCountActive: {
     color: '#4A90E2',
+  },
+  audioListContainer: {
+    position: 'relative',
+  },
+  audioItemContainer: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+  audioRemoveButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

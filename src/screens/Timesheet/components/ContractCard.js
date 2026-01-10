@@ -25,6 +25,7 @@ export const ContractCard = ({
   onReplyComment,
   onToggleReaction,
   onCancelReply,
+  onAudioInteractionChange,
 }) => {
   const isExpanded = expandedContract === contract.timesheet_contract_id;
   const isAddingComment = addingComment === contract.timesheet_contract_id;
@@ -137,6 +138,7 @@ export const ContractCard = ({
               onReplyComment={onReplyComment}
               onToggleReaction={onToggleReaction}
               onCancelReply={onCancelReply}
+              onAudioInteractionChange={onAudioInteractionChange}
             />
           )}
         </Pressable>
