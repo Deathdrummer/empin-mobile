@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Image, TouchableOpacity, StyleSheet, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import ImageViewing from 'react-native-image-viewing';
 
 const GAP = 2; // Промежуток между картинками
 const ITEMS_PER_ROW = 3;
@@ -114,20 +115,41 @@ const FullscreenVideo = ({ uri }) => {
 
 // Основной компонент сетки 3x3
 export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
-  const [viewerVisible, setViewerVisible] = React.useState(false);
-  const [selectedImageIndex, setSelectedImageIndex] = React.useState(0);
+  const [imageViewerVisible, setImageViewerVisible] = React.useState(false);
+  const [videoViewerVisible, setVideoViewerVisible] = React.useState(false);
+  const [selectedMediaIndex, setSelectedMediaIndex] = React.useState(0);
 
   if (!mediaArray || mediaArray.length === 0) {
     return null;
   }
 
+  // Разделяем медиа на изображения и видео
+  const images = mediaArray.filter(media => !isVideo(media));
+
+  // Преобразуем изображения в формат для ImageViewing
+  const imageViewingData = images.map(img => ({ uri: img.uri }));
+
   const handleImagePress = (index) => {
-    setSelectedImageIndex(index);
-    setViewerVisible(true);
+    const media = mediaArray[index];
+    if (isVideo(media)) {
+      // Для видео используем старый модальный просмотр
+      setSelectedMediaIndex(index);
+      setVideoViewerVisible(true);
+    } else {
+      // Для фото используем ImageViewing
+      // Находим индекс в массиве только изображений
+      const imageIndex = images.findIndex(img => img.uri === media.uri);
+      setSelectedMediaIndex(imageIndex);
+      setImageViewerVisible(true);
+    }
   };
 
-  const handleCloseViewer = () => {
-    setViewerVisible(false);
+  const handleCloseImageViewer = () => {
+    setImageViewerVisible(false);
+  };
+
+  const handleCloseVideoViewer = () => {
+    setVideoViewerVisible(false);
   };
 
   // Динамическое определение количества элементов в ряду
@@ -196,33 +218,35 @@ export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
         ))}
       </View>
 
-      {/* Modal для полноэкранного просмотра */}
+      {/* ImageViewing для просмотра фото с зумом и свайпом */}
+      <ImageViewing
+        images={imageViewingData}
+        imageIndex={selectedMediaIndex}
+        visible={imageViewerVisible}
+        onRequestClose={handleCloseImageViewer}
+        swipeToCloseEnabled={true}
+        doubleTapToZoomEnabled={true}
+      />
+
+      {/* Modal для полноэкранного просмотра видео */}
       <Modal
-        visible={viewerVisible}
+        visible={videoViewerVisible}
         transparent={true}
         animationType="fade"
-        onRequestClose={handleCloseViewer}
+        onRequestClose={handleCloseVideoViewer}
       >
         <View style={styles.viewerContainer}>
           <Pressable
             style={styles.viewerBackdrop}
-            onPress={handleCloseViewer}
+            onPress={handleCloseVideoViewer}
           />
 
-          {isVideo(mediaArray[selectedImageIndex] || {}) ? (
-            <FullscreenVideo uri={mediaArray[selectedImageIndex]?.uri} />
-          ) : (
-            <Image
-              source={{ uri: mediaArray[selectedImageIndex]?.uri }}
-              style={styles.fullscreenImage}
-              resizeMode="contain"
-            />
-          )}
+          <FullscreenVideo uri={mediaArray[selectedMediaIndex]?.uri} />
 
           {/* Кнопка закрытия */}
           <TouchableOpacity
             style={styles.closeButton}
-            onPress={handleCloseViewer}
+            onPress={handleCloseVideoViewer}
             activeOpacity={0.7}
           >
             <MaterialCommunityIcons name="close" size={28} color="#FFFFFF" />
