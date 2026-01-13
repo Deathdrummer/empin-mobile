@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import Slider from '@react-native-community/slider';
+import { useAudioPlayerContext } from '../../../contexts/AudioPlayerContext';
+import { useSwipeControl } from '../../../contexts/SwipeControlContext';
 
 // Форматирование времени в формат mm:ss
 const formatTime = (seconds) => {
@@ -12,30 +14,50 @@ const formatTime = (seconds) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-export const AudioPlayer = ({ audioUri, fileName, onInteractionStart, onInteractionEnd }) => {
+export const AudioPlayer = ({ audioUri, fileName }) => {
   const player = useAudioPlayer({ uri: audioUri });
   const status = useAudioPlayerStatus(player);
+  const { registerPlayer, unregisterPlayer } = useAudioPlayerContext();
+  const { disableSwipe, enableSwipe } = useSwipeControl();
+  const isSliding = React.useRef(false);
 
   // useAudioPlayer автоматически освобождает ресурсы при размонтировании
   // Ручная очистка НЕ требуется и вызывает ошибку "shared object already released"
+
+  // Отписываемся при размонтировании
+  React.useEffect(() => {
+    return () => {
+      unregisterPlayer(player);
+      // Убеждаемся, что свайп разблокирован при размонтировании
+      if (isSliding.current) {
+        enableSwipe();
+      }
+    };
+  }, [player, unregisterPlayer, enableSwipe]);
 
   const handlePlayPause = () => {
     if (status.playing) {
       player.pause();
     } else {
+      // Перед началом воспроизведения регистрируем плеер (остановит остальные)
+      registerPlayer(player);
       player.play();
     }
   };
 
   const handleSliderStart = () => {
-    onInteractionStart?.();
+    isSliding.current = true;
+    disableSwipe();
   };
 
   const handleSliderChange = (value) => {
     if (status.duration) {
       player.seekTo(value);
     }
-    onInteractionEnd?.();
+    if (isSliding.current) {
+      isSliding.current = false;
+      enableSwipe();
+    }
   };
 
   const currentTime = status.currentTime || 0;
@@ -93,15 +115,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 8,
     marginTop: 8,
-    gap: 8,
+    gap: 12,
   },
   playButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#E3F2FD',
     justifyContent: 'center',
     alignItems: 'center',
+	zIndex: 10
   },
   contentContainer: {
     flex: 1,
@@ -111,6 +134,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     marginBottom: 4,
+	
   },
   fileName: {
     fontSize: 12,
@@ -121,8 +145,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   slider: {
-    width: '100%',
+    width: '107%',
     height: 20,
+	marginLeft: -14,
+	zIndex: 9
   },
   timeContainer: {
     flexDirection: 'row',
@@ -131,6 +157,8 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 10,
+	marginLeft: 4,
+	marginRight: 4,
     color: '#999',
   },
 });

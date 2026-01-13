@@ -26,7 +26,6 @@ export const TeamCard = ({
   onReplyComment,
   onToggleReaction,
   onCancelReply,
-  onAudioInteractionChange,
 }) => {
   const masterName = formatShortName(team.master);
   const isDeletingThisTeam = deletingTeam === team.id;
@@ -86,7 +85,6 @@ export const TeamCard = ({
             onReplyComment={onReplyComment}
             onToggleReaction={onToggleReaction}
             onCancelReply={onCancelReply}
-            onAudioInteractionChange={onAudioInteractionChange}
           />
         ))
       )}

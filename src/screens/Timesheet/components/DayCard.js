@@ -27,7 +27,6 @@ export const DayCard = ({
   onReplyComment,
   onToggleReaction,
   onCancelReply,
-  onAudioInteractionChange,
 }) => {
   const dateMatch = item.humanDate?.match(/(\d{4})/);
   const year = dateMatch ? dateMatch[1] : '';
@@ -77,7 +76,6 @@ export const DayCard = ({
                 onEditComment={onEditComment}
                 onReplyComment={onReplyComment}
                 onToggleReaction={onToggleReaction}
-                onAudioInteractionChange={onAudioInteractionChange}
                 onCancelReply={onCancelReply}
               />
             ))

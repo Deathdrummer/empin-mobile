@@ -260,6 +260,7 @@ export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
 const styles = StyleSheet.create({
   collageContainer: {
     marginTop: 8,
+	 width: '99%'
   },
   row: {
     flexDirection: 'row',
