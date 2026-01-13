@@ -12,15 +12,13 @@ import { useSwipeControl } from '../contexts/SwipeControlContext';
  * </SwipeBlocker>
  */
 export const SwipeBlocker = ({ children, style, disabled = false }) => {
-  const { disableSwipe, enableSwipe, flatListRef } = useSwipeControl();
+  const { flatListRef } = useSwipeControl();
   const isBlockingRef = useRef(false);
   const startPositionRef = useRef({ x: 0, y: 0 });
   const unlockTimerRef = useRef(null);
 
-  // Функция разблокировки
+  // Функция разблокировки - ТОЛЬКО через setNativeProps
   const unlock = useCallback(() => {
-    if (!isBlockingRef.current) return;
-
     console.log('✅ [SwipeBlocker] Разблокирую свайп');
 
     // Очищаем таймер
@@ -29,18 +27,23 @@ export const SwipeBlocker = ({ children, style, disabled = false }) => {
       unlockTimerRef.current = null;
     }
 
-    // Разблокируем FlatList
+    // Разблокируем FlatList СИНХРОННО
     if (flatListRef?.current) {
       flatListRef.current.setNativeProps({ scrollEnabled: true });
     }
 
     isBlockingRef.current = false;
-    enableSwipe();
-  }, [enableSwipe, flatListRef]);
+  }, [flatListRef]);
 
   // Capture phase - блокируем FlatList СРАЗУ
   const handleStartShouldSetResponderCapture = (event) => {
     if (disabled) return false;
+
+    // Если уже заблокирован - игнорируем (защита от множественных вызовов)
+    if (isBlockingRef.current) {
+      console.log('⚠️ [SwipeBlocker] Уже заблокирован, игнорирую');
+      return false;
+    }
 
     // Сохраняем начальную позицию
     startPositionRef.current = {
@@ -48,25 +51,23 @@ export const SwipeBlocker = ({ children, style, disabled = false }) => {
       y: event.nativeEvent.pageY,
     };
 
-    console.log('🚫 [SwipeBlocker] StartCapture - блокирую FlatList сразу');
+    console.log('🚫 [SwipeBlocker] StartCapture - блокирую FlatList');
 
-    // Блокируем FlatList СРАЗУ - это предотвратит свайп дня
+    // Блокируем FlatList СИНХРОННО
     if (flatListRef?.current) {
       flatListRef.current.setNativeProps({ scrollEnabled: false });
     }
 
     isBlockingRef.current = true;
-    disableSwipe();
 
-    // СТРАХОВКА: автоматическая разблокировка через 1 секунду
-    // Если Release не вызовется (дочерний элемент перехватил респондер)
+    // СТРАХОВКА: автоматическая разблокировка через 500ms
     if (unlockTimerRef.current) {
       clearTimeout(unlockTimerRef.current);
     }
     unlockTimerRef.current = setTimeout(() => {
       console.log('⏰ [SwipeBlocker] Таймер - автоматическая разблокировка');
       unlock();
-    }, 1000);
+    }, 500);
 
     // НЕ перехватываем респондер - даем Slider/TouchableOpacity работать
     return false;
