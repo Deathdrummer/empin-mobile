@@ -115,6 +115,7 @@ const styles = StyleSheet.create({
     padding: 8,
     marginTop: 8,
     gap: 12,
+	width: '100%',
   },
   playButton: {
     width: 48,
