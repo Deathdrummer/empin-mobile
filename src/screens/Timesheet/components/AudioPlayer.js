@@ -144,9 +144,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   slider: {
-    width: '107%',
+    width: '106%',
     height: 20,
-	marginLeft: -14,
+	marginLeft: -8,
 	zIndex: 9
   },
   timeContainer: {
