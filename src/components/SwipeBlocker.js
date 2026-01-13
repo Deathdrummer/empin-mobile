@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import { View } from 'react-native';
 import { useSwipeControl } from '../contexts/SwipeControlContext';
 
@@ -15,6 +15,28 @@ export const SwipeBlocker = ({ children, style, disabled = false }) => {
   const { disableSwipe, enableSwipe, flatListRef } = useSwipeControl();
   const isBlockingRef = useRef(false);
   const startPositionRef = useRef({ x: 0, y: 0 });
+  const unlockTimerRef = useRef(null);
+
+  // Функция разблокировки
+  const unlock = useCallback(() => {
+    if (!isBlockingRef.current) return;
+
+    console.log('✅ [SwipeBlocker] Разблокирую свайп');
+
+    // Очищаем таймер
+    if (unlockTimerRef.current) {
+      clearTimeout(unlockTimerRef.current);
+      unlockTimerRef.current = null;
+    }
+
+    // Разблокируем FlatList
+    if (flatListRef?.current) {
+      flatListRef.current.setNativeProps({ scrollEnabled: true });
+    }
+
+    isBlockingRef.current = false;
+    enableSwipe();
+  }, [enableSwipe, flatListRef]);
 
   // Capture phase - блокируем FlatList СРАЗУ
   const handleStartShouldSetResponderCapture = (event) => {
@@ -36,6 +58,16 @@ export const SwipeBlocker = ({ children, style, disabled = false }) => {
     isBlockingRef.current = true;
     disableSwipe();
 
+    // СТРАХОВКА: автоматическая разблокировка через 1 секунду
+    // Если Release не вызовется (дочерний элемент перехватил респондер)
+    if (unlockTimerRef.current) {
+      clearTimeout(unlockTimerRef.current);
+    }
+    unlockTimerRef.current = setTimeout(() => {
+      console.log('⏰ [SwipeBlocker] Таймер - автоматическая разблокировка');
+      unlock();
+    }, 1000);
+
     // НЕ перехватываем респондер - даем Slider/TouchableOpacity работать
     return false;
   };
@@ -49,16 +81,8 @@ export const SwipeBlocker = ({ children, style, disabled = false }) => {
 
     // Если вертикальное движение - РАЗБЛОКИРУЕМ (даем ScrollView скроллить)
     if (dy > dx && dy > 10) {
-      console.log('✅ [SwipeBlocker] MoveCapture - вертикальный свайп, РАЗБЛОКИРУЮ');
-
-      // Разблокируем FlatList для вертикального скролла
-      if (flatListRef?.current) {
-        flatListRef.current.setNativeProps({ scrollEnabled: true });
-      }
-
-      isBlockingRef.current = false;
-      enableSwipe();
-
+      console.log('✅ [SwipeBlocker] MoveCapture - вертикальный свайп');
+      unlock();
       return false;
     }
 
@@ -78,30 +102,29 @@ export const SwipeBlocker = ({ children, style, disabled = false }) => {
   };
 
   const handleResponderRelease = () => {
-    if (disabled || !isBlockingRef.current) return;
-    console.log('✅ [SwipeBlocker] Release - разблокирую свайп');
-    isBlockingRef.current = false;
-
-    // Разблокируем FlatList
-    if (flatListRef?.current) {
-      flatListRef.current.setNativeProps({ scrollEnabled: true });
-    }
-
-    enableSwipe();
+    if (disabled) return;
+    console.log('✅ [SwipeBlocker] Release');
+    unlock();
   };
 
   const handleResponderTerminate = () => {
-    if (disabled || !isBlockingRef.current) return;
-    console.log('✅ [SwipeBlocker] Terminate - разблокирую свайп');
-    isBlockingRef.current = false;
-
-    // Разблокируем FlatList
-    if (flatListRef?.current) {
-      flatListRef.current.setNativeProps({ scrollEnabled: true });
-    }
-
-    enableSwipe();
+    if (disabled) return;
+    console.log('✅ [SwipeBlocker] Terminate');
+    unlock();
   };
+
+  // Очистка таймера при размонтировании
+  useEffect(() => {
+    return () => {
+      if (unlockTimerRef.current) {
+        clearTimeout(unlockTimerRef.current);
+      }
+      // Разблокируем FlatList при размонтировании, если был заблокирован
+      if (isBlockingRef.current && flatListRef?.current) {
+        flatListRef.current.setNativeProps({ scrollEnabled: true });
+      }
+    };
+  }, [flatListRef]);
 
   return (
     <View
