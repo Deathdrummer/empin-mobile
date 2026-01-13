@@ -14,30 +14,59 @@ import { useSwipeControl } from '../contexts/SwipeControlContext';
 export const SwipeBlocker = ({ children, style, disabled = false }) => {
   const { disableSwipe, enableSwipe, flatListRef } = useSwipeControl();
   const isBlockingRef = useRef(false);
+  const startPositionRef = useRef({ x: 0, y: 0 });
 
-  // НЕ используем Capture - это блокирует вертикальный скролл ScrollView
-  // Вместо этого используем обычный Responder
-  const handleStartShouldSetResponder = () => {
+  // Capture phase - блокируем FlatList сразу, но НЕ перехватываем респондер
+  // Это позволяет дочерним элементам (TouchableOpacity, Slider) работать
+  const handleStartShouldSetResponderCapture = (event) => {
     if (disabled) return false;
 
-    console.log('🚫 [SwipeBlocker] Start - блокирую свайп');
+    // Сохраняем начальную позицию
+    startPositionRef.current = {
+      x: event.nativeEvent.pageX,
+      y: event.nativeEvent.pageY,
+    };
+
+    console.log('🚫 [SwipeBlocker] StartCapture - блокирую FlatList');
     isBlockingRef.current = true;
 
     // Блокируем FlatList СИНХРОННО через setNativeProps
-    // setState слишком медленный - FlatList успевает получить touch
     if (flatListRef?.current) {
       flatListRef.current.setNativeProps({ scrollEnabled: false });
     }
 
     disableSwipe();
-    return true;
+
+    // НЕ перехватываем респондер - даем дочерним элементам работать
+    return false;
   };
 
-  const handleMoveShouldSetResponder = () => {
-    // Удерживаем респондер только если мы его захватили
+  // Capture phase - перехватываем только горизонтальное движение
+  const handleMoveShouldSetResponderCapture = (event) => {
     if (disabled || !isBlockingRef.current) return false;
-    console.log('🚫 [SwipeBlocker] Move - удерживаю блокировку');
-    return true;
+
+    const dx = Math.abs(event.nativeEvent.pageX - startPositionRef.current.x);
+    const dy = Math.abs(event.nativeEvent.pageY - startPositionRef.current.y);
+
+    // Если горизонтальное движение больше вертикального - перехватываем
+    if (dx > dy && dx > 10) {
+      console.log('🚫 [SwipeBlocker] MoveCapture - горизонтальный свайп, перехватываю');
+      return true;
+    }
+
+    // Если вертикальное движение - НЕ перехватываем (даем ScrollView скроллить)
+    if (dy > dx && dy > 10) {
+      console.log('✅ [SwipeBlocker] MoveCapture - вертикальный свайп, отпускаю');
+      // Вертикальный скролл - разблокируем и выходим
+      isBlockingRef.current = false;
+      if (flatListRef?.current) {
+        flatListRef.current.setNativeProps({ scrollEnabled: true });
+      }
+      enableSwipe();
+      return false;
+    }
+
+    return false;
   };
 
   // Запрещаем FlatList отбирать респондер у нас
@@ -80,8 +109,8 @@ export const SwipeBlocker = ({ children, style, disabled = false }) => {
   return (
     <View
       style={style}
-      onStartShouldSetResponder={handleStartShouldSetResponder}
-      onMoveShouldSetResponder={handleMoveShouldSetResponder}
+      onStartShouldSetResponderCapture={handleStartShouldSetResponderCapture}
+      onMoveShouldSetResponderCapture={handleMoveShouldSetResponderCapture}
       onResponderTerminationRequest={handleResponderTerminationRequest}
       onResponderGrant={handleResponderGrant}
       onResponderRelease={handleResponderRelease}
