@@ -18,10 +18,12 @@ import { useTeamActions } from './hooks/useTeamActions';
 import { useContractActions } from './hooks/useContractActions';
 import { useCommentActions } from './hooks/useCommentActions';
 import { useFilterData } from './hooks/useFilterData';
+import { AudioPlayerProvider } from '../../contexts/AudioPlayerContext';
+import { SwipeControlProvider, useSwipeControl } from '../../contexts/SwipeControlContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export default function TimesheetScreen({ onLogout }) {
+function TimesheetScreenContent({ onLogout }) {
   const {
     filters,
     allTeams,
@@ -41,7 +43,7 @@ export default function TimesheetScreen({ onLogout }) {
     filterLoading,
     currentIndex,
     setCurrentIndex,
-    flatListRef,
+    flatListRef: localFlatListRef,
     minIndex,
     maxIndex,
     loadDays,
@@ -116,11 +118,18 @@ export default function TimesheetScreen({ onLogout }) {
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [calendarModalVisible, setCalendarModalVisible] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
-  const [isAudioInteracting, setIsAudioInteracting] = useState(false);
   const scrollStartX = useRef(0);
   const isScrolling = useRef(false);
   const lastScrollTime = useRef(0);
   const isPrependingRef = useRef(false);
+  const { swipeEnabled, flatListRef } = useSwipeControl();
+
+  // Синхронизируем ref из хука с ref из контекста
+  React.useEffect(() => {
+    if (localFlatListRef.current && flatListRef) {
+      flatListRef.current = localFlatListRef.current;
+    }
+  }, [localFlatListRef, flatListRef]);
 
   // Shake detection
   useEffect(() => {
@@ -269,7 +278,6 @@ export default function TimesheetScreen({ onLogout }) {
       onReplyComment={handleReplyComment}
       onToggleReaction={handleToggleReaction}
       onCancelReply={handleCancelReply}
-      onAudioInteractionChange={(enabled) => setIsAudioInteracting(!enabled)}
     />
   );
 
@@ -282,18 +290,19 @@ export default function TimesheetScreen({ onLogout }) {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      {filterLoading && (
-        <View style={styles.filterLoadingOverlay}>
-          <ActivityIndicator size="large" color="#999999" />
-        </View>
-      )}
+    <AudioPlayerProvider>
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        {filterLoading && (
+          <View style={styles.filterLoadingOverlay}>
+            <ActivityIndicator size="large" color="#999999" />
+          </View>
+        )}
 
-      {isPrepending && (
-        <View style={styles.prependingOverlay}>
-          <ActivityIndicator size="large" color="#999999" />
-        </View>
-      )}
+        {isPrepending && (
+          <View style={styles.prependingOverlay}>
+            <ActivityIndicator size="large" color="#999999" />
+          </View>
+        )}
 
       <CalendarModal
         visible={calendarModalVisible}
@@ -372,14 +381,14 @@ export default function TimesheetScreen({ onLogout }) {
 
       <FlatList
         key={`timesheet-${dataVersion}`}
-        ref={flatListRef}
+        ref={localFlatListRef}
         data={days}
         renderItem={renderDay}
         keyExtractor={(item) => item.index.toString()}
         initialScrollIndex={initialScrollIndex}
         horizontal
         pagingEnabled={false}
-        scrollEnabled={!isAudioInteracting}
+        scrollEnabled={swipeEnabled}
         directionalLockEnabled={true}
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"
@@ -478,7 +487,16 @@ export default function TimesheetScreen({ onLogout }) {
         hasActiveFilters={hasActiveFilters}
         onClearFilters={handleClearFilters}
       />
-    </SafeAreaView>
+      </SafeAreaView>
+    </AudioPlayerProvider>
+  );
+}
+
+export default function TimesheetScreen({ onLogout }) {
+  return (
+    <SwipeControlProvider>
+      <TimesheetScreenContent onLogout={onLogout} />
+    </SwipeControlProvider>
   );
 }
 

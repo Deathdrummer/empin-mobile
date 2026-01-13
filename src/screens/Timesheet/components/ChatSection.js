@@ -1,11 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, StatusBar, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SERVER_URL } from '../../../services/api';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { Directory, File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import Toast from 'react-native-toast-message';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
@@ -17,6 +19,7 @@ import { CommentContextMenu } from './CommentContextMenu';
 import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
+import { SwipeBlocker } from '../../../components/SwipeBlocker';
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -190,7 +193,6 @@ export const ChatSection = ({
   onReplyComment,
   onToggleReaction,
   onCancelReply,
-  onAudioInteractionChange
 }) => {
   const [lastTap, setLastTap] = React.useState(null);
   const [isFocused, setIsFocused] = React.useState(false);
@@ -303,8 +305,8 @@ export const ChatSection = ({
     }
   };
 
-  // Функция для съемки с камеры
-  const takePhotoWithCamera = async () => {
+  // Функция для съемки фото
+  const takePhoto = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
@@ -319,58 +321,70 @@ export const ChatSection = ({
         return;
       }
 
-      // На Android нужно явно выбирать тип медиа (фото или видео)
-      // На iOS можно использовать оба типа одновременно
-      const launchCamera = async (mediaTypes) => {
-        const result = await ImagePicker.launchCameraAsync({
-          mediaTypes,
-          quality: 0.8,
-        });
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+      });
 
-        // Принудительно скрываем StatusBar после закрытия камеры
-        StatusBar.setHidden(true);
+      // Принудительно скрываем StatusBar после закрытия камеры
+      StatusBar.setHidden(true);
 
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-          const media = result.assets[0];
-          // Добавляем снимок к массиву медиа
-          setSelectedMediaArray(prev => [...prev, media]);
-          // Сбрасываем ошибку валидации, так как теперь есть медиа
-          if (hasValidationError) {
-            setHasValidationError(false);
-          }
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const media = result.assets[0];
+        setSelectedMediaArray(prev => [...prev, media]);
+        if (hasValidationError) {
+          setHasValidationError(false);
         }
-      };
-
-      if (Platform.OS === 'android') {
-        // На Android показываем диалог выбора типа
-        Alert.alert(
-          'Выберите тип',
-          'Что вы хотите снять?',
-          [
-            {
-              text: 'Фото',
-              onPress: () => launchCamera(['images']),
-            },
-            {
-              text: 'Видео',
-              onPress: () => launchCamera(['videos']),
-            },
-            {
-              text: 'Отмена',
-              style: 'cancel',
-            },
-          ]
-        );
-      } else {
-        // На iOS можно использовать оба типа
-        await launchCamera(['images', 'videos']);
       }
     } catch (error) {
-      console.error('Error taking photo with camera', { error: error.message });
+      console.error('Error taking photo', { error: error.message });
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: 'Не удалось сделать снимок',
+        text2: 'Не удалось сделать фото',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  // Функция для съемки видео
+  const takeVideo = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+
+      if (status !== 'granted') {
+        Toast.show({
+          type: 'error',
+          text1: 'Доступ запрещен',
+          text2: 'Необходим доступ к камере для съемки',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['videos'],
+        quality: 0.8,
+      });
+
+      // Принудительно скрываем StatusBar после закрытия камеры
+      StatusBar.setHidden(true);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const media = result.assets[0];
+        setSelectedMediaArray(prev => [...prev, media]);
+        if (hasValidationError) {
+          setHasValidationError(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error taking video', { error: error.message });
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось снять видео',
         position: 'top',
         visibilityTime: 3000,
       });
@@ -411,8 +425,8 @@ export const ChatSection = ({
 
   // Функция для показа Action Sheet с выбором медиа
   const showMediaOptions = () => {
-    const options = ['Выбрать из галереи', 'Снять фото/видео', 'Выбрать документ', 'Отмена'];
-    const cancelButtonIndex = 3;
+    const options = ['Выбрать из галереи', 'Снять фото', 'Снять видео', 'Выбрать документ', 'Отмена'];
+    const cancelButtonIndex = 4;
 
     showActionSheetWithOptions(
       {
@@ -424,8 +438,10 @@ export const ChatSection = ({
         if (buttonIndex === 0) {
           pickImageFromLibrary();
         } else if (buttonIndex === 1) {
-          takePhotoWithCamera();
+          takePhoto();
         } else if (buttonIndex === 2) {
+          takeVideo();
+        } else if (buttonIndex === 3) {
           pickDocument();
         }
       }
@@ -553,6 +569,66 @@ export const ChatSection = ({
     handleCloseMenu();
   };
 
+  // Функция скачивания документа
+  const handleDownloadDocument = async (document) => {
+    try {
+      const fileName = document.name || document.uri.split('/').pop();
+
+      Toast.show({
+        type: 'info',
+        text1: 'Скачивание',
+        text2: `Загрузка файла ${fileName}...`,
+        position: 'top',
+        visibilityTime: 2000,
+      });
+
+      // Создаем директорию для загрузок (если не существует)
+      const downloadDir = new Directory(Paths.cache, 'downloads');
+      if (!downloadDir.exists) {
+        downloadDir.create();
+      }
+
+      // Создаем целевой файл с нужным именем
+      const outputFile = new File(downloadDir, fileName);
+
+      // Скачиваем файл (новый API v54)
+      const downloadedFile = await File.downloadFileAsync(document.uri, outputFile);
+
+      // Проверяем доступность шаринга
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+
+      if (isSharingAvailable) {
+        // Открываем диалог шаринга (позволяет сохранить или открыть файл)
+        await Sharing.shareAsync(downloadedFile.uri);
+
+        Toast.show({
+          type: 'success',
+          text1: 'Готово',
+          text2: 'Файл загружен',
+          position: 'top',
+          visibilityTime: 2000,
+        });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Ошибка',
+          text2: 'Шаринг недоступен на этом устройстве',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+      }
+    } catch (error) {
+      console.error('Error downloading document', { error: error.message });
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось скачать документ',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
   return (
     <View style={styles.chatContainer}>
       {chat && chat.length > 0 && (
@@ -631,21 +707,22 @@ export const ChatSection = ({
                   return (
                     <>
                       {media.length > 0 && (
-                        <MediaCollage
-                          mediaArray={media}
-                          showControls={false}
-                        />
+                        <SwipeBlocker>
+                          <MediaCollage
+                            mediaArray={media}
+                            showControls={false}
+                          />
+                        </SwipeBlocker>
                       )}
                       {audio.length > 0 && (
                         <>
                           {audio.map((audioFile, index) => (
-                            <AudioPlayer
-                              key={index}
-                              audioUri={audioFile.uri}
-                              fileName={audioFile.name}
-                              onInteractionStart={() => onAudioInteractionChange?.(false)}
-                              onInteractionEnd={() => onAudioInteractionChange?.(true)}
-                            />
+                            <SwipeBlocker key={index}>
+                              <AudioPlayer
+                                audioUri={audioFile.uri}
+                                fileName={audioFile.name}
+                              />
+                            </SwipeBlocker>
                           ))}
                         </>
                       )}
@@ -653,6 +730,7 @@ export const ChatSection = ({
                         <DocumentList
                           documents={documents}
                           showControls={false}
+                          onDownload={handleDownloadDocument}
                         />
                       )}
                     </>
@@ -720,29 +798,31 @@ export const ChatSection = ({
               onResponderRelease={() => {}}
             >
               {media.length > 0 && (
-                <MediaCollage
-                  mediaArray={media}
-                  onRemove={(index) => {
-                    // Находим глобальный индекс в selectedMediaArray
-                    const mediaItem = media[index];
-                    const globalIndex = selectedMediaArray.findIndex(item => item === mediaItem);
-                    if (globalIndex !== -1) {
-                      setSelectedMediaArray(prev => prev.filter((_, i) => i !== globalIndex));
-                    }
-                  }}
-                  showControls={true}
-                />
+                <SwipeBlocker>
+                  <MediaCollage
+                    mediaArray={media}
+                    onRemove={(index) => {
+                      // Находим глобальный индекс в selectedMediaArray
+                      const mediaItem = media[index];
+                      const globalIndex = selectedMediaArray.findIndex(item => item === mediaItem);
+                      if (globalIndex !== -1) {
+                        setSelectedMediaArray(prev => prev.filter((_, i) => i !== globalIndex));
+                      }
+                    }}
+                    showControls={true}
+                  />
+                </SwipeBlocker>
               )}
               {audio.length > 0 && (
                 <View style={styles.audioListContainer}>
                   {audio.map((audioFile, index) => (
                     <View key={index} style={styles.audioItemContainer}>
-                      <AudioPlayer
-                        audioUri={audioFile.uri}
-                        fileName={audioFile.name}
-                        onInteractionStart={() => onAudioInteractionChange?.(false)}
-                        onInteractionEnd={() => onAudioInteractionChange?.(true)}
-                      />
+                      <SwipeBlocker style={{ flex: 1 }}>
+                        <AudioPlayer
+                          audioUri={audioFile.uri}
+                          fileName={audioFile.name}
+                        />
+                      </SwipeBlocker>
                       <TouchableOpacity
                         style={styles.audioRemoveButton}
                         onPress={() => {
