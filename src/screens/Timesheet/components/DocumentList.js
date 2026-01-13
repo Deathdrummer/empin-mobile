@@ -29,10 +29,21 @@ const getFileExtension = (document) => {
       'application/pdf': 'PDF',
       'application/msword': 'DOC',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
+      'application/rtf': 'RTF',
+      'text/rtf': 'RTF',
+      'application/vnd.oasis.opendocument.text': 'ODT',
+      'application/vnd.apple.pages': 'PAGES',
+      'application/x-iwork-pages-sffpages': 'PAGES',
       'application/vnd.ms-excel': 'XLS',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'XLSX',
+      'application/vnd.oasis.opendocument.spreadsheet': 'ODS',
+      'application/vnd.apple.numbers': 'NUMBERS',
+      'application/x-iwork-numbers-sffnumbers': 'NUMBERS',
       'application/vnd.ms-powerpoint': 'PPT',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PPTX',
+      'application/vnd.oasis.opendocument.presentation': 'ODP',
+      'application/vnd.apple.keynote': 'KEYNOTE',
+      'application/x-iwork-keynote-sffkey': 'KEYNOTE',
       // Архивы
       'application/zip': 'ZIP',
       'application/x-rar-compressed': 'RAR',
@@ -104,30 +115,43 @@ const getFileName = (document) => {
 };
 
 // Компонент для отображения одного документа
-const DocumentItem = ({ document, onRemove, index, showControls = true, onPress }) => {
+const DocumentItem = ({ document, onRemove, onDownload, index, showControls = true, onPress }) => {
   const extension = getFileExtension(document);
   const fileSize = formatFileSize(document.size);
   const fileName = getFileName(document);
 
   return (
-    <TouchableOpacity
-      style={styles.documentItem}
-      activeOpacity={showControls ? 1 : 0.7}
-      onPress={() => !showControls && onPress && onPress(index)}
-      disabled={showControls}
-    >
-      {/* Кружок с расширением файла */}
-      <View style={styles.documentIcon}>
-        <Text style={styles.documentExtension}>{extension}</Text>
-      </View>
+    <View style={styles.documentItem}>
+      <TouchableOpacity
+        style={styles.documentContent}
+        activeOpacity={0.7}
+        onPress={() => onPress && onPress(index)}
+        disabled={!onPress}
+      >
+        {/* Кружок с расширением файла */}
+        <View style={styles.documentIcon}>
+          <Text style={styles.documentExtension}>{extension}</Text>
+        </View>
 
-      {/* Информация о файле */}
-      <View style={styles.documentInfo}>
-        <Text style={styles.documentName} numberOfLines={1}>
-          {fileName}
-        </Text>
-        {fileSize && <Text style={styles.documentSize}>{fileSize}</Text>}
-      </View>
+        {/* Информация о файле */}
+        <View style={styles.documentInfo}>
+          <Text style={styles.documentName} numberOfLines={1}>
+            {fileName}
+          </Text>
+          {fileSize && <Text style={styles.documentSize}>{fileSize}</Text>}
+        </View>
+      </TouchableOpacity>
+
+      {/* Кнопка скачивания */}
+      {!showControls && onDownload && (
+        <TouchableOpacity
+          style={styles.documentDownloadButton}
+          onPress={() => onDownload(document, index)}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons name="download" size={20} color="#4A90E2" />
+        </TouchableOpacity>
+      )}
 
       {/* Кнопка удаления */}
       {showControls && onRemove && (
@@ -139,12 +163,12 @@ const DocumentItem = ({ document, onRemove, index, showControls = true, onPress 
           <MaterialCommunityIcons name="close" size={20} color="#999999" />
         </TouchableOpacity>
       )}
-    </TouchableOpacity>
+    </View>
   );
 };
 
 // Основной компонент списка документов
-export const DocumentList = ({ documents, onRemove, showControls = true }) => {
+export const DocumentList = ({ documents, onRemove, onDownload, showControls = true }) => {
   if (!documents || documents.length === 0) {
     return null;
   }
@@ -156,6 +180,7 @@ export const DocumentList = ({ documents, onRemove, showControls = true }) => {
           key={index}
           document={document}
           onRemove={onRemove}
+          onDownload={onDownload}
           index={index}
           showControls={showControls}
         />
@@ -177,6 +202,11 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 6,
     width: '100%',
+  },
+  documentContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   documentIcon: {
     width: 48,
@@ -207,6 +237,10 @@ const styles = StyleSheet.create({
   documentSize: {
     fontSize: 12,
     color: '#888888',
+  },
+  documentDownloadButton: {
+    padding: 4,
+    marginLeft: 8,
   },
   documentRemoveButton: {
     padding: 4,
