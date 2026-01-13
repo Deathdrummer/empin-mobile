@@ -122,12 +122,13 @@ function TimesheetScreenContent({ onLogout }) {
   const isScrolling = useRef(false);
   const lastScrollTime = useRef(0);
   const isPrependingRef = useRef(false);
-  const { swipeEnabled, flatListRef } = useSwipeControl();
+  const { flatListRef } = useSwipeControl();
 
   // Синхронизируем ref из хука с ref из контекста
   React.useEffect(() => {
     if (localFlatListRef.current && flatListRef) {
       flatListRef.current = localFlatListRef.current;
+      console.log('📋 [TimesheetScreen] FlatList ref синхронизирован');
     }
   }, [localFlatListRef, flatListRef]);
 
@@ -388,7 +389,6 @@ function TimesheetScreenContent({ onLogout }) {
         initialScrollIndex={initialScrollIndex}
         horizontal
         pagingEnabled={false}
-        scrollEnabled={swipeEnabled}
         directionalLockEnabled={true}
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"

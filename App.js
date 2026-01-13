@@ -3,6 +3,7 @@ import { View, ActivityIndicator, StyleSheet, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import LoginScreen from './src/screens/LoginScreen';
 import TimesheetScreen from './src/screens/TimesheetScreen';
 import { setUnauthorizedCallback, checkApiAvailability } from './src/services/api';
@@ -71,20 +72,22 @@ export default function App() {
   }
 
   return (
-    <ActionSheetProvider>
-      <>
-        <StatusBar hidden={true} />
-        <View style={styles.appContainer}>
-          {isLoggedIn ? (
-            <TimesheetScreen onLogout={handleLogout} />
-          ) : (
-            <LoginScreen onLoginSuccess={handleLoginSuccess} />
-          )}
-          <Toast />
-          <ApiBlockModal visible={isApiBlocked} onRetry={handleRetryApi} />
-        </View>
-      </>
-    </ActionSheetProvider>
+    <GestureHandlerRootView style={styles.appContainer}>
+      <ActionSheetProvider>
+        <>
+          <StatusBar hidden={true} />
+          <View style={styles.appContainer}>
+            {isLoggedIn ? (
+              <TimesheetScreen onLogout={handleLogout} />
+            ) : (
+              <LoginScreen onLoginSuccess={handleLoginSuccess} />
+            )}
+            <Toast />
+            <ApiBlockModal visible={isApiBlocked} onRetry={handleRetryApi} />
+          </View>
+        </>
+      </ActionSheetProvider>
+    </GestureHandlerRootView>
   );
 }
 

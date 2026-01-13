@@ -4,7 +4,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import Slider from '@react-native-community/slider';
 import { useAudioPlayerContext } from '../../../contexts/AudioPlayerContext';
-import { useSwipeControl } from '../../../contexts/SwipeControlContext';
 
 // Форматирование времени в формат mm:ss
 const formatTime = (seconds) => {
@@ -18,22 +17,27 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   const player = useAudioPlayer({ uri: audioUri });
   const status = useAudioPlayerStatus(player);
   const { registerPlayer, unregisterPlayer } = useAudioPlayerContext();
-  const { disableSwipe, enableSwipe } = useSwipeControl();
-  const isSliding = React.useRef(false);
 
   // useAudioPlayer автоматически освобождает ресурсы при размонтировании
   // Ручная очистка НЕ требуется и вызывает ошибку "shared object already released"
+
+  // КРИТИЧНО: expo-audio выгружает файл сразу после загрузки
+  // Поэтому запускаем воспроизведение сразу, чтобы файл не выгрузился
+  React.useEffect(() => {
+    player.play();
+    // Через 100ms ставим на паузу (файл останется загруженным)
+    const timer = setTimeout(() => {
+      player.pause();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [player]);
 
   // Отписываемся при размонтировании
   React.useEffect(() => {
     return () => {
       unregisterPlayer(player);
-      // Убеждаемся, что свайп разблокирован при размонтировании
-      if (isSliding.current) {
-        enableSwipe();
-      }
     };
-  }, [player, unregisterPlayer, enableSwipe]);
+  }, [player, unregisterPlayer]);
 
   const handlePlayPause = () => {
     if (status.playing) {
@@ -46,17 +50,12 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   };
 
   const handleSliderStart = () => {
-    isSliding.current = true;
-    disableSwipe();
+    // Ничего не делаем - блокировка свайпа убрана
   };
 
   const handleSliderChange = (value) => {
     if (status.duration) {
       player.seekTo(value);
-    }
-    if (isSliding.current) {
-      isSliding.current = false;
-      enableSwipe();
     }
   };
 
