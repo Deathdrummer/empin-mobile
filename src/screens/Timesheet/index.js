@@ -122,7 +122,7 @@ function TimesheetScreenContent({ onLogout }) {
   const isScrolling = useRef(false);
   const lastScrollTime = useRef(0);
   const isPrependingRef = useRef(false);
-  const { flatListRef } = useSwipeControl();
+  const { flatListRef, scrollEnabled } = useSwipeControl();
 
   // Синхронизируем ref из хука с ref из контекста
   React.useEffect(() => {
@@ -388,6 +388,7 @@ function TimesheetScreenContent({ onLogout }) {
         keyExtractor={(item) => item.index.toString()}
         initialScrollIndex={initialScrollIndex}
         horizontal
+        scrollEnabled={scrollEnabled}
         pagingEnabled={false}
         directionalLockEnabled={true}
         showsHorizontalScrollIndicator={false}

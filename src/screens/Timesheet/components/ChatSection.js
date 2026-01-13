@@ -19,6 +19,7 @@ import { CommentContextMenu } from './CommentContextMenu';
 import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
+import { SwipeBlocker } from '../../../components/SwipeBlocker';
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -706,19 +707,22 @@ export const ChatSection = ({
                   return (
                     <>
                       {media.length > 0 && (
-                        <MediaCollage
-                          mediaArray={media}
-                          showControls={false}
-                        />
+                        <SwipeBlocker>
+                          <MediaCollage
+                            mediaArray={media}
+                            showControls={false}
+                          />
+                        </SwipeBlocker>
                       )}
                       {audio.length > 0 && (
                         <>
                           {audio.map((audioFile, index) => (
-                            <AudioPlayer
-                              key={index}
-                              audioUri={audioFile.uri}
-                              fileName={audioFile.name}
-                            />
+                            <SwipeBlocker key={index}>
+                              <AudioPlayer
+                                audioUri={audioFile.uri}
+                                fileName={audioFile.name}
+                              />
+                            </SwipeBlocker>
                           ))}
                         </>
                       )}
@@ -791,29 +795,31 @@ export const ChatSection = ({
           return (
             <View>
               {media.length > 0 && (
-                <MediaCollage
-                  mediaArray={media}
-                  onRemove={(index) => {
-                    // Находим глобальный индекс в selectedMediaArray
-                    const mediaItem = media[index];
-                    const globalIndex = selectedMediaArray.findIndex(item => item === mediaItem);
-                    if (globalIndex !== -1) {
-                      setSelectedMediaArray(prev => prev.filter((_, i) => i !== globalIndex));
-                    }
-                  }}
-                  showControls={true}
-                />
+                <SwipeBlocker>
+                  <MediaCollage
+                    mediaArray={media}
+                    onRemove={(index) => {
+                      // Находим глобальный индекс в selectedMediaArray
+                      const mediaItem = media[index];
+                      const globalIndex = selectedMediaArray.findIndex(item => item === mediaItem);
+                      if (globalIndex !== -1) {
+                        setSelectedMediaArray(prev => prev.filter((_, i) => i !== globalIndex));
+                      }
+                    }}
+                    showControls={true}
+                  />
+                </SwipeBlocker>
               )}
               {audio.length > 0 && (
                 <View style={styles.audioListContainer}>
                   {audio.map((audioFile, index) => (
                     <View key={index} style={styles.audioItemContainer}>
-                      <View style={{ flex: 1 }}>
+                      <SwipeBlocker style={{ flex: 1 }}>
                         <AudioPlayer
                           audioUri={audioFile.uri}
                           fileName={audioFile.name}
                         />
-                      </View>
+                      </SwipeBlocker>
                       <TouchableOpacity
                         style={styles.audioRemoveButton}
                         onPress={() => {
