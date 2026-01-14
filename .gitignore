@@ -45,3 +45,6 @@ logs/*.log
 
 # Claude Code CLI temporary files
 tmpclaude-*-cwd
+
+# Temporary documentation and notes
+WebRTC.md

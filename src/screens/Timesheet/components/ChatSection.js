@@ -20,6 +20,10 @@ import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent
+} from 'expo-speech-recognition';
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -202,6 +206,7 @@ export const ChatSection = ({
   const [currentUserId, setCurrentUserId] = React.useState(null);
   const [selectedMediaArray, setSelectedMediaArray] = React.useState([]);
   const [hasValidationError, setHasValidationError] = React.useState(false);
+  const [isRecording, setIsRecording] = React.useState(false);
   const { can } = usePermissions();
   const { showActionSheetWithOptions } = useActionSheet();
   const inputRef = React.useRef(null);
@@ -211,6 +216,35 @@ export const ChatSection = ({
     if (!chat || !replyToId) return null;
     return chat.find(comment => comment.id === replyToId);
   };
+
+  // Обработчики событий голосового распознавания
+  useSpeechRecognitionEvent('start', () => {
+    setIsRecording(true);
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setIsRecording(false);
+  });
+
+  useSpeechRecognitionEvent('result', (event) => {
+    if (event.results && event.results.length > 0) {
+      const transcript = event.results[0]?.transcript || '';
+      // Добавляем распознанный текст к существующему
+      onCommentChange(commentText + transcript);
+    }
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    console.error('Speech recognition error', { error: event.error, message: event.message });
+    setIsRecording(false);
+    Toast.show({
+      type: 'error',
+      text1: 'Ошибка распознавания',
+      text2: event.message || 'Не удалось распознать речь',
+      position: 'top',
+      visibilityTime: 3000,
+    });
+  });
 
   React.useEffect(() => {
     const loadCurrentUser = async () => {
@@ -569,6 +603,46 @@ export const ChatSection = ({
     handleCloseMenu();
   };
 
+  // Функция запуска голосового ввода
+  const handleVoiceInput = async () => {
+    try {
+      // Проверяем и запрашиваем разрешения
+      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+
+      if (!permission.granted) {
+        Toast.show({
+          type: 'error',
+          text1: 'Доступ запрещен',
+          text2: 'Необходим доступ к микрофону для голосового ввода',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      // Запускаем распознавание речи
+      ExpoSpeechRecognitionModule.start({
+        lang: 'ru-RU',
+        interimResults: true,
+        maxAlternatives: 1,
+        continuous: false,
+        requiresOnDeviceRecognition: false,
+        addsPunctuation: true,
+      });
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('Failed to start voice input', { error: error.message });
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось запустить голосовой ввод',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
   // Функция скачивания документа
   const handleDownloadDocument = async (document) => {
     try {
@@ -885,10 +959,18 @@ export const ChatSection = ({
           />
           <TouchableOpacity
             style={styles.chatSendButton}
-            onPress={handleSendComment}
+            onPress={commentText.trim() ? handleSendComment : handleVoiceInput}
             activeOpacity={0.7}
           >
-            <Text style={styles.chatSendButtonIcon}>➤</Text>
+            {commentText.trim() ? (
+              <Text style={styles.chatSendButtonIcon}>➤</Text>
+            ) : (
+              <MaterialCommunityIcons
+                name={isRecording ? "microphone" : "microphone-outline"}
+                size={22}
+                color={isRecording ? "#E53935" : "#999999"}
+              />
+            )}
           </TouchableOpacity>
         </View>
       </Can>
