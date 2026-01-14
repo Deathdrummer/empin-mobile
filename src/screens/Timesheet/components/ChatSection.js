@@ -20,19 +20,7 @@ import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
-// Безопасный импорт модуля голосового распознавания
-let ExpoSpeechRecognitionModule = null;
-let useSpeechRecognitionEvent = () => {};
-let isSpeechRecognitionAvailable = false;
-
-try {
-  const speechRecognition = require('expo-speech-recognition');
-  ExpoSpeechRecognitionModule = speechRecognition.ExpoSpeechRecognitionModule;
-  useSpeechRecognitionEvent = speechRecognition.useSpeechRecognitionEvent;
-  isSpeechRecognitionAvailable = true;
-} catch (error) {
-  console.warn('Speech recognition module not available:', error.message);
-}
+import { useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -216,9 +204,12 @@ export const ChatSection = ({
   const [selectedMediaArray, setSelectedMediaArray] = React.useState([]);
   const [hasValidationError, setHasValidationError] = React.useState(false);
   const [isRecording, setIsRecording] = React.useState(false);
+  const [recordingDuration, setRecordingDuration] = React.useState(0);
   const { can } = usePermissions();
   const { showActionSheetWithOptions } = useActionSheet();
   const inputRef = React.useRef(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recordingTimerRef = React.useRef(null);
 
   // Функция для поиска родительского комментария
   const findParentComment = (replyToId) => {
@@ -226,34 +217,14 @@ export const ChatSection = ({
     return chat.find(comment => comment.id === replyToId);
   };
 
-  // Обработчики событий голосового распознавания
-  useSpeechRecognitionEvent('start', () => {
-    setIsRecording(true);
-  });
-
-  useSpeechRecognitionEvent('end', () => {
-    setIsRecording(false);
-  });
-
-  useSpeechRecognitionEvent('result', (event) => {
-    if (event.results && event.results.length > 0) {
-      const transcript = event.results[0]?.transcript || '';
-      // Добавляем распознанный текст к существующему
-      onCommentChange(commentText + transcript);
-    }
-  });
-
-  useSpeechRecognitionEvent('error', (event) => {
-    console.error('Speech recognition error', { error: event.error, message: event.message });
-    setIsRecording(false);
-    Toast.show({
-      type: 'error',
-      text1: 'Ошибка распознавания',
-      text2: event.message || 'Не удалось распознать речь',
-      position: 'top',
-      visibilityTime: 3000,
-    });
-  });
+  // Эффект для очистки таймера при размонтировании
+  React.useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, []);
 
   React.useEffect(() => {
     const loadCurrentUser = async () => {
@@ -612,52 +583,95 @@ export const ChatSection = ({
     handleCloseMenu();
   };
 
-  // Функция запуска голосового ввода
-  const handleVoiceInput = async () => {
-    // Проверяем доступность модуля
-    if (!isSpeechRecognitionAvailable || !ExpoSpeechRecognitionModule) {
-      Toast.show({
-        type: 'error',
-        text1: 'Недоступно',
-        text2: 'Голосовой ввод недоступен на этом устройстве',
-        position: 'top',
-        visibilityTime: 3000,
-      });
-      return;
-    }
-
+  // Функция начала записи аудио
+  const handleStartRecording = async () => {
     try {
-      // Проверяем и запрашиваем разрешения
-      const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      // Запрашиваем разрешение на микрофон
+      const permission = await AudioModule.requestRecordingPermissionsAsync();
 
       if (!permission.granted) {
         Toast.show({
           type: 'error',
           text1: 'Доступ запрещен',
-          text2: 'Необходим доступ к микрофону для голосового ввода',
+          text2: 'Необходим доступ к микрофону для записи',
           position: 'top',
           visibilityTime: 3000,
         });
         return;
       }
 
-      // Запускаем распознавание речи
-      ExpoSpeechRecognitionModule.start({
-        lang: 'ru-RU',
-        interimResults: true,
-        maxAlternatives: 1,
-        continuous: false,
-        requiresOnDeviceRecognition: false,
-        addsPunctuation: true,
-      });
+      // Подготавливаем и запускаем запись
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      // Запускаем таймер для отображения длительности
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
 
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
-      console.error('Failed to start voice input', { error: error.message });
+      console.error('Failed to start recording', { error: error.message });
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: 'Не удалось запустить голосовой ввод',
+        text2: 'Не удалось начать запись',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  // Функция остановки записи и автоотправки
+  const handleStopRecording = async () => {
+    try {
+      // Останавливаем таймер
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+
+      // Останавливаем запись
+      await audioRecorder.stop();
+      setIsRecording(false);
+      setRecordingDuration(0);
+
+      // Получаем URI записанного файла
+      const audioUri = audioRecorder.uri;
+
+      if (!audioUri) {
+        Toast.show({
+          type: 'error',
+          text1: 'Ошибка',
+          text2: 'Не удалось получить аудиофайл',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      // Создаем объект аудиофайла
+      const audioFile = {
+        uri: audioUri,
+        name: `audio_${Date.now()}.m4a`,
+        mimeType: 'audio/mp4',
+      };
+
+      // Автоматически отправляем аудио
+      await onAddComment([audioFile]);
+
+    } catch (error) {
+      console.error('Failed to stop recording', { error: error.message });
+      setIsRecording(false);
+      setRecordingDuration(0);
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось сохранить запись',
         position: 'top',
         visibilityTime: 3000,
       });
@@ -947,6 +961,21 @@ export const ChatSection = ({
             </View>
           );
         })()}
+        {isRecording && (
+          <View style={styles.recordingIndicator}>
+            <View style={styles.recordingIndicatorContent}>
+              <MaterialCommunityIcons
+                name="microphone"
+                size={18}
+                color="#E53935"
+              />
+              <Text style={styles.recordingIndicatorText}>
+                Запись... {Math.floor(recordingDuration / 60)}:{String(recordingDuration % 60).padStart(2, '0')}
+              </Text>
+            </View>
+            <Text style={styles.recordingIndicatorHint}>Отпустите для отправки</Text>
+          </View>
+        )}
         <View style={styles.chatInputWrapper}>
           <TouchableOpacity
             style={styles.chatAttachButton}
@@ -978,21 +1007,28 @@ export const ChatSection = ({
             onBlur={() => setIsFocused(false)}
             multiline
           />
-          <TouchableOpacity
-            style={styles.chatSendButton}
-            onPress={commentText.trim() ? handleSendComment : handleVoiceInput}
-            activeOpacity={0.7}
-          >
-            {commentText.trim() ? (
+          {commentText.trim() ? (
+            <TouchableOpacity
+              style={styles.chatSendButton}
+              onPress={handleSendComment}
+              activeOpacity={0.7}
+            >
               <Text style={styles.chatSendButtonIcon}>➤</Text>
-            ) : (
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.chatSendButton}
+              onPressIn={handleStartRecording}
+              onPressOut={handleStopRecording}
+              activeOpacity={0.7}
+            >
               <MaterialCommunityIcons
                 name={isRecording ? "microphone" : "microphone-outline"}
                 size={22}
                 color={isRecording ? "#E53935" : "#999999"}
               />
-            )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+          )}
         </View>
       </Can>
 
@@ -1277,5 +1313,29 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  recordingIndicator: {
+    backgroundColor: '#FFEBEE',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#E53935',
+  },
+  recordingIndicatorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  recordingIndicatorText: {
+    fontSize: 14,
+    color: '#E53935',
+    fontWeight: '500',
+  },
+  recordingIndicatorHint: {
+    fontSize: 11,
+    color: '#999',
+    marginLeft: 26,
   },
 });
