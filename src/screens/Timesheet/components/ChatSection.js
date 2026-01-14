@@ -20,10 +20,19 @@ import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent
-} from 'expo-speech-recognition';
+// Безопасный импорт модуля голосового распознавания
+let ExpoSpeechRecognitionModule = null;
+let useSpeechRecognitionEvent = () => {};
+let isSpeechRecognitionAvailable = false;
+
+try {
+  const speechRecognition = require('expo-speech-recognition');
+  ExpoSpeechRecognitionModule = speechRecognition.ExpoSpeechRecognitionModule;
+  useSpeechRecognitionEvent = speechRecognition.useSpeechRecognitionEvent;
+  isSpeechRecognitionAvailable = true;
+} catch (error) {
+  console.warn('Speech recognition module not available:', error.message);
+}
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -605,6 +614,18 @@ export const ChatSection = ({
 
   // Функция запуска голосового ввода
   const handleVoiceInput = async () => {
+    // Проверяем доступность модуля
+    if (!isSpeechRecognitionAvailable || !ExpoSpeechRecognitionModule) {
+      Toast.show({
+        type: 'error',
+        text1: 'Недоступно',
+        text2: 'Голосовой ввод недоступен на этом устройстве',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
     try {
       // Проверяем и запрашиваем разрешения
       const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
