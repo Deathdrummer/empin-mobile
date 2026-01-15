@@ -74,7 +74,7 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     const nextSpeed = speeds[nextIndex];
 
     setPlaybackRate(nextSpeed);
-    player.setPlaybackRate(nextSpeed);
+    player.playbackRate = nextSpeed;
   };
 
   const currentTime = status.currentTime || 0;
