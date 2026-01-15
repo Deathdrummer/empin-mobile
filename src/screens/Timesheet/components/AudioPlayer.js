@@ -26,6 +26,11 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   const { registerPlayer, unregisterPlayer } = useAudioPlayerContext();
   const [playbackRate, setPlaybackRate] = React.useState(1.0);
 
+  // Включаем коррекцию pitch при изменении скорости
+  React.useEffect(() => {
+    player.shouldCorrectPitch = true;
+  }, [player]);
+
   // useAudioPlayer автоматически освобождает ресурсы при размонтировании
   // Ручная очистка НЕ требуется и вызывает ошибку "shared object already released"
 
@@ -77,7 +82,8 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
 
     // setPlaybackRate может вызвать автоплей (issue #38220), поэтому сохраняем текущее состояние
     const wasPlaying = status.playing;
-    player.setPlaybackRate(nextSpeed);
+    // Второй параметр - качество pitch коррекции (iOS only, android игнорирует)
+    player.setPlaybackRate(nextSpeed, 'high');
 
     // Восстанавливаем состояние воспроизведения
     if (!wasPlaying && status.playing) {
