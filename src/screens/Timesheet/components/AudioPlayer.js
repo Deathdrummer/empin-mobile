@@ -32,6 +32,8 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   // КРИТИЧНО: expo-audio выгружает файл сразу после загрузки
   // Поэтому запускаем воспроизведение сразу, чтобы файл не выгрузился
   React.useEffect(() => {
+    // Устанавливаем playbackRate сразу после создания плеера
+    player.playbackRate = playbackRate;
     player.play();
     // Через 100ms ставим на паузу (файл останется загруженным)
     const timer = setTimeout(() => {
@@ -39,6 +41,11 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     }, 100);
     return () => clearTimeout(timer);
   }, [player]);
+
+  // Синхронизируем playbackRate при изменении
+  React.useEffect(() => {
+    player.playbackRate = playbackRate;
+  }, [player, playbackRate]);
 
   // Отписываемся при размонтировании
   React.useEffect(() => {
@@ -74,8 +81,7 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     const nextSpeed = speeds[nextIndex];
 
     setPlaybackRate(nextSpeed);
-    // Прямое присваивание - pitch correction включен по умолчанию (shouldCorrectPitch = true)
-    player.playbackRate = nextSpeed;
+    // playbackRate будет синхронизирован через useEffect
   };
 
   const currentTime = status.currentTime || 0;

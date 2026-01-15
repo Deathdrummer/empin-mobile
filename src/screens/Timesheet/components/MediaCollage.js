@@ -104,7 +104,13 @@ const FullscreenVideo = ({ uri }) => {
     player.play();
     // Включаем сохранение pitch при изменении скорости
     player.preservesPitch = true;
+    player.playbackRate = playbackRate;
   });
+
+  // Синхронизируем playbackRate при изменении
+  React.useEffect(() => {
+    player.playbackRate = playbackRate;
+  }, [player, playbackRate]);
 
   const handleSpeedChange = () => {
     const speeds = [1.0, 1.25, 1.5, 2.0];
@@ -113,7 +119,7 @@ const FullscreenVideo = ({ uri }) => {
     const nextSpeed = speeds[nextIndex];
 
     setPlaybackRate(nextSpeed);
-    player.playbackRate = nextSpeed;
+    // playbackRate будет синхронизирован через useEffect
   };
 
   return (
