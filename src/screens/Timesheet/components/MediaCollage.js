@@ -111,6 +111,7 @@ const FullscreenVideo = ({ uri }) => {
     const nextSpeed = speeds[nextIndex];
 
     setPlaybackRate(nextSpeed);
+    // expo-video позволяет прямое присваивание, но для единообразия используем тот же подход
     player.playbackRate = nextSpeed;
   };
 
