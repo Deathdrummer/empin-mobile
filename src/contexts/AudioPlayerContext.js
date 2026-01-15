@@ -65,12 +65,14 @@ export const AudioPlayerProvider = ({ children }) => {
   const registerPlayer = (player) => {
     // Если уже есть активный плеер и он воспроизводится, останавливаем его
     if (currentPlayerRef.current && currentPlayerRef.current !== player) {
+      console.log('[AudioPlayerContext] Stopping previous player');
       try {
         currentPlayerRef.current.pause();
       } catch (error) {
         console.error('Failed to pause previous player', { error: error.message });
       }
     }
+    console.log('[AudioPlayerContext] Registering new player');
     currentPlayerRef.current = player;
   };
 
