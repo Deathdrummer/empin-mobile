@@ -43,15 +43,13 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   // КРИТИЧНО: expo-audio выгружает файл сразу после загрузки
   // Поэтому запускаем воспроизведение сразу, чтобы файл не выгрузился
   React.useEffect(() => {
-    // Регистрируем плеер для остановки других при запуске
-    registerPlayer(player);
     player.play();
     // Через 100ms ставим на паузу (файл останется загруженным)
     const timer = setTimeout(() => {
       player.pause();
     }, 100);
     return () => clearTimeout(timer);
-  }, [player, registerPlayer]);
+  }, [player]);
 
   // Отписываемся при размонтировании
   React.useEffect(() => {
