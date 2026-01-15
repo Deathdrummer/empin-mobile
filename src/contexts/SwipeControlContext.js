@@ -11,7 +11,6 @@ export const SwipeControlProvider = ({ children }) => {
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
   const disableScroll = useCallback(() => {
-    console.log('🚫 SwipeControl: Блокировка свайпа');
     // КРИТИЧНО: используем setNativeProps для немедленной блокировки (синхронно)
     // State обновление слишком медленное на реальных устройствах
     if (flatListRef.current) {
@@ -22,7 +21,6 @@ export const SwipeControlProvider = ({ children }) => {
   }, []);
 
   const enableScroll = useCallback(() => {
-    console.log('✅ SwipeControl: Разблокировка свайпа');
     // Аналогично - setNativeProps для немедленной разблокировки
     if (flatListRef.current) {
       flatListRef.current.setNativeProps({ scrollEnabled: true });

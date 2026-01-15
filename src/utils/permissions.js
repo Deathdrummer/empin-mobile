@@ -15,19 +15,35 @@ export const getPermissions = async () => {
   }
 };
 
+// Кэш для предотвращения множественных параллельных запросов
+let refreshPromise = null;
+
 /**
  * Обновить права пользователя с сервера
  * Вызывает /auth/me и автоматически обновляет права через EventEmitter
+ * Если вызывается несколько раз параллельно - возвращает тот же Promise
  * @returns {Promise<string[]>} Новый массив прав
  */
 export const refreshPermissions = async () => {
-  try {
-    const userData = await authAPI.me();
-    return userData.permissions || [];
-  } catch (error) {
-    console.error('Error refreshing permissions', { error: error.message });
-    throw error;
+  // Если уже идёт запрос - возвращаем существующий Promise
+  if (refreshPromise) {
+    return refreshPromise;
   }
+
+  refreshPromise = (async () => {
+    try {
+      const userData = await authAPI.me();
+      return userData.permissions || [];
+    } catch (error) {
+      console.error('Error refreshing permissions', { error: error.message });
+      throw error;
+    } finally {
+      // Очищаем кэш после завершения запроса
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 };
 
 /**

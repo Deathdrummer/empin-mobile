@@ -135,12 +135,23 @@ const isMediaFile = (media) => {
 
   // Проверяем по mimeType
   if (media.mimeType) {
+    // НЕ считаем аудио файлы как media, даже если mimeType неправильный
+    if (media.mimeType.startsWith('audio/') || media.mimeType === 'application/ogg') {
+      return false;
+    }
     return media.mimeType.startsWith('image/') || media.mimeType.startsWith('video/');
   }
 
   // Fallback: проверяем по расширению файла
   if (media.uri || media.name) {
     const fileName = (media.uri || media.name).toLowerCase();
+
+    // Сначала проверяем аудио расширения - исключаем их из media
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.oga', '.opus', '.m4a', '.aac', '.flac', '.wma', '.webm', '.amr', '.3gp'];
+    if (audioExtensions.some(ext => fileName.endsWith(ext))) {
+      return false;
+    }
+
     const mediaExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.mp4', '.mov', '.avi', '.mkv'];
     return mediaExtensions.some(ext => fileName.endsWith(ext));
   }
@@ -175,9 +186,10 @@ const separateMediaAndDocuments = (array) => {
     return { media: [], audio: [], documents: [] };
   }
 
-  const media = array.filter(item => isMediaFile(item));
+  // Сначала проверяем аудио (приоритет), потом медиа, потом документы
   const audio = array.filter(item => isAudioFile(item));
-  const documents = array.filter(item => !isMediaFile(item) && !isAudioFile(item));
+  const media = array.filter(item => !isAudioFile(item) && isMediaFile(item));
+  const documents = array.filter(item => !isAudioFile(item) && !isMediaFile(item));
 
   return { media, audio, documents };
 };
@@ -586,6 +598,12 @@ export const ChatSection = ({
   // Функция начала записи аудио
   const handleStartRecording = async () => {
     try {
+      // Проверяем, что запись не идёт
+      if (audioRecorder.isRecording) {
+        console.log('[Audio] Recording already in progress');
+        return;
+      }
+
       // Запрашиваем разрешение на микрофон
       const permission = await AudioModule.requestRecordingPermissionsAsync();
 
@@ -614,6 +632,7 @@ export const ChatSection = ({
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
       console.error('Failed to start recording', { error: error.message });
+      setIsRecording(false);
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
@@ -633,8 +652,26 @@ export const ChatSection = ({
         recordingTimerRef.current = null;
       }
 
-      // Останавливаем запись
-      await audioRecorder.stop();
+      // Проверяем, что запись действительно идёт
+      if (!audioRecorder.isRecording) {
+        console.log('[Audio] Recording already stopped');
+        setIsRecording(false);
+        setRecordingDuration(0);
+        return;
+      }
+
+      // Останавливаем запись с защитой от IllegalStateException
+      try {
+        await audioRecorder.stop();
+      } catch (stopError) {
+        // Игнорируем IllegalStateException, если запись уже остановлена
+        if (stopError.message?.includes('IllegalStateException')) {
+          console.log('[Audio] IllegalStateException caught (known expo-audio bug on Android)', { error: stopError.message });
+        } else {
+          throw stopError;
+        }
+      }
+
       setIsRecording(false);
       setRecordingDuration(0);
 

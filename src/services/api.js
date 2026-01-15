@@ -52,9 +52,19 @@ api.interceptors.response.use(
     }
     // 401 - невалидный токен
     else if (error.response?.status === 401) {
-      // Удаляем невалидный токен
+      const url = error.config?.url || '';
+
+      // Игнорируем 401 на фоновых проверках /auth/me - не выкидываем пользователя
+      // Выкидываем только при 401 на реальных запросах данных
+      if (url === '/auth/me') {
+        console.warn('Token expired on background check, ignoring');
+        return Promise.reject(error);
+      }
+
+      // Для остальных запросов - удаляем токен и выкидываем пользователя
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('user');
+      await AsyncStorage.removeItem('permissions');
 
       // Вызываем callback для принудительного выхода
       if (onUnauthorizedCallback) {
