@@ -30,9 +30,9 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     player.shouldCorrectPitch = true;
   }, [player]);
 
-  // Применяем глобальную скорость к плееру при загрузке
+  // Применяем глобальную скорость к плееру при загрузке и при изменении глобальной скорости
   React.useEffect(() => {
-    if (isLoaded && audioPlaybackRate !== 1.0) {
+    if (isLoaded) {
       player.setPlaybackRate(audioPlaybackRate, 'high');
     }
   }, [player, isLoaded, audioPlaybackRate]);
