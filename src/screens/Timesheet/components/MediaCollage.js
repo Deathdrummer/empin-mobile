@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, Pressable, Dime
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import ImageViewing from 'react-native-image-viewing';
+import { useAudioPlayerContext } from '../../../contexts/AudioPlayerContext';
 
 const GAP = 2; // Промежуток между картинками
 const ITEMS_PER_ROW = 3;
@@ -99,20 +100,27 @@ const MediaItem = ({ uri, mimeType, onRemove, index, showControls = true, isLast
 
 // Компонент полноэкранного видео
 const FullscreenVideo = ({ uri }) => {
-  const [playbackRate, setPlaybackRate] = React.useState(1.0);
+  const { videoPlaybackRate, setVideoPlaybackRate, isLoaded } = useAudioPlayerContext();
   const player = useVideoPlayer(uri, (player) => {
     player.play();
     // Включаем сохранение pitch при изменении скорости
     player.preservesPitch = true;
   });
 
+  // Применяем глобальную скорость к плееру при загрузке
+  React.useEffect(() => {
+    if (isLoaded && videoPlaybackRate !== 1.0) {
+      player.playbackRate = videoPlaybackRate;
+    }
+  }, [player, isLoaded, videoPlaybackRate]);
+
   const handleSpeedChange = () => {
     const speeds = [1.0, 1.25, 1.5, 2.0];
-    const currentIndex = speeds.indexOf(playbackRate);
+    const currentIndex = speeds.indexOf(videoPlaybackRate);
     const nextIndex = (currentIndex + 1) % speeds.length;
     const nextSpeed = speeds[nextIndex];
 
-    setPlaybackRate(nextSpeed);
+    setVideoPlaybackRate(nextSpeed);
     player.playbackRate = nextSpeed;
   };
 
@@ -129,7 +137,7 @@ const FullscreenVideo = ({ uri }) => {
         onPress={handleSpeedChange}
         activeOpacity={0.7}
       >
-        <Text style={styles.videoSpeedButtonText}>{playbackRate}x</Text>
+        <Text style={styles.videoSpeedButtonText}>{videoPlaybackRate}x</Text>
       </TouchableOpacity>
     </View>
   );

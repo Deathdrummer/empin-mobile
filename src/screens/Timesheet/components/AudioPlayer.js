@@ -23,13 +23,19 @@ const removeFileExtension = (fileName) => {
 export const AudioPlayer = ({ audioUri, fileName }) => {
   const player = useAudioPlayer({ uri: audioUri });
   const status = useAudioPlayerStatus(player);
-  const { registerPlayer, unregisterPlayer } = useAudioPlayerContext();
-  const [playbackRate, setPlaybackRate] = React.useState(1.0);
+  const { registerPlayer, unregisterPlayer, audioPlaybackRate, setAudioPlaybackRate, isLoaded } = useAudioPlayerContext();
 
   // Включаем коррекцию pitch при изменении скорости
   React.useEffect(() => {
     player.shouldCorrectPitch = true;
   }, [player]);
+
+  // Применяем глобальную скорость к плееру при загрузке
+  React.useEffect(() => {
+    if (isLoaded && audioPlaybackRate !== 1.0) {
+      player.setPlaybackRate(audioPlaybackRate, 'high');
+    }
+  }, [player, isLoaded, audioPlaybackRate]);
 
   // useAudioPlayer автоматически освобождает ресурсы при размонтировании
   // Ручная очистка НЕ требуется и вызывает ошибку "shared object already released"
@@ -74,11 +80,11 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
 
   const handleSpeedChange = () => {
     const speeds = [1.0, 1.25, 1.5, 2.0];
-    const currentIndex = speeds.indexOf(playbackRate);
+    const currentIndex = speeds.indexOf(audioPlaybackRate);
     const nextIndex = (currentIndex + 1) % speeds.length;
     const nextSpeed = speeds[nextIndex];
 
-    setPlaybackRate(nextSpeed);
+    setAudioPlaybackRate(nextSpeed);
 
     // setPlaybackRate может вызвать автоплей (issue #38220), поэтому сохраняем текущее состояние
     const wasPlaying = status.playing;
@@ -140,7 +146,7 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
         onPress={handleSpeedChange}
         activeOpacity={0.7}
       >
-        <Text style={styles.speedButtonText}>{playbackRate}x</Text>
+        <Text style={styles.speedButtonText}>{audioPlaybackRate}x</Text>
       </TouchableOpacity>
     </View>
   );
