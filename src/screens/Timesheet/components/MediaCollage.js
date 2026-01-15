@@ -99,17 +99,37 @@ const MediaItem = ({ uri, mimeType, onRemove, index, showControls = true, isLast
 
 // Компонент полноэкранного видео
 const FullscreenVideo = ({ uri }) => {
+  const [playbackRate, setPlaybackRate] = React.useState(1.0);
   const player = useVideoPlayer(uri, (player) => {
     player.play();
   });
 
+  const handleSpeedChange = () => {
+    const speeds = [1.0, 1.25, 1.5, 2.0];
+    const currentIndex = speeds.indexOf(playbackRate);
+    const nextIndex = (currentIndex + 1) % speeds.length;
+    const nextSpeed = speeds[nextIndex];
+
+    setPlaybackRate(nextSpeed);
+    player.playbackRate = nextSpeed;
+  };
+
   return (
-    <VideoView
-      player={player}
-      style={styles.fullscreenVideo}
-      nativeControls={true}
-      contentFit="contain"
-    />
+    <View style={styles.videoPlayerContainer}>
+      <VideoView
+        player={player}
+        style={styles.fullscreenVideo}
+        nativeControls={true}
+        contentFit="contain"
+      />
+      <TouchableOpacity
+        style={styles.videoSpeedButton}
+        onPress={handleSpeedChange}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.videoSpeedButtonText}>{playbackRate}x</Text>
+      </TouchableOpacity>
+    </View>
   );
 };
 
@@ -315,9 +335,31 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
   },
-  fullscreenVideo: {
+  videoPlayerContainer: {
+    position: 'relative',
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT * 0.8,
+  },
+  fullscreenVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  videoSpeedButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  videoSpeedButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   closeButton: {
     position: 'absolute',

@@ -24,6 +24,7 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   const player = useAudioPlayer({ uri: audioUri });
   const status = useAudioPlayerStatus(player);
   const { registerPlayer, unregisterPlayer } = useAudioPlayerContext();
+  const [playbackRate, setPlaybackRate] = React.useState(1.0);
 
   // useAudioPlayer автоматически освобождает ресурсы при размонтировании
   // Ручная очистка НЕ требуется и вызывает ошибку "shared object already released"
@@ -64,6 +65,16 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     if (status.duration) {
       player.seekTo(value);
     }
+  };
+
+  const handleSpeedChange = () => {
+    const speeds = [1.0, 1.25, 1.5, 2.0];
+    const currentIndex = speeds.indexOf(playbackRate);
+    const nextIndex = (currentIndex + 1) % speeds.length;
+    const nextSpeed = speeds[nextIndex];
+
+    setPlaybackRate(nextSpeed);
+    player.playbackRate = nextSpeed;
   };
 
   const currentTime = status.currentTime || 0;
@@ -109,6 +120,14 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
           </View>
         </View>
       </View>
+
+      <TouchableOpacity
+        style={styles.speedButton}
+        onPress={handleSpeedChange}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.speedButtonText}>{playbackRate}x</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -167,5 +186,19 @@ const styles = StyleSheet.create({
 	marginLeft: 4,
 	marginRight: 4,
     color: '#999',
+  },
+  speedButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  speedButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#4A90E2',
   },
 });
