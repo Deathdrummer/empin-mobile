@@ -74,8 +74,8 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     const nextSpeed = speeds[nextIndex];
 
     setPlaybackRate(nextSpeed);
-    // Используем setPlaybackRate с pitch correction (iOS: 'high' quality)
-    player.setPlaybackRate(nextSpeed, 'high');
+    // Прямое присваивание - pitch correction включен по умолчанию (shouldCorrectPitch = true)
+    player.playbackRate = nextSpeed;
   };
 
   const currentTime = status.currentTime || 0;
