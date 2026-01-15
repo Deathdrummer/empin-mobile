@@ -74,7 +74,8 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     const nextSpeed = speeds[nextIndex];
 
     setPlaybackRate(nextSpeed);
-    player.playbackRate = nextSpeed;
+    // Используем метод setPlaybackRate без второго параметра (pitch correction по умолчанию)
+    player.setPlaybackRate(nextSpeed);
   };
 
   const currentTime = status.currentTime || 0;
