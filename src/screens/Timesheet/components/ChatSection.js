@@ -646,6 +646,9 @@ export const ChatSection = ({
   // Функция остановки записи и автоотправки
   const handleStopRecording = async () => {
     try {
+      // Сохраняем длительность для проверки перед сбросом
+      const duration = recordingDuration;
+
       // Останавливаем таймер
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
@@ -674,6 +677,18 @@ export const ChatSection = ({
 
       setIsRecording(false);
       setRecordingDuration(0);
+
+      // Проверка минимальной длительности записи
+      if (duration < 1) {
+        Toast.show({
+          type: 'info',
+          text1: 'Слишком короткая запись',
+          text2: 'Удерживайте кнопку минимум 1 секунду',
+          position: 'top',
+          visibilityTime: 2500,
+        });
+        return;
+      }
 
       // Получаем URI записанного файла
       const audioUri = audioRecorder.uri;
