@@ -13,6 +13,13 @@ const formatTime = (seconds) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+// Удаление расширения из названия файла
+const removeFileExtension = (fileName) => {
+  if (!fileName) return '';
+  const lastDotIndex = fileName.lastIndexOf('.');
+  return lastDotIndex > 0 ? fileName.substring(0, lastDotIndex) : fileName;
+};
+
 export const AudioPlayer = ({ audioUri, fileName }) => {
   const player = useAudioPlayer({ uri: audioUri });
   const status = useAudioPlayerStatus(player);
@@ -80,7 +87,7 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
         <View style={styles.fileInfo}>
           <MaterialCommunityIcons name="file-music" size={16} color="#666" />
           <Text style={styles.fileName} numberOfLines={1}>
-            {fileName || 'Áудиофайл'}
+            {removeFileExtension(fileName) || 'Аудиофайл'}
           </Text>
         </View>
 

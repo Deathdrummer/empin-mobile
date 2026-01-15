@@ -694,7 +694,7 @@ export const ChatSection = ({
       // Создаем объект аудиофайла
       const audioFile = {
         uri: audioUri,
-        name: `audio_${Date.now()}.m4a`,
+        name: 'Голосовое сообщение.m4a',
         mimeType: 'audio/mp4',
       };
 
@@ -999,17 +999,19 @@ export const ChatSection = ({
           );
         })()}
         <View style={styles.chatInputWrapper}>
-          <TouchableOpacity
-            style={styles.chatAttachButton}
-            onPress={showMediaOptions}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons
-              name="paperclip"
-              size={22}
-              color="#999999"
-            />
-          </TouchableOpacity>
+          {!isRecording && (
+            <TouchableOpacity
+              style={styles.chatAttachButton}
+              onPress={showMediaOptions}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name="paperclip"
+                size={22}
+                color="#999999"
+              />
+            </TouchableOpacity>
+          )}
           <TextInput
             ref={inputRef}
             style={[
@@ -1021,7 +1023,7 @@ export const ChatSection = ({
             placeholder={isRecording
               ? `Запись... ${Math.floor(recordingDuration / 60)}:${String(recordingDuration % 60).padStart(2, '0')}`
               : replyingToComment ? "Ваш ответ..." : "Ваш комментарий..."}
-            placeholderTextColor={isRecording ? "#fff" : "#999"}
+            placeholderTextColor={isRecording ? "#f00" : "#999"}
             value={commentText}
             onChangeText={(text) => {
               onCommentChange(text);
@@ -1212,8 +1214,9 @@ const styles = StyleSheet.create({
     borderColor: '#FF4444',
   },
   chatTextInputRecording: {
-    backgroundColor: '#E53935',
+    backgroundColor: '#fcc',
     borderColor: '#E53935',
+    paddingLeft: 10,
   },
   chatSendButton: {
     position: 'absolute',
