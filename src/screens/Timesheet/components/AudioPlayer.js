@@ -70,10 +70,8 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     if (status.playing) {
       player.pause();
     } else {
-      console.log('[AudioPlayer] Play button pressed, URI:', audioUri);
       // Перед началом воспроизведения регистрируем плеер (остановит остальные)
       registerPlayer(player, audioUri);
-      console.log('[AudioPlayer] Starting playback');
       player.play();
     }
   };

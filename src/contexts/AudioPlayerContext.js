@@ -63,33 +63,19 @@ export const AudioPlayerProvider = ({ children }) => {
   };
 
   const registerPlayer = React.useCallback((player, playerId) => {
-    console.log('[AudioPlayerContext] registerPlayer called');
-    console.log('[AudioPlayerContext] currentPlayerRef.current:', currentPlayerRef.current);
-    console.log('[AudioPlayerContext] new playerId:', playerId);
-
     // Если уже есть активный плеер с другим ID, останавливаем его
     if (currentPlayerRef.current && currentPlayerRef.current.id !== playerId) {
-      console.log('[AudioPlayerContext] Stopping previous player, ID:', currentPlayerRef.current.id);
       try {
         currentPlayerRef.current.player.pause();
       } catch (error) {
         console.error('Failed to pause previous player', { error: error.message });
       }
-    } else {
-      console.log('[AudioPlayerContext] NOT stopping previous player');
-      console.log('[AudioPlayerContext] currentPlayerRef.current exists:', !!currentPlayerRef.current);
-      if (currentPlayerRef.current) {
-        console.log('[AudioPlayerContext] IDs match:', currentPlayerRef.current.id === playerId);
-      }
     }
-    console.log('[AudioPlayerContext] Registering new player, ID:', playerId);
     currentPlayerRef.current = { player, id: playerId };
   }, []);
 
   const unregisterPlayer = React.useCallback((playerId) => {
-    console.log('[AudioPlayerContext] unregisterPlayer called for ID:', playerId);
     if (currentPlayerRef.current && currentPlayerRef.current.id === playerId) {
-      console.log('[AudioPlayerContext] Unregistering player');
       currentPlayerRef.current = null;
     }
   }, []);
