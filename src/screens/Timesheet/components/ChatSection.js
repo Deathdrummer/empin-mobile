@@ -998,21 +998,6 @@ export const ChatSection = ({
             </View>
           );
         })()}
-        {isRecording && (
-          <View style={styles.recordingIndicator}>
-            <View style={styles.recordingIndicatorContent}>
-              <MaterialCommunityIcons
-                name="microphone"
-                size={18}
-                color="#E53935"
-              />
-              <Text style={styles.recordingIndicatorText}>
-                Запись... {Math.floor(recordingDuration / 60)}:{String(recordingDuration % 60).padStart(2, '0')}
-              </Text>
-            </View>
-            <Text style={styles.recordingIndicatorHint}>Отпустите для отправки</Text>
-          </View>
-        )}
         <View style={styles.chatInputWrapper}>
           <TouchableOpacity
             style={styles.chatAttachButton}
@@ -1030,9 +1015,13 @@ export const ChatSection = ({
             style={[
               styles.chatTextInput,
               isFocused && styles.chatTextInputFocused,
-              hasValidationError && styles.chatTextInputError
+              hasValidationError && styles.chatTextInputError,
+              isRecording && styles.chatTextInputRecording
             ]}
-            placeholder={replyingToComment ? "Ваш ответ..." : "Ваш комментарий..."}
+            placeholder={isRecording
+              ? `Запись... ${Math.floor(recordingDuration / 60)}:${String(recordingDuration % 60).padStart(2, '0')}`
+              : replyingToComment ? "Ваш ответ..." : "Ваш комментарий..."}
+            placeholderTextColor={isRecording ? "#fff" : "#999"}
             value={commentText}
             onChangeText={(text) => {
               onCommentChange(text);
@@ -1043,6 +1032,7 @@ export const ChatSection = ({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             multiline
+            editable={!isRecording}
           />
           {commentText.trim() ? (
             <TouchableOpacity
@@ -1221,6 +1211,10 @@ const styles = StyleSheet.create({
   chatTextInputError: {
     borderColor: '#FF4444',
   },
+  chatTextInputRecording: {
+    backgroundColor: '#E53935',
+    borderColor: '#E53935',
+  },
   chatSendButton: {
     position: 'absolute',
     right: 5,
@@ -1350,29 +1344,5 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  recordingIndicator: {
-    backgroundColor: '#FFEBEE',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#E53935',
-  },
-  recordingIndicatorContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  recordingIndicatorText: {
-    fontSize: 14,
-    color: '#E53935',
-    fontWeight: '500',
-  },
-  recordingIndicatorHint: {
-    fontSize: 11,
-    color: '#999',
-    marginLeft: 26,
   },
 });
