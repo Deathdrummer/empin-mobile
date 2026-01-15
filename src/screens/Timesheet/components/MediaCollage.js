@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Image, TouchableOpacity, StyleSheet, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import ImageViewing from 'react-native-image-viewing';
@@ -104,13 +104,7 @@ const FullscreenVideo = ({ uri }) => {
     player.play();
     // Включаем сохранение pitch при изменении скорости
     player.preservesPitch = true;
-    player.playbackRate = playbackRate;
   });
-
-  // Синхронизируем playbackRate при изменении
-  React.useEffect(() => {
-    player.playbackRate = playbackRate;
-  }, [player, playbackRate]);
 
   const handleSpeedChange = () => {
     const speeds = [1.0, 1.25, 1.5, 2.0];
@@ -119,7 +113,7 @@ const FullscreenVideo = ({ uri }) => {
     const nextSpeed = speeds[nextIndex];
 
     setPlaybackRate(nextSpeed);
-    // playbackRate будет синхронизирован через useEffect
+    player.playbackRate = nextSpeed;
   };
 
   return (

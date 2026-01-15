@@ -40,12 +40,6 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     return () => clearTimeout(timer);
   }, [player]);
 
-  // Синхронизируем playbackRate при изменении
-  React.useEffect(() => {
-    // Используем setPlaybackRate без второго параметра (он вызывает ошибку на Android)
-    player.setPlaybackRate(playbackRate);
-  }, [player, playbackRate]);
-
   // Отписываемся при размонтировании
   React.useEffect(() => {
     return () => {
@@ -80,7 +74,7 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     const nextSpeed = speeds[nextIndex];
 
     setPlaybackRate(nextSpeed);
-    // playbackRate будет синхронизирован через useEffect
+    player.setPlaybackRate(nextSpeed);
   };
 
   const currentTime = status.currentTime || 0;
