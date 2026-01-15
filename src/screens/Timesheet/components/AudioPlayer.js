@@ -32,8 +32,6 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   // КРИТИЧНО: expo-audio выгружает файл сразу после загрузки
   // Поэтому запускаем воспроизведение сразу, чтобы файл не выгрузился
   React.useEffect(() => {
-    // Устанавливаем playbackRate сразу после создания плеера
-    player.playbackRate = playbackRate;
     player.play();
     // Через 100ms ставим на паузу (файл останется загруженным)
     const timer = setTimeout(() => {
@@ -44,7 +42,8 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
 
   // Синхронизируем playbackRate при изменении
   React.useEffect(() => {
-    player.playbackRate = playbackRate;
+    // Используем setPlaybackRate без второго параметра (он вызывает ошибку на Android)
+    player.setPlaybackRate(playbackRate);
   }, [player, playbackRate]);
 
   // Отписываемся при размонтировании
