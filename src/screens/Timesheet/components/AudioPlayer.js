@@ -74,8 +74,15 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     const nextSpeed = speeds[nextIndex];
 
     setPlaybackRate(nextSpeed);
-    // Используем метод setPlaybackRate без второго параметра (pitch correction по умолчанию)
+
+    // setPlaybackRate может вызвать автоплей (issue #38220), поэтому сохраняем текущее состояние
+    const wasPlaying = status.playing;
     player.setPlaybackRate(nextSpeed);
+
+    // Восстанавливаем состояние воспроизведения
+    if (!wasPlaying && status.playing) {
+      player.pause();
+    }
   };
 
   const currentTime = status.currentTime || 0;
