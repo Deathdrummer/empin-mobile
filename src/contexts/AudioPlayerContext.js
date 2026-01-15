@@ -62,22 +62,22 @@ export const AudioPlayerProvider = ({ children }) => {
     }
   };
 
-  const registerPlayer = (player) => {
-    // Если уже есть активный плеер и он воспроизводится, останавливаем его
-    if (currentPlayerRef.current && currentPlayerRef.current !== player) {
-      console.log('[AudioPlayerContext] Stopping previous player');
+  const registerPlayer = (player, playerId) => {
+    // Если уже есть активный плеер с другим ID, останавливаем его
+    if (currentPlayerRef.current && currentPlayerRef.current.id !== playerId) {
+      console.log('[AudioPlayerContext] Stopping previous player, ID:', currentPlayerRef.current.id);
       try {
-        currentPlayerRef.current.pause();
+        currentPlayerRef.current.player.pause();
       } catch (error) {
         console.error('Failed to pause previous player', { error: error.message });
       }
     }
-    console.log('[AudioPlayerContext] Registering new player');
-    currentPlayerRef.current = player;
+    console.log('[AudioPlayerContext] Registering new player, ID:', playerId);
+    currentPlayerRef.current = { player, id: playerId };
   };
 
-  const unregisterPlayer = (player) => {
-    if (currentPlayerRef.current === player) {
+  const unregisterPlayer = (playerId) => {
+    if (currentPlayerRef.current && currentPlayerRef.current.id === playerId) {
       currentPlayerRef.current = null;
     }
   };

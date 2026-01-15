@@ -54,9 +54,9 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   // Отписываемся при размонтировании
   React.useEffect(() => {
     return () => {
-      unregisterPlayer(player);
+      unregisterPlayer(audioUri);
     };
-  }, [player, unregisterPlayer]);
+  }, [audioUri, unregisterPlayer]);
 
   // Сброс позиции при окончании воспроизведения
   React.useEffect(() => {
@@ -70,9 +70,9 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     if (status.playing) {
       player.pause();
     } else {
-      console.log('[AudioPlayer] Play button pressed, registering player');
+      console.log('[AudioPlayer] Play button pressed, URI:', audioUri);
       // Перед началом воспроизведения регистрируем плеер (остановит остальные)
-      registerPlayer(player);
+      registerPlayer(player, audioUri);
       console.log('[AudioPlayer] Starting playback');
       player.play();
     }
