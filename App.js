@@ -88,7 +88,9 @@ export default function App() {
                   <Stack.Screen name="Timesheet">
                     {props => <TimesheetScreen {...props} onLogout={handleLogout} />}
                   </Stack.Screen>
-                  <Stack.Screen name="Messenger" component={MessengerScreen} />
+                  <Stack.Screen name="Messenger">
+                    {props => <MessengerScreen {...props} onLogout={handleLogout} />}
+                  </Stack.Screen>
                 </Stack.Navigator>
               </NavigationContainer>
             ) : (
