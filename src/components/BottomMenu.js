@@ -29,33 +29,42 @@ export default function BottomMenu({
     const isMessenger = currentScreen === 'Messenger';
 
     const options = [
-      isTimesheet ? '✓ План-график работ' : '→ План-график работ',
-      isMessenger ? '✓ Мессенджер' : '→ Мессенджер',
-      '🚪 Выйти'
+      'План-график работ',
+      'Мессенджер',
+      'Выйти'
     ];
 
-    const disabledButtonIndices = [];
-    if (isTimesheet) disabledButtonIndices.push(0);
-    if (isMessenger) disabledButtonIndices.push(1);
+    const icons = [
+      <Ionicons name="calendar-outline" size={22} color="#666666" />,
+      <Ionicons name="chatbubble-outline" size={22} color="#666666" />,
+      <Ionicons name="log-out-outline" size={22} color="#666666" />
+    ];
+
+    const cancelButtonIndex = 3;
 
     showActionSheetWithOptions(
       {
         options,
+        icons,
         title: 'Меню аккаунта',
-        disabledButtonIndices,
-        destructiveButtonIndex: 2,
+        textStyle: { paddingLeft: 0, marginLeft: -22 },
+        cancelButtonIndex,
       },
       (selectedIndex) => {
+        if (selectedIndex === cancelButtonIndex) {
+          return; // Отмена
+        }
+
         switch (selectedIndex) {
           case 0:
             // Переход на экран План-график работ
-            if (onNavigateToTimesheet) {
+            if (!isTimesheet && onNavigateToTimesheet) {
               onNavigateToTimesheet();
             }
             break;
           case 1:
             // Переход в Мессенджер
-            if (onNavigateToMessenger) {
+            if (!isMessenger && onNavigateToMessenger) {
               onNavigateToMessenger();
             }
             break;
