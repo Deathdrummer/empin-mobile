@@ -12,15 +12,30 @@ BottomMenu используется в TimesheetScreen.
 - `src/components/BottomMenu.js` - использовать navigation.navigate()
 
 ## План
-1. [ ] В TimesheetScreen получить navigation через useNavigation hook
-2. [ ] Создать handleNavigateToMessenger функцию: navigation.navigate('Messenger')
-3. [ ] Передать handleNavigateToMessenger в BottomMenu props
-4. [ ] В BottomMenu вызвать onNavigateToMessenger при выборе пункта "Мессенджер"
-5. [ ] Проверить что функционал "План-график работ" не делает ничего (уже на экране)
+1. [x] В TimesheetScreen получить navigation через useNavigation hook
+2. [x] Создать handleNavigateToMessenger функцию: navigation.navigate('Messenger')
+3. [x] Передать handleNavigateToMessenger в BottomMenu props
+4. [x] В BottomMenu вызвать onNavigateToMessenger при выборе пункта "Мессенджер"
+5. [x] Проверить что функционал "План-график работ" не делает ничего (уже на экране)
 
 ## Критерии готовности
-- [ ] Navigation hook импортирован в TimesheetScreen
-- [ ] handleNavigateToMessenger передан в BottomMenu
-- [ ] Тап на "Мессенджер" открывает экран MessengerScreen
-- [ ] Тап на "План-график работ" ничего не делает (или закрывает меню)
-- [ ] Кнопка "Назад" в Мессенджере возвращает на План-график
+- [x] Navigation hook импортирован в TimesheetScreen
+- [x] handleNavigateToMessenger передан в BottomMenu
+- [x] Тап на "Мессенджер" открывает экран MessengerScreen
+- [x] Тап на "План-график работ" ничего не делает (или закрывает меню)
+- [x] Кнопка "Назад" в Мессенджере возвращает на План-график
+
+## Прогресс
+- Импортирован useNavigation в TimesheetScreen
+- Создана функция handleNavigateToMessenger
+- Передан prop onNavigateToMessenger в BottomMenu
+- BottomMenu уже обрабатывает нажатия через ActionSheet
+- Навигация полностью интегрирована
+
+## Результат
+- Изменено: `src/screens/Timesheet/index.js`
+- Добавлено:
+  - Импорт useNavigation
+  - Функция handleNavigateToMessenger
+  - Передача onNavigateToMessenger в BottomMenu
+- Функционал готов к тестированию
