@@ -1,13 +1,26 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import BottomMenu from '../components/BottomMenu';
 
 export default function MessengerScreen() {
+  const navigation = useNavigation();
+
+  const handleNavigateToTimesheet = () => {
+    navigation.navigate('Timesheet');
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.content}>
         <Text style={styles.title}>Мессенджер</Text>
       </View>
+      <BottomMenu
+        showCalendar={false}
+        showFilter={false}
+        onNavigateToMessenger={handleNavigateToTimesheet}
+      />
     </SafeAreaView>
   );
 }
