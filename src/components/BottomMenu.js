@@ -43,6 +43,7 @@ export default function BottomMenu({
         options,
         title: 'Меню аккаунта',
         disabledButtonIndices,
+        destructiveButtonIndex: 2,
       },
       (selectedIndex) => {
         switch (selectedIndex) {
