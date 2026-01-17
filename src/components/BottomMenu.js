@@ -1,14 +1,48 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useActionSheet } from '@expo/react-native-action-sheet';
 
-export default function BottomMenu({ onLogout, onCalendarPress, onFilterPress, hasActiveFilters, onClearFilters }) {
+export default function BottomMenu({ onLogout, onCalendarPress, onFilterPress, hasActiveFilters, onClearFilters, onNavigateToMessenger }) {
+  const { showActionSheetWithOptions } = useActionSheet();
   const handleFilterIconPress = () => {
     if (hasActiveFilters && onClearFilters) {
       onClearFilters();
     } else {
       onFilterPress();
     }
+  };
+
+  const handleAccountPress = () => {
+    const options = ['План-график работ', 'Мессенджер', 'Выйти', 'Отмена'];
+    const cancelButtonIndex = 3;
+
+    showActionSheetWithOptions(
+      {
+        options,
+        cancelButtonIndex,
+        title: 'Меню аккаунта',
+      },
+      (selectedIndex) => {
+        switch (selectedIndex) {
+          case 0:
+            // Уже на экране План-график работ
+            break;
+          case 1:
+            // Переход в Мессенджер
+            if (onNavigateToMessenger) {
+              onNavigateToMessenger();
+            }
+            break;
+          case 2:
+            // Выход
+            if (onLogout) {
+              onLogout();
+            }
+            break;
+        }
+      }
+    );
   };
 
   return (
@@ -36,8 +70,8 @@ export default function BottomMenu({ onLogout, onCalendarPress, onFilterPress, h
         {/* Пустая секция 3 */}
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.menuItem} onPress={onLogout} activeOpacity={0.7}>
-        <Ionicons name="log-out-outline" size={28} color="#999999" />
+      <TouchableOpacity style={styles.menuItem} onPress={handleAccountPress} activeOpacity={0.7}>
+        <Ionicons name="person-circle-outline" size={28} color="#999999" />
       </TouchableOpacity>
     </View>
   );
