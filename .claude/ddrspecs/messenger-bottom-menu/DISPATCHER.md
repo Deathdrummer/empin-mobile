@@ -7,14 +7,14 @@
 - Status: in_progress
 
 ## Checkpoint
-- Current: 1
-- Last Updated: 2026-01-17T00:00:00.000Z
+- Current: 2
+- Last Updated: 2026-01-17T12:00:00.000Z
 
 ## Tasks
 | # | File | Status | Title |
 |---|------|--------|-------|
-| 1 | 001-modify-bottom-menu.md | current | Модифицировать BottomMenu с условными пропсами |
-| 2 | 002-integrate-menu.md | pending | Интегрировать BottomMenu в MessengerScreen |
+| 1 | 001-modify-bottom-menu.md | done | Модифицировать BottomMenu с условными пропсами |
+| 2 | 002-integrate-menu.md | current | Интегрировать BottomMenu в MessengerScreen |
 | 3 | 003-test-functionality.md | pending | Тестирование функционала |
 
 ## Context

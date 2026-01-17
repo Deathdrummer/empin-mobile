@@ -3,7 +3,16 @@ import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 
-export default function BottomMenu({ onLogout, onCalendarPress, onFilterPress, hasActiveFilters, onClearFilters, onNavigateToMessenger }) {
+export default function BottomMenu({
+  onLogout,
+  onCalendarPress,
+  onFilterPress,
+  hasActiveFilters,
+  onClearFilters,
+  onNavigateToMessenger,
+  showCalendar = true,
+  showFilter = true
+}) {
   const { showActionSheetWithOptions } = useActionSheet();
   const handleFilterIconPress = () => {
     if (hasActiveFilters && onClearFilters) {
@@ -47,24 +56,32 @@ export default function BottomMenu({ onLogout, onCalendarPress, onFilterPress, h
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.menuItem} onPress={onCalendarPress} activeOpacity={0.7}>
-        <Ionicons name="calendar-outline" size={28} color="#999999" />
-      </TouchableOpacity>
+      {showCalendar ? (
+        <TouchableOpacity style={styles.menuItem} onPress={onCalendarPress} activeOpacity={0.7}>
+          <Ionicons name="calendar-outline" size={28} color="#999999" />
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.menuItem} />
+      )}
 
-      <TouchableOpacity style={styles.menuItem} onPress={onFilterPress} activeOpacity={0.7}>
-        <View style={styles.filterIconContainer}>
-          <Ionicons name="funnel-outline" size={28} color="#999999" />
-          {hasActiveFilters && (
-            <TouchableOpacity
-              style={styles.clearFilterButton}
-              onPress={onClearFilters}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close-circle" size={20} color="#555555" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </TouchableOpacity>
+      {showFilter ? (
+        <TouchableOpacity style={styles.menuItem} onPress={onFilterPress} activeOpacity={0.7}>
+          <View style={styles.filterIconContainer}>
+            <Ionicons name="funnel-outline" size={28} color="#999999" />
+            {hasActiveFilters && (
+              <TouchableOpacity
+                style={styles.clearFilterButton}
+                onPress={onClearFilters}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close-circle" size={20} color="#555555" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.menuItem} />
+      )}
 
       <TouchableOpacity style={styles.menuItem} onPress={() => {}} activeOpacity={0.7}>
         {/* Пустая секция 3 */}
