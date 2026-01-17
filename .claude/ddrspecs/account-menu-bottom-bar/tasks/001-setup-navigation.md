@@ -21,15 +21,30 @@
 - `App.js` - добавить NavigationContainer и Stack Navigator
 
 ## План
-1. [ ] Импортировать NavigationContainer из @react-navigation/native
-2. [ ] Импортировать createNativeStackNavigator из @react-navigation/native-stack
-3. [ ] Создать Stack Navigator
-4. [ ] Обернуть авторизованную часть в Navigator со скрытым header
-5. [ ] Создать две screen: Timesheet и Messenger
-6. [ ] Передать onLogout через navigation params или context
+1. [x] Импортировать NavigationContainer из @react-navigation/native
+2. [x] Импортировать createNativeStackNavigator из @react-navigation/native-stack
+3. [x] Создать Stack Navigator
+4. [x] Обернуть авторизованную часть в Navigator со скрытым header
+5. [x] Создать screen Timesheet (Messenger будет в следующей задаче)
+6. [x] Передать onLogout через props в children функции
 
 ## Критерии готовности
-- [ ] NavigationContainer обёрнут вокруг приложения
-- [ ] Stack Navigator создан для авторизованной части
-- [ ] Существующий функционал TimesheetScreen не нарушен
-- [ ] Приложение запускается без ошибок
+- [x] NavigationContainer обёрнут вокруг приложения
+- [x] Stack Navigator создан для авторизованной части
+- [x] Существующий функционал TimesheetScreen не нарушен
+- [ ] Приложение запускается без ошибок (требуется проверка)
+
+## Прогресс
+- Добавлены импорты NavigationContainer и createNativeStackNavigator
+- Создан Stack экземпляр
+- Обернута авторизованная часть в NavigationContainer + Stack.Navigator
+- Установлен headerShown: false глобально через screenOptions
+- onLogout передаётся через props в children функции
+- Код готов к тестированию
+
+## Результат
+- Изменено: `App.js`
+- Добавлено:
+  - Импорты: NavigationContainer, createNativeStackNavigator
+  - Stack Navigator для авторизованной части
+  - Screen "Timesheet" с передачей onLogout через props

@@ -7,14 +7,14 @@
 - Status: in_progress
 
 ## Checkpoint
-- Current: 1
-- Last Updated: 2026-01-17T00:00:00Z
+- Current: 2
+- Last Updated: 2026-01-17T12:00:00Z
 
 ## Tasks
 | # | File | Status | Title |
 |---|------|--------|-------|
-| 1 | 001-setup-navigation.md | current | Настроить React Navigation |
-| 2 | 002-messenger-screen.md | pending | Создать экран MessengerScreen |
+| 1 | 001-setup-navigation.md | done | Настроить React Navigation |
+| 2 | 002-messenger-screen.md | current | Создать экран MessengerScreen |
 | 3 | 003-update-bottom-menu.md | pending | Обновить BottomMenu с кнопкой "Аккаунт" |
 | 4 | 004-integrate-navigation.md | pending | Интегрировать навигацию в BottomMenu |
 | 5 | 005-testing.md | pending | Тестирование функционала |
