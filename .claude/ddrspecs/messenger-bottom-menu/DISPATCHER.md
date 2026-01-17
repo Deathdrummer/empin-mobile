@@ -20,6 +20,7 @@
 ## Context
 - Выбран подход: Условные пропсы showCalendar/showFilter
 - Структура меню: 4 позиции (3 пустых + Аккаунт)
+- Action sheet: активный раздел отмечен ✓ и отключен
 - Ключевые файлы:
   - src/components/BottomMenu.js
   - src/screens/MessengerScreen.js

@@ -35,10 +35,13 @@
 - Изменено:
   - src/components/BottomMenu.js
   - src/screens/MessengerScreen.js
+  - src/screens/Timesheet/index.js
 - Ключевые изменения:
   - Добавлен проп onNavigateToTimesheet в BottomMenu
+  - Добавлен проп currentScreen для индикации активного раздела
   - Реализована навигация "План-график работ" через action sheet (case 0)
-  - MessengerScreen теперь передает onNavigateToTimesheet вместо onNavigateToMessenger
+  - Активный раздел отмечен символом ✓ и отключен (disabledButtonIndices)
+  - Убрана кнопка "Отмена" из action sheet
   - Навигация работает в обе стороны: Timesheet ↔ Messenger
 
 ## Готово к тестированию на эмуляторе BlueStacks
