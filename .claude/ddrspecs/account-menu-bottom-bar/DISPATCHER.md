@@ -8,7 +8,7 @@
 
 ## Checkpoint
 - Current: 5
-- Last Updated: 2026-01-17T15:00:00Z
+- Last Updated: 2026-01-17T16:00:00Z
 
 ## Tasks
 | # | File | Status | Title |
@@ -17,7 +17,7 @@
 | 2 | 002-messenger-screen.md | done | Создать экран MessengerScreen |
 | 3 | 003-update-bottom-menu.md | done | Обновить BottomMenu с кнопкой "Аккаунт" |
 | 4 | 004-integrate-navigation.md | done | Интегрировать навигацию в BottomMenu |
-| 5 | 005-testing.md | current | Тестирование функционала |
+| 5 | 005-testing.md | done | Тестирование функционала |
 
 ## Context
 - Выбран: @expo/react-native-action-sheet (уже в проекте)
