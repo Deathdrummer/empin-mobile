@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Can } from '../../../components/Can';
 import { ContractCard } from './ContractCard';
 import { formatShortName } from '../../../utils/formatName';
+import { SwipeBlocker } from '../../../components/SwipeBlocker';
 
 export const TeamCard = ({
   team,
@@ -51,16 +52,18 @@ export const TeamCard = ({
           {masterName}
         </Text>
         <Can permission="mobile-app-can-create-contract:site">
-          <TouchableHighlight
-            style={styles.addButton}
-            onPress={() => onAddContract(team.id)}
-            underlayColor="#7a7a7a"
-          >
-            <View style={styles.addButtonContent}>
-              <Text style={styles.addButtonText}>Добавить объект</Text>
-              <Text style={styles.addButtonIcon}>+</Text>
-            </View>
-          </TouchableHighlight>
+          <SwipeBlocker>
+            <TouchableHighlight
+              style={styles.addButton}
+              onPress={() => onAddContract(team.id)}
+              underlayColor="#7a7a7a"
+            >
+              <View style={styles.addButtonContent}>
+                <Text style={styles.addButtonText}>Добавить объект</Text>
+                <Text style={styles.addButtonIcon}>+</Text>
+              </View>
+            </TouchableHighlight>
+          </SwipeBlocker>
         </Can>
       </View>
 

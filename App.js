@@ -4,12 +4,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from './src/screens/LoginScreen';
 import TimesheetScreen from './src/screens/TimesheetScreen';
+import MessengerScreen from './src/screens/MessengerScreen';
 import { setUnauthorizedCallback, checkApiAvailability } from './src/services/api';
 import { useAppStatePermissions } from './src/hooks/useAppStatePermissions';
 import apiBlockEmitter from './src/utils/apiBlockEmitter';
 import { ApiBlockModal } from './src/components/ApiBlockModal';
+
+const Stack = createNativeStackNavigator();
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -78,7 +83,14 @@ export default function App() {
           <StatusBar hidden={true} />
           <View style={styles.appContainer}>
             {isLoggedIn ? (
-              <TimesheetScreen onLogout={handleLogout} />
+              <NavigationContainer>
+                <Stack.Navigator screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="Timesheet">
+                    {props => <TimesheetScreen {...props} onLogout={handleLogout} />}
+                  </Stack.Screen>
+                  <Stack.Screen name="Messenger" component={MessengerScreen} />
+                </Stack.Navigator>
+              </NavigationContainer>
             ) : (
               <LoginScreen onLoginSuccess={handleLoginSuccess} />
             )}

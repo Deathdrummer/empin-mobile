@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Image, TouchableOpacity, StyleSheet, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import ImageViewing from 'react-native-image-viewing';
+import { useAudioPlayerContext } from '../../../contexts/AudioPlayerContext';
 
 const GAP = 2; // Промежуток между картинками
 const ITEMS_PER_ROW = 3;
@@ -99,17 +100,46 @@ const MediaItem = ({ uri, mimeType, onRemove, index, showControls = true, isLast
 
 // Компонент полноэкранного видео
 const FullscreenVideo = ({ uri }) => {
+  const { videoPlaybackRate, setVideoPlaybackRate, isLoaded } = useAudioPlayerContext();
   const player = useVideoPlayer(uri, (player) => {
     player.play();
+    // Включаем сохранение pitch при изменении скорости
+    player.preservesPitch = true;
   });
 
+  // Применяем глобальную скорость к плееру при загрузке
+  React.useEffect(() => {
+    if (isLoaded && videoPlaybackRate !== 1.0) {
+      player.playbackRate = videoPlaybackRate;
+    }
+  }, [player, isLoaded, videoPlaybackRate]);
+
+  const handleSpeedChange = () => {
+    const speeds = [1.0, 1.25, 1.5, 2.0];
+    const currentIndex = speeds.indexOf(videoPlaybackRate);
+    const nextIndex = (currentIndex + 1) % speeds.length;
+    const nextSpeed = speeds[nextIndex];
+
+    setVideoPlaybackRate(nextSpeed);
+    player.playbackRate = nextSpeed;
+  };
+
   return (
-    <VideoView
-      player={player}
-      style={styles.fullscreenVideo}
-      nativeControls={true}
-      contentFit="contain"
-    />
+    <View style={styles.videoPlayerContainer}>
+      <VideoView
+        player={player}
+        style={styles.fullscreenVideo}
+        nativeControls={true}
+        contentFit="contain"
+      />
+      <TouchableOpacity
+        style={styles.videoSpeedButton}
+        onPress={handleSpeedChange}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.videoSpeedButtonText}>{videoPlaybackRate}x</Text>
+      </TouchableOpacity>
+    </View>
   );
 };
 
@@ -315,9 +345,31 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
   },
-  fullscreenVideo: {
+  videoPlayerContainer: {
+    position: 'relative',
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT * 0.8,
+  },
+  fullscreenVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  videoSpeedButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  videoSpeedButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   closeButton: {
     position: 'absolute',

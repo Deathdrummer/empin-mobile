@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, FlatList, Dimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { DeviceMotion } from 'expo-sensors';
 import { timesheetAPI } from '../../services/api';
 import BottomMenu from '../../components/BottomMenu';
@@ -24,6 +25,8 @@ import { SwipeControlProvider, useSwipeControl } from '../../contexts/SwipeContr
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function TimesheetScreenContent({ onLogout }) {
+  const navigation = useNavigation();
+
   const {
     filters,
     allTeams,
@@ -122,7 +125,7 @@ function TimesheetScreenContent({ onLogout }) {
   const isScrolling = useRef(false);
   const lastScrollTime = useRef(0);
   const isPrependingRef = useRef(false);
-  const { flatListRef } = useSwipeControl();
+  const { flatListRef, scrollEnabled } = useSwipeControl();
 
   // Синхронизируем ref из хука с ref из контекста
   React.useEffect(() => {
@@ -205,6 +208,10 @@ function TimesheetScreenContent({ onLogout }) {
       teams: [],
       contracts: [],
     });
+  };
+
+  const handleNavigateToMessenger = () => {
+    navigation.navigate('Messenger');
   };
 
   const hasActiveFilters = filters.teams.length > 0 || filters.contracts.length > 0;
@@ -388,6 +395,7 @@ function TimesheetScreenContent({ onLogout }) {
         keyExtractor={(item) => item.index.toString()}
         initialScrollIndex={initialScrollIndex}
         horizontal
+        scrollEnabled={scrollEnabled}
         pagingEnabled={false}
         directionalLockEnabled={true}
         showsHorizontalScrollIndicator={false}
@@ -486,6 +494,7 @@ function TimesheetScreenContent({ onLogout }) {
         onFilterPress={handleFilterPress}
         hasActiveFilters={hasActiveFilters}
         onClearFilters={handleClearFilters}
+        onNavigateToMessenger={handleNavigateToMessenger}
       />
       </SafeAreaView>
     </AudioPlayerProvider>

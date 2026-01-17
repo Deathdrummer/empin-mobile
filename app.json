@@ -17,7 +17,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Разрешите доступ к камере для съемки фото и видео в комментариях",
         "NSPhotoLibraryUsageDescription": "Разрешите доступ к галерее для выбора фото и видео в комментариях",
-        "NSMicrophoneUsageDescription": "Разрешите доступ к микрофону для записи видео с камеры"
+        "NSMicrophoneUsageDescription": "Разрешите доступ к микрофону для записи видео с камеры и голосового ввода комментариев",
+        "NSSpeechRecognitionUsageDescription": "Разрешите доступ к распознаванию речи для голосового ввода комментариев"
       }
     },
     "android": {
@@ -32,7 +33,8 @@
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "READ_MEDIA_IMAGES",
-        "READ_MEDIA_VIDEO"
+        "READ_MEDIA_VIDEO",
+        "RECORD_AUDIO"
       ]
     },
     "web": {
@@ -45,7 +47,8 @@
     },
     "plugins": [
       "expo-video",
-      "expo-audio"
+      "expo-audio",
+      "expo-speech-recognition"
     ]
   }
 }

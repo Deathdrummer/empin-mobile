@@ -19,6 +19,8 @@ import { CommentContextMenu } from './CommentContextMenu';
 import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
+import { SwipeBlocker } from '../../../components/SwipeBlocker';
+import { useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -133,12 +135,23 @@ const isMediaFile = (media) => {
 
   // Проверяем по mimeType
   if (media.mimeType) {
+    // НЕ считаем аудио файлы как media, даже если mimeType неправильный
+    if (media.mimeType.startsWith('audio/') || media.mimeType === 'application/ogg') {
+      return false;
+    }
     return media.mimeType.startsWith('image/') || media.mimeType.startsWith('video/');
   }
 
   // Fallback: проверяем по расширению файла
   if (media.uri || media.name) {
     const fileName = (media.uri || media.name).toLowerCase();
+
+    // Сначала проверяем аудио расширения - исключаем их из media
+    const audioExtensions = ['.mp3', '.wav', '.ogg', '.oga', '.opus', '.m4a', '.aac', '.flac', '.wma', '.webm', '.amr', '.3gp'];
+    if (audioExtensions.some(ext => fileName.endsWith(ext))) {
+      return false;
+    }
+
     const mediaExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.mp4', '.mov', '.avi', '.mkv'];
     return mediaExtensions.some(ext => fileName.endsWith(ext));
   }
@@ -173,9 +186,10 @@ const separateMediaAndDocuments = (array) => {
     return { media: [], audio: [], documents: [] };
   }
 
-  const media = array.filter(item => isMediaFile(item));
+  // Сначала проверяем аудио (приоритет), потом медиа, потом документы
   const audio = array.filter(item => isAudioFile(item));
-  const documents = array.filter(item => !isMediaFile(item) && !isAudioFile(item));
+  const media = array.filter(item => !isAudioFile(item) && isMediaFile(item));
+  const documents = array.filter(item => !isAudioFile(item) && !isMediaFile(item));
 
   return { media, audio, documents };
 };
@@ -201,15 +215,28 @@ export const ChatSection = ({
   const [currentUserId, setCurrentUserId] = React.useState(null);
   const [selectedMediaArray, setSelectedMediaArray] = React.useState([]);
   const [hasValidationError, setHasValidationError] = React.useState(false);
+  const [isRecording, setIsRecording] = React.useState(false);
+  const [recordingDuration, setRecordingDuration] = React.useState(0);
   const { can } = usePermissions();
   const { showActionSheetWithOptions } = useActionSheet();
   const inputRef = React.useRef(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recordingTimerRef = React.useRef(null);
 
   // Функция для поиска родительского комментария
   const findParentComment = (replyToId) => {
     if (!chat || !replyToId) return null;
     return chat.find(comment => comment.id === replyToId);
   };
+
+  // Эффект для очистки таймера при размонтировании
+  React.useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, []);
 
   React.useEffect(() => {
     const loadCurrentUser = async () => {
@@ -568,6 +595,141 @@ export const ChatSection = ({
     handleCloseMenu();
   };
 
+  // Функция начала записи аудио
+  const handleStartRecording = async () => {
+    try {
+      // Проверяем, что запись не идёт
+      if (audioRecorder.isRecording) {
+        console.log('[Audio] Recording already in progress');
+        return;
+      }
+
+      // Запрашиваем разрешение на микрофон
+      const permission = await AudioModule.requestRecordingPermissionsAsync();
+
+      if (!permission.granted) {
+        Toast.show({
+          type: 'error',
+          text1: 'Доступ запрещен',
+          text2: 'Необходим доступ к микрофону для записи',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      // Подготавливаем и запускаем запись
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      // Запускаем таймер для отображения длительности
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('Failed to start recording', { error: error.message });
+      setIsRecording(false);
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось начать запись',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  // Функция остановки записи и автоотправки
+  const handleStopRecording = async () => {
+    try {
+      // Сохраняем длительность для проверки перед сбросом
+      const duration = recordingDuration;
+
+      // Останавливаем таймер
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+
+      // Проверяем, что запись действительно идёт
+      if (!audioRecorder.isRecording) {
+        console.log('[Audio] Recording already stopped');
+        setIsRecording(false);
+        setRecordingDuration(0);
+        return;
+      }
+
+      // Останавливаем запись с защитой от IllegalStateException
+      try {
+        await audioRecorder.stop();
+      } catch (stopError) {
+        // Игнорируем IllegalStateException, если запись уже остановлена
+        if (stopError.message?.includes('IllegalStateException')) {
+          console.log('[Audio] IllegalStateException caught (known expo-audio bug on Android)', { error: stopError.message });
+        } else {
+          throw stopError;
+        }
+      }
+
+      setIsRecording(false);
+      setRecordingDuration(0);
+
+      // Проверка минимальной длительности записи
+      if (duration < 1) {
+        Toast.show({
+          type: 'info',
+          text1: 'Слишком короткая запись',
+          text2: 'Удерживайте кнопку минимум 1 секунду',
+          position: 'top',
+          visibilityTime: 2500,
+        });
+        return;
+      }
+
+      // Получаем URI записанного файла
+      const audioUri = audioRecorder.uri;
+
+      if (!audioUri) {
+        Toast.show({
+          type: 'error',
+          text1: 'Ошибка',
+          text2: 'Не удалось получить аудиофайл',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      // Создаем объект аудиофайла
+      const audioFile = {
+        uri: audioUri,
+        name: 'Голосовое сообщение.m4a',
+        mimeType: 'audio/mp4',
+      };
+
+      // Автоматически отправляем аудио
+      await onAddComment([audioFile]);
+
+    } catch (error) {
+      console.error('Failed to stop recording', { error: error.message });
+      setIsRecording(false);
+      setRecordingDuration(0);
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось сохранить запись',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
   // Функция скачивания документа
   const handleDownloadDocument = async (document) => {
     try {
@@ -706,19 +868,22 @@ export const ChatSection = ({
                   return (
                     <>
                       {media.length > 0 && (
-                        <MediaCollage
-                          mediaArray={media}
-                          showControls={false}
-                        />
+                        <SwipeBlocker>
+                          <MediaCollage
+                            mediaArray={media}
+                            showControls={false}
+                          />
+                        </SwipeBlocker>
                       )}
                       {audio.length > 0 && (
                         <>
                           {audio.map((audioFile, index) => (
-                            <AudioPlayer
-                              key={index}
-                              audioUri={audioFile.uri}
-                              fileName={audioFile.name}
-                            />
+                            <SwipeBlocker key={index}>
+                              <AudioPlayer
+                                audioUri={audioFile.uri}
+                                fileName={audioFile.name}
+                              />
+                            </SwipeBlocker>
                           ))}
                         </>
                       )}
@@ -791,29 +956,31 @@ export const ChatSection = ({
           return (
             <View>
               {media.length > 0 && (
-                <MediaCollage
-                  mediaArray={media}
-                  onRemove={(index) => {
-                    // Находим глобальный индекс в selectedMediaArray
-                    const mediaItem = media[index];
-                    const globalIndex = selectedMediaArray.findIndex(item => item === mediaItem);
-                    if (globalIndex !== -1) {
-                      setSelectedMediaArray(prev => prev.filter((_, i) => i !== globalIndex));
-                    }
-                  }}
-                  showControls={true}
-                />
+                <SwipeBlocker>
+                  <MediaCollage
+                    mediaArray={media}
+                    onRemove={(index) => {
+                      // Находим глобальный индекс в selectedMediaArray
+                      const mediaItem = media[index];
+                      const globalIndex = selectedMediaArray.findIndex(item => item === mediaItem);
+                      if (globalIndex !== -1) {
+                        setSelectedMediaArray(prev => prev.filter((_, i) => i !== globalIndex));
+                      }
+                    }}
+                    showControls={true}
+                  />
+                </SwipeBlocker>
               )}
               {audio.length > 0 && (
                 <View style={styles.audioListContainer}>
                   {audio.map((audioFile, index) => (
                     <View key={index} style={styles.audioItemContainer}>
-                      <View style={{ flex: 1 }}>
+                      <SwipeBlocker style={{ flex: 1 }}>
                         <AudioPlayer
                           audioUri={audioFile.uri}
                           fileName={audioFile.name}
                         />
-                      </View>
+                      </SwipeBlocker>
                       <TouchableOpacity
                         style={styles.audioRemoveButton}
                         onPress={() => {
@@ -847,25 +1014,31 @@ export const ChatSection = ({
           );
         })()}
         <View style={styles.chatInputWrapper}>
-          <TouchableOpacity
-            style={styles.chatAttachButton}
-            onPress={showMediaOptions}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons
-              name="paperclip"
-              size={22}
-              color="#999999"
-            />
-          </TouchableOpacity>
+          {!isRecording && (
+            <TouchableOpacity
+              style={styles.chatAttachButton}
+              onPress={showMediaOptions}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name="paperclip"
+                size={22}
+                color="#999999"
+              />
+            </TouchableOpacity>
+          )}
           <TextInput
             ref={inputRef}
             style={[
               styles.chatTextInput,
               isFocused && styles.chatTextInputFocused,
-              hasValidationError && styles.chatTextInputError
+              hasValidationError && styles.chatTextInputError,
+              isRecording && styles.chatTextInputRecording
             ]}
-            placeholder={replyingToComment ? "Ваш ответ..." : "Ваш комментарий..."}
+            placeholder={isRecording
+              ? `Запись... ${Math.floor(recordingDuration / 60)}:${String(recordingDuration % 60).padStart(2, '0')}`
+              : replyingToComment ? "Ваш ответ..." : "Ваш комментарий..."}
+            placeholderTextColor={isRecording ? "#f00" : "#999"}
             value={commentText}
             onChangeText={(text) => {
               onCommentChange(text);
@@ -876,14 +1049,30 @@ export const ChatSection = ({
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             multiline
+            editable={!isRecording}
           />
-          <TouchableOpacity
-            style={styles.chatSendButton}
-            onPress={handleSendComment}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.chatSendButtonIcon}>➤</Text>
-          </TouchableOpacity>
+          {commentText.trim() ? (
+            <TouchableOpacity
+              style={styles.chatSendButton}
+              onPress={handleSendComment}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.chatSendButtonIcon}>➤</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.chatSendButton}
+              onPressIn={handleStartRecording}
+              onPressOut={handleStopRecording}
+              activeOpacity={0.7}
+            >
+              <MaterialCommunityIcons
+                name={isRecording ? "microphone" : "microphone-outline"}
+                size={22}
+                color={isRecording ? "#E53935" : "#999999"}
+              />
+            </TouchableOpacity>
+          )}
         </View>
       </Can>
 
@@ -1038,6 +1227,11 @@ const styles = StyleSheet.create({
   },
   chatTextInputError: {
     borderColor: '#FF4444',
+  },
+  chatTextInputRecording: {
+    backgroundColor: '#fcc',
+    borderColor: '#E53935',
+    paddingLeft: 10,
   },
   chatSendButton: {
     position: 'absolute',

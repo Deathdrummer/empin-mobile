@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TouchableHighlight, Dimensions } from 'react-native';
 import { Can } from '../../../components/Can';
 import { TeamCard } from './TeamCard';
+import { SwipeBlocker } from '../../../components/SwipeBlocker';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -87,13 +88,15 @@ export const DayCard = ({
         </ScrollView>
 
         <Can permission="mobile-app-can-create-team:site">
-          <TouchableHighlight
-            style={styles.addTeamButton}
-            onPress={() => onAddTeam(item)}
-            underlayColor="#7a7a7a"
-          >
-            <Text style={styles.addTeamButtonText}>+ Добавить бригаду</Text>
-          </TouchableHighlight>
+          <SwipeBlocker>
+            <TouchableHighlight
+              style={styles.addTeamButton}
+              onPress={() => onAddTeam(item)}
+              underlayColor="#7a7a7a"
+            >
+              <Text style={styles.addTeamButtonText}>+ Добавить бригаду</Text>
+            </TouchableHighlight>
+          </SwipeBlocker>
         </Can>
       </View>
     </View>

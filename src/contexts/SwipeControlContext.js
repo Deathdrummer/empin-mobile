@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useRef } from 'react';
+import React, { createContext, useContext, useRef, useState, useCallback } from 'react';
 
 /**
  * Контекст для доступа к FlatList главного экрана
@@ -8,9 +8,31 @@ const SwipeControlContext = createContext(null);
 
 export const SwipeControlProvider = ({ children }) => {
   const flatListRef = useRef(null);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+
+  const disableScroll = useCallback(() => {
+    // КРИТИЧНО: используем setNativeProps для немедленной блокировки (синхронно)
+    // State обновление слишком медленное на реальных устройствах
+    if (flatListRef.current) {
+      flatListRef.current.setNativeProps({ scrollEnabled: false });
+    }
+    // Плюс обновляем state для синхронизации с React
+    setScrollEnabled(false);
+  }, []);
+
+  const enableScroll = useCallback(() => {
+    // Аналогично - setNativeProps для немедленной разблокировки
+    if (flatListRef.current) {
+      flatListRef.current.setNativeProps({ scrollEnabled: true });
+    }
+    setScrollEnabled(true);
+  }, []);
 
   const value = {
     flatListRef,
+    scrollEnabled,
+    disableScroll,
+    enableScroll,
   };
 
   return (

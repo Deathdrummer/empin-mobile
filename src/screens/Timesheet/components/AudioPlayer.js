@@ -13,10 +13,29 @@ const formatTime = (seconds) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+// Удаление расширения из названия файла
+const removeFileExtension = (fileName) => {
+  if (!fileName) return '';
+  const lastDotIndex = fileName.lastIndexOf('.');
+  return lastDotIndex > 0 ? fileName.substring(0, lastDotIndex) : fileName;
+};
+
 export const AudioPlayer = ({ audioUri, fileName }) => {
   const player = useAudioPlayer({ uri: audioUri });
   const status = useAudioPlayerStatus(player);
-  const { registerPlayer, unregisterPlayer } = useAudioPlayerContext();
+  const { registerPlayer, unregisterPlayer, audioPlaybackRate, setAudioPlaybackRate, isLoaded } = useAudioPlayerContext();
+
+  // Включаем коррекцию pitch при изменении скорости
+  React.useEffect(() => {
+    player.shouldCorrectPitch = true;
+  }, [player]);
+
+  // Применяем глобальную скорость к плееру при загрузке и при изменении глобальной скорости
+  React.useEffect(() => {
+    if (isLoaded) {
+      player.setPlaybackRate(audioPlaybackRate, 'high');
+    }
+  }, [player, isLoaded, audioPlaybackRate]);
 
   // useAudioPlayer автоматически освобождает ресурсы при размонтировании
   // Ручная очистка НЕ требуется и вызывает ошибку "shared object already released"
@@ -35,16 +54,24 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   // Отписываемся при размонтировании
   React.useEffect(() => {
     return () => {
-      unregisterPlayer(player);
+      unregisterPlayer(audioUri);
     };
-  }, [player, unregisterPlayer]);
+  }, [audioUri, unregisterPlayer]);
+
+  // Сброс позиции при окончании воспроизведения
+  React.useEffect(() => {
+    if (status.didJustFinish) {
+      player.pause();
+      player.seekTo(0);
+    }
+  }, [status.didJustFinish, player]);
 
   const handlePlayPause = () => {
     if (status.playing) {
       player.pause();
     } else {
       // Перед началом воспроизведения регистрируем плеер (остановит остальные)
-      registerPlayer(player);
+      registerPlayer(player, audioUri);
       player.play();
     }
   };
@@ -56,6 +83,25 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   const handleSliderChange = (value) => {
     if (status.duration) {
       player.seekTo(value);
+    }
+  };
+
+  const handleSpeedChange = () => {
+    const speeds = [1.0, 1.25, 1.5, 2.0];
+    const currentIndex = speeds.indexOf(audioPlaybackRate);
+    const nextIndex = (currentIndex + 1) % speeds.length;
+    const nextSpeed = speeds[nextIndex];
+
+    setAudioPlaybackRate(nextSpeed);
+
+    // setPlaybackRate может вызвать автоплей (issue #38220), поэтому сохраняем текущее состояние
+    const wasPlaying = status.playing;
+    // Второй параметр - качество pitch коррекции (iOS only, android игнорирует)
+    player.setPlaybackRate(nextSpeed, 'high');
+
+    // Восстанавливаем состояние воспроизведения
+    if (!wasPlaying && status.playing) {
+      player.pause();
     }
   };
 
@@ -80,7 +126,7 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
         <View style={styles.fileInfo}>
           <MaterialCommunityIcons name="file-music" size={16} color="#666" />
           <Text style={styles.fileName} numberOfLines={1}>
-            {fileName || 'Áудиофайл'}
+            {removeFileExtension(fileName) || 'Аудиофайл'}
           </Text>
         </View>
 
@@ -102,6 +148,14 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
           </View>
         </View>
       </View>
+
+      <TouchableOpacity
+        style={styles.speedButton}
+        onPress={handleSpeedChange}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.speedButtonText}>{audioPlaybackRate}x</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -115,6 +169,7 @@ const styles = StyleSheet.create({
     padding: 8,
     marginTop: 8,
     gap: 12,
+	width: '100%',
   },
   playButton: {
     width: 48,
@@ -159,5 +214,19 @@ const styles = StyleSheet.create({
 	marginLeft: 4,
 	marginRight: 4,
     color: '#999',
+  },
+  speedButton: {
+    width: 40,
+    height: 24,
+    borderRadius: 10,
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 0,
+  },
+  speedButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4A90E2',
   },
 });
