@@ -20,6 +20,7 @@ export default function MessengerScreen() {
         showCalendar={false}
         showFilter={false}
         onNavigateToTimesheet={handleNavigateToTimesheet}
+        currentScreen="Messenger"
       />
     </SafeAreaView>
   );

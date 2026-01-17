@@ -11,6 +11,7 @@ export default function BottomMenu({
   onClearFilters,
   onNavigateToMessenger,
   onNavigateToTimesheet,
+  currentScreen,
   showCalendar = true,
   showFilter = true
 }) {
@@ -24,12 +25,24 @@ export default function BottomMenu({
   };
 
   const handleAccountPress = () => {
-    const options = ['План-график работ', 'Мессенджер', 'Выйти'];
+    const isTimesheet = currentScreen === 'Timesheet';
+    const isMessenger = currentScreen === 'Messenger';
+
+    const options = [
+      isTimesheet ? '✓ План-график работ' : 'План-график работ',
+      isMessenger ? '✓ Мессенджер' : 'Мессенджер',
+      'Выйти'
+    ];
+
+    const disabledButtonIndices = [];
+    if (isTimesheet) disabledButtonIndices.push(0);
+    if (isMessenger) disabledButtonIndices.push(1);
 
     showActionSheetWithOptions(
       {
         options,
         title: 'Меню аккаунта',
+        disabledButtonIndices,
       },
       (selectedIndex) => {
         switch (selectedIndex) {

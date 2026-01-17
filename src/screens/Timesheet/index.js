@@ -495,6 +495,7 @@ function TimesheetScreenContent({ onLogout }) {
         hasActiveFilters={hasActiveFilters}
         onClearFilters={handleClearFilters}
         onNavigateToMessenger={handleNavigateToMessenger}
+        currentScreen="Timesheet"
       />
       </SafeAreaView>
     </AudioPlayerProvider>
