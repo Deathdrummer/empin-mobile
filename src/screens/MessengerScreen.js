@@ -19,7 +19,7 @@ export default function MessengerScreen() {
       <BottomMenu
         showCalendar={false}
         showFilter={false}
-        onNavigateToMessenger={handleNavigateToTimesheet}
+        onNavigateToTimesheet={handleNavigateToTimesheet}
       />
     </SafeAreaView>
   );

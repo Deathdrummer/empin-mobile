@@ -10,6 +10,7 @@ export default function BottomMenu({
   hasActiveFilters,
   onClearFilters,
   onNavigateToMessenger,
+  onNavigateToTimesheet,
   showCalendar = true,
   showFilter = true
 }) {
@@ -23,19 +24,20 @@ export default function BottomMenu({
   };
 
   const handleAccountPress = () => {
-    const options = ['План-график работ', 'Мессенджер', 'Выйти', 'Отмена'];
-    const cancelButtonIndex = 3;
+    const options = ['План-график работ', 'Мессенджер', 'Выйти'];
 
     showActionSheetWithOptions(
       {
         options,
-        cancelButtonIndex,
         title: 'Меню аккаунта',
       },
       (selectedIndex) => {
         switch (selectedIndex) {
           case 0:
-            // Уже на экране План-график работ
+            // Переход на экран План-график работ
+            if (onNavigateToTimesheet) {
+              onNavigateToTimesheet();
+            }
             break;
           case 1:
             // Переход в Мессенджер
