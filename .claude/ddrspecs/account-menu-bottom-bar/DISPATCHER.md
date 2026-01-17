@@ -4,7 +4,8 @@
 - Slug: account-menu-bottom-bar
 - Branch: feature/account-menu-bottom-bar
 - Created: 2026-01-17
-- Status: in_progress
+- Status: done
+- Completed: 2026-01-17
 
 ## Checkpoint
 - Current: 5
