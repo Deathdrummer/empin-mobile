@@ -29,9 +29,9 @@ export default function BottomMenu({
     const isMessenger = currentScreen === 'Messenger';
 
     const options = [
-      isTimesheet ? '✓ План-график работ' : 'План-график работ',
-      isMessenger ? '✓ Мессенджер' : 'Мессенджер',
-      'Выйти'
+      isTimesheet ? '✓ План-график работ' : '→ План-график работ',
+      isMessenger ? '✓ Мессенджер' : '→ Мессенджер',
+      '🚪 Выйти'
     ];
 
     const disabledButtonIndices = [];
