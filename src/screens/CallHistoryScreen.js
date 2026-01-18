@@ -7,7 +7,7 @@ import BottomMenu from '../components/BottomMenu';
 import { LogoutModal } from './Timesheet/components/modals/LogoutModal';
 import { timesheetAPI } from '../services/api';
 
-export default function MessengerScreen({ onLogout }) {
+export default function CallHistoryScreen({ onLogout }) {
   const navigation = useNavigation();
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
@@ -19,8 +19,8 @@ export default function MessengerScreen({ onLogout }) {
     navigation.navigate('Chats');
   };
 
-  const handleNavigateToCallHistory = () => {
-    navigation.navigate('CallHistory');
+  const handleNavigateToMessenger = () => {
+    navigation.navigate('Messenger');
   };
 
   const handleLogout = () => {
@@ -49,14 +49,14 @@ export default function MessengerScreen({ onLogout }) {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.headerButton}
-          onPress={handleNavigateToCallHistory}
+          onPress={handleNavigateToMessenger}
           activeOpacity={0.7}
         >
-          <Ionicons name="call-outline" size={28} color="#999999" />
+          <Ionicons name="arrow-back" size={28} color="#999999" />
         </TouchableOpacity>
       </View>
       <View style={styles.content}>
-        <Text style={styles.title}>Мессенджер</Text>
+        <Text style={styles.title}>История звонков</Text>
       </View>
       <LogoutModal
         visible={logoutModalVisible}
@@ -68,6 +68,7 @@ export default function MessengerScreen({ onLogout }) {
         showFilter={false}
         onLogout={handleLogout}
         onNavigateToTimesheet={handleNavigateToTimesheet}
+        onNavigateToMessenger={handleNavigateToMessenger}
         currentScreen="Messenger"
       />
     </SafeAreaView>
