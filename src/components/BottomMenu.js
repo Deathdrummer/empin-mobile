@@ -81,15 +81,21 @@ export default function BottomMenu({
     );
   };
 
+  const isMessengerSection = ['Messenger', 'Chats', 'CallHistory'].includes(currentScreen);
+
   return (
     <View style={styles.container}>
       {showCalendar ? (
         <TouchableOpacity style={styles.menuItem} onPress={onCalendarPress} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={28} color="#999999" />
         </TouchableOpacity>
-      ) : currentScreen === 'Messenger' && onNavigateToChats ? (
+      ) : isMessengerSection && onNavigateToChats ? (
         <TouchableOpacity style={styles.menuItem} onPress={onNavigateToChats} activeOpacity={0.7}>
-          <Ionicons name="chatbubble-outline" size={28} color="#999999" />
+          <Ionicons
+            name="chatbubble-outline"
+            size={28}
+            color={currentScreen === 'Chats' ? "#6c5ce7" : "#999999"}
+          />
         </TouchableOpacity>
       ) : (
         <View style={styles.menuItem} />
@@ -110,9 +116,13 @@ export default function BottomMenu({
             )}
           </View>
         </TouchableOpacity>
-      ) : currentScreen === 'Messenger' && onNavigateToCallHistory ? (
+      ) : isMessengerSection && onNavigateToCallHistory ? (
         <TouchableOpacity style={styles.menuItem} onPress={onNavigateToCallHistory} activeOpacity={0.7}>
-          <Ionicons name="call-outline" size={28} color="#999999" />
+          <Ionicons
+            name="call-outline"
+            size={28}
+            color={currentScreen === 'CallHistory' ? "#6c5ce7" : "#999999"}
+          />
         </TouchableOpacity>
       ) : (
         <View style={styles.menuItem} />

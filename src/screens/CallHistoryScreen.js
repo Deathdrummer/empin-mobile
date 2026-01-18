@@ -11,15 +11,15 @@ export default function CallHistoryScreen({ onLogout }) {
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   const handleNavigateToTimesheet = () => {
-    navigation.navigate('Timesheet');
+    navigation.replace('Timesheet');
   };
 
   const handleNavigateToChats = () => {
-    navigation.navigate('Chats');
+    navigation.replace('Chats');
   };
 
   const handleNavigateToMessenger = () => {
-    navigation.navigate('Messenger');
+    navigation.replace('Messenger');
   };
 
   const handleLogout = () => {
@@ -53,7 +53,7 @@ export default function CallHistoryScreen({ onLogout }) {
         onNavigateToTimesheet={handleNavigateToTimesheet}
         onNavigateToMessenger={handleNavigateToMessenger}
         onNavigateToChats={handleNavigateToChats}
-        currentScreen="Messenger"
+        currentScreen="CallHistory"
       />
     </SafeAreaView>
   );

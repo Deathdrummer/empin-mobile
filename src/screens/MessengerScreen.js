@@ -11,15 +11,15 @@ export default function MessengerScreen({ onLogout }) {
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   const handleNavigateToTimesheet = () => {
-    navigation.navigate('Timesheet');
+    navigation.replace('Timesheet');
   };
 
   const handleNavigateToChats = () => {
-    navigation.navigate('Chats');
+    navigation.replace('Chats');
   };
 
   const handleNavigateToCallHistory = () => {
-    navigation.navigate('CallHistory');
+    navigation.replace('CallHistory');
   };
 
   const handleLogout = () => {

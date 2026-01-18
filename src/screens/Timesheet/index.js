@@ -211,7 +211,7 @@ function TimesheetScreenContent({ onLogout }) {
   };
 
   const handleNavigateToMessenger = () => {
-    navigation.navigate('Messenger');
+    navigation.replace('Messenger');
   };
 
   const hasActiveFilters = filters.teams.length > 0 || filters.contracts.length > 0;
