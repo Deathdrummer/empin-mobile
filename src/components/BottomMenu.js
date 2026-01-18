@@ -11,6 +11,8 @@ export default function BottomMenu({
   onClearFilters,
   onNavigateToMessenger,
   onNavigateToTimesheet,
+  onNavigateToChats,
+  onNavigateToCallHistory,
   currentScreen,
   showCalendar = true,
   showFilter = true
@@ -85,6 +87,10 @@ export default function BottomMenu({
         <TouchableOpacity style={styles.menuItem} onPress={onCalendarPress} activeOpacity={0.7}>
           <Ionicons name="calendar-outline" size={28} color="#999999" />
         </TouchableOpacity>
+      ) : currentScreen === 'Messenger' && onNavigateToChats ? (
+        <TouchableOpacity style={styles.menuItem} onPress={onNavigateToChats} activeOpacity={0.7}>
+          <Ionicons name="chatbubble-outline" size={28} color="#999999" />
+        </TouchableOpacity>
       ) : (
         <View style={styles.menuItem} />
       )}
@@ -103,6 +109,10 @@ export default function BottomMenu({
               </TouchableOpacity>
             )}
           </View>
+        </TouchableOpacity>
+      ) : currentScreen === 'Messenger' && onNavigateToCallHistory ? (
+        <TouchableOpacity style={styles.menuItem} onPress={onNavigateToCallHistory} activeOpacity={0.7}>
+          <Ionicons name="call-outline" size={28} color="#999999" />
         </TouchableOpacity>
       ) : (
         <View style={styles.menuItem} />

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import BottomMenu from '../components/BottomMenu';
 import { LogoutModal } from './Timesheet/components/modals/LogoutModal';
 import { timesheetAPI } from '../services/api';
@@ -39,22 +38,6 @@ export default function MessengerScreen({ onLogout }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={handleNavigateToChats}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chatbubble-outline" size={28} color="#999999" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={handleNavigateToCallHistory}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="call-outline" size={28} color="#999999" />
-        </TouchableOpacity>
-      </View>
       <View style={styles.content}>
         <Text style={styles.title}>Мессенджер</Text>
       </View>
@@ -68,6 +51,8 @@ export default function MessengerScreen({ onLogout }) {
         showFilter={false}
         onLogout={handleLogout}
         onNavigateToTimesheet={handleNavigateToTimesheet}
+        onNavigateToChats={handleNavigateToChats}
+        onNavigateToCallHistory={handleNavigateToCallHistory}
         currentScreen="Messenger"
       />
     </SafeAreaView>
@@ -78,17 +63,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f3eff6',
-  },
-  header: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2dde7',
-  },
-  headerButton: {
-    marginRight: 16,
   },
   content: {
     flex: 1,
