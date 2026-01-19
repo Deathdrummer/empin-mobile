@@ -91,11 +91,16 @@ export default function BottomMenu({
         </TouchableOpacity>
       ) : isMessengerSection && onNavigateToChats ? (
         <TouchableOpacity style={styles.menuItem} onPress={onNavigateToChats} activeOpacity={0.7}>
-          <Ionicons
-            name="chatbubble-outline"
-            size={28}
-            color={currentScreen === 'Chats' ? "#6c5ce7" : "#999999"}
-          />
+          <View style={[
+            styles.iconWrapper,
+            currentScreen === 'Chats' && styles.iconWrapperActive
+          ]}>
+            <Ionicons
+              name="chatbubble-outline"
+              size={24}
+              color={currentScreen === 'Chats' ? "#2c2c2c" : "#999999"}
+            />
+          </View>
         </TouchableOpacity>
       ) : (
         <View style={styles.menuItem} />
@@ -118,11 +123,16 @@ export default function BottomMenu({
         </TouchableOpacity>
       ) : isMessengerSection && onNavigateToCallHistory ? (
         <TouchableOpacity style={styles.menuItem} onPress={onNavigateToCallHistory} activeOpacity={0.7}>
-          <Ionicons
-            name="call-outline"
-            size={28}
-            color={currentScreen === 'CallHistory' ? "#6c5ce7" : "#999999"}
-          />
+          <View style={[
+            styles.iconWrapper,
+            currentScreen === 'CallHistory' && styles.iconWrapperActive
+          ]}>
+            <Ionicons
+              name="call-outline"
+              size={24}
+              color={currentScreen === 'CallHistory' ? "#2c2c2c" : "#999999"}
+            />
+          </View>
         </TouchableOpacity>
       ) : (
         <View style={styles.menuItem} />
@@ -169,5 +179,18 @@ const styles = StyleSheet.create({
     zIndex: 10,
     backgroundColor: '#fff',
     borderRadius: 10,
+  },
+  iconWrapper: {
+    padding: 6,
+    borderRadius: 8,
+  },
+  iconWrapperActive: {
+    backgroundColor: '#e8e8e8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+	 borderRadius: 10,
   },
 });

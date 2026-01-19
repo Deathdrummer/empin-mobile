@@ -9,17 +9,18 @@ import { timesheetAPI } from '../services/api';
 export default function MessengerScreen({ onLogout }) {
   const navigation = useNavigation();
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState('chats');
 
   const handleNavigateToTimesheet = () => {
     navigation.replace('Timesheet');
   };
 
   const handleNavigateToChats = () => {
-    navigation.replace('Chats');
+    setActiveTab('chats');
   };
 
   const handleNavigateToCallHistory = () => {
-    navigation.replace('CallHistory');
+    setActiveTab('callHistory');
   };
 
   const handleLogout = () => {
@@ -36,11 +37,32 @@ export default function MessengerScreen({ onLogout }) {
     }
   };
 
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'chats':
+        return (
+          <View style={styles.content}>
+            <Text style={styles.title}>Чаты</Text>
+          </View>
+        );
+      case 'callHistory':
+        return (
+          <View style={styles.content}>
+            <Text style={styles.title}>История звонков</Text>
+          </View>
+        );
+      default:
+        return (
+          <View style={styles.content}>
+            <Text style={styles.title}>Мессенджер</Text>
+          </View>
+        );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Мессенджер</Text>
-      </View>
+      {renderContent()}
       <LogoutModal
         visible={logoutModalVisible}
         onClose={() => setLogoutModalVisible(false)}
@@ -53,7 +75,7 @@ export default function MessengerScreen({ onLogout }) {
         onNavigateToTimesheet={handleNavigateToTimesheet}
         onNavigateToChats={handleNavigateToChats}
         onNavigateToCallHistory={handleNavigateToCallHistory}
-        currentScreen="Messenger"
+        currentScreen={activeTab === 'chats' ? 'Chats' : activeTab === 'callHistory' ? 'CallHistory' : 'Messenger'}
       />
     </SafeAreaView>
   );
