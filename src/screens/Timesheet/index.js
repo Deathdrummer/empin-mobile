@@ -489,6 +489,7 @@ function TimesheetScreenContent({ onLogout }) {
         onRemoveTag={handleRemoveFilterTag}
       />
       <BottomMenu
+        section="timesheet"
         onLogout={handleLogout}
         onCalendarPress={handleCalendarPress}
         onFilterPress={handleFilterPress}
