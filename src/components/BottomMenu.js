@@ -53,16 +53,34 @@ export default function BottomMenu({
     );
   };
 
-  // Правая кнопка: переключение раздела (фиксированная для всех разделов)
-  const renderRightButton = () => {
+  // Получить иконку для переключения раздела
+  const getSwitchSectionIcon = () => {
     // Иконка меняется в зависимости от текущего раздела:
     // - если активен timesheet → показываем иконку messenger
     // - если активен messenger → показываем иконку timesheet
-    const icon = section === 'timesheet' ? 'chatbubbles-outline' : 'calendar-outline';
+    return section === 'timesheet' ? 'chatbubble-outline' : 'calendar-outline';
+  };
+
+  // Обработчик переключения раздела
+  const handleSectionSwitch = () => {
+    if (section === 'timesheet') {
+      // В разделе План-график → переходим в Мессенджер
+      onNavigateToMessenger?.();
+    } else if (section === 'messenger') {
+      // В разделе Мессенджер → переходим в План-график
+      onNavigateToTimesheet?.();
+    }
+  };
+
+  // Правая кнопка: переключение раздела (фиксированная для всех разделов)
+  const renderRightButton = () => {
+    const icon = getSwitchSectionIcon();
 
     return (
-      <TouchableOpacity style={styles.menuItem} onPress={() => {}} activeOpacity={0.7}>
-        <Ionicons name={icon} size={28} color="#999999" />
+      <TouchableOpacity style={styles.menuItem} onPress={handleSectionSwitch} activeOpacity={0.7}>
+        <View style={styles.rightButtonWrapper}>
+          <Ionicons name={icon} size={24} color="#fff" />
+        </View>
       </TouchableOpacity>
     );
   };
@@ -187,5 +205,10 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
 	borderRadius: 10,
+  },
+  rightButtonWrapper: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: '#666',
   },
 });

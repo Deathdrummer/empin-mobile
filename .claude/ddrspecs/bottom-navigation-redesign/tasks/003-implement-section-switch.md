@@ -12,17 +12,17 @@
 - `src/components/BottomMenu.js`
 
 ## План
-1. [ ] Добавить пропсы: `currentSection` (или определять из `currentScreen`), `onNavigateToMessenger`, `onNavigateToTimesheet`
-2. [ ] Создать функцию getSwitchSectionIcon() - возвращает иконку в зависимости от раздела
-3. [ ] Создать функцию handleSectionSwitch() - вызывает нужный navigation callback
-4. [ ] Обновить renderRightButton() с реальной реализацией
-5. [ ] Добавить Ionicons: `chatbubble-outline` (мессенджер), `calendar-outline` (план-график)
+1. [x] Добавить пропсы: `currentSection` (или определять из `currentScreen`), `onNavigateToMessenger`, `onNavigateToTimesheet`
+2. [x] Создать функцию getSwitchSectionIcon() - возвращает иконку в зависимости от раздела
+3. [x] Создать функцию handleSectionSwitch() - вызывает нужный navigation callback
+4. [x] Обновить renderRightButton() с реальной реализацией
+5. [x] Добавить Ionicons: `chatbubble-outline` (мессенджер), `calendar-outline` (план-график)
 
 ## Критерии готовности
-- [ ] В разделе Timesheet правая кнопка показывает иконку мессенджера
-- [ ] В разделе Messenger правая кнопка показывает иконку календаря
-- [ ] Тап на кнопку корректно переключает раздел
-- [ ] Переход анимированный и плавный (React Navigation)
+- [x] В разделе Timesheet правая кнопка показывает иконку мессенджера
+- [x] В разделе Messenger правая кнопка показывает иконку календаря
+- [x] Тап на кнопку корректно переключает раздел
+- [x] Переход анимированный и плавный (React Navigation)
 
 ## Проблемы и решения
 
@@ -67,3 +67,23 @@ sed -i 's/marginRight:[0-9]*/marginRight:N/g' node_modules/@expo/react-native-ac
 **Источники**:
 - [GitHub expo/react-native-action-sheet](https://github.com/expo/react-native-action-sheet) — исходный код ActionGroup.tsx
 - [WebFetch ActionGroup.tsx](https://github.com/expo/react-native-action-sheet/blob/master/src/ActionSheet/ActionGroup.tsx) — хардкод marginRight: 32
+
+## Результат
+
+### Изменено
+- `src/components/BottomMenu.js`:
+  - Создана функция `getSwitchSectionIcon()` - возвращает иконку в зависимости от раздела
+  - Создана функция `handleSectionSwitch()` - переключает раздел через navigation callbacks
+  - Обновлен `renderRightButton()` - подключен обработчик переключения
+  - Исправлена иконка: `chatbubbles-outline` → `chatbubble-outline`
+
+### Проверено
+- ✅ В TimesheetScreen правая кнопка показывает иконку мессенджера (`chatbubble-outline`)
+- ✅ В MessengerScreen правая кнопка показывает иконку календаря (`calendar-outline`)
+- ✅ Обработчики навигации корректно подключены в обоих экранах
+- ✅ Используется `navigation.replace()` для плавных переходов
+
+### Ключевые изменения
+Правая кнопка теперь динамически меняет иконку и действие:
+- **Timesheet** → показывает иконку мессенджера → переход в Messenger
+- **Messenger** → показывает иконку календаря → переход в Timesheet

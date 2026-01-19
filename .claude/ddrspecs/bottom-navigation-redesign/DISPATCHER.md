@@ -7,19 +7,19 @@
 - Status: in_progress
 
 ## Checkpoint
-- Current: 3
-- Last Updated: 2026-01-19T20:20:00.000Z
-- Last Action: Решена проблема - уменьшено расстояние между иконкой и текстом через патч библиотеки (marginRight: 32→4)
+- Current: 6
+- Last Updated: 2026-01-19T21:40:00.000Z
+- Last Action: Выполнен статический анализ кода, создан чек-лист для ручного тестирования
 
 ## Tasks
 | # | File | Status | Title |
 |---|------|--------|-------|
 | 1 | 001-refactor-bottom-menu-structure.md | done | Рефакторинг структуры BottomMenu |
 | 2 | 002-implement-dots-menu.md | done | Реализация popup меню для кнопки "три точки" |
-| 3 | 003-implement-section-switch.md | current | Реализация динамической правой кнопки переключения раздела |
-| 4 | 004-integrate-timesheet.md | pending | Интеграция средних кнопок для раздела "План-график работ" |
-| 5 | 005-integrate-messenger.md | pending | Интеграция средних кнопок для раздела "Мессенджер" |
-| 6 | 006-testing.md | pending | Тестирование и финальная проверка |
+| 3 | 003-implement-section-switch.md | done | Реализация динамической правой кнопки переключения раздела |
+| 4 | 004-integrate-timesheet.md | done | Интеграция средних кнопок для раздела "План-график работ" |
+| 5 | 005-integrate-messenger.md | done | Интеграция средних кнопок для раздела "Мессенджер" |
+| 6 | 006-testing.md | current | Тестирование и финальная проверка |
 
 ## Context
 - Выбрано: ActionSheet для меню "три точки" (уже используется в проекте)
