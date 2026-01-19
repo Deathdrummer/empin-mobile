@@ -69,8 +69,7 @@ export default function MessengerScreen({ onLogout }) {
         onConfirm={confirmLogout}
       />
       <BottomMenu
-        showCalendar={false}
-        showFilter={false}
+        section="messenger"
         onLogout={handleLogout}
         onNavigateToTimesheet={handleNavigateToTimesheet}
         onNavigateToChats={handleNavigateToChats}
