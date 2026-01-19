@@ -1,0 +1,20 @@
+{
+  "tasks": [
+    {
+      "slug": "bottom-navigation-redesign",
+      "task_num": 1,
+      "task_file": "001-refactor-bottom-menu-structure.md",
+      "title": "Рефакторинг структуры BottomMenu",
+      "completed_at": "2026-01-19T14:30:00+03:00",
+      "result_summary": "Рефакторинг структуры: 4 фиксированные позиции (левая, 2 средние, правая). Крайние кнопки - заглушки для будущих функций. Средние кнопки - динамические по разделу."
+    },
+    {
+      "slug": "bottom-navigation-redesign",
+      "task_num": 2,
+      "task_file": "002-implement-dots-menu.md",
+      "title": "Реализация popup меню для кнопки \"три точки\"",
+      "completed_at": "2026-01-19T18:30:00+03:00",
+      "result_summary": "Реализовано ActionSheet меню с пунктом \"Выйти\" (с иконкой log-out-outline). Кнопка \"три точки\" активна и открывает меню по тапу."
+    }
+  ]
+}

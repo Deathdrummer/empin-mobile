@@ -31,9 +31,7 @@ export default function BottomMenu({
         cancelButtonIndex,
         title: 'Меню',
         icons: [
-          <View style={{ justifyContent: 'center', alignItems: 'center', width: 24, height: 24 }}>
-            <Ionicons name="log-out-outline" size={18} color="#FF3B30" />
-          </View>
+          <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
         ],
       },
       (selectedIndex) => {

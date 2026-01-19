@@ -40,14 +40,27 @@
 - Коммит `77933e5` — предыдущая реализация этого хака в проекте
 
 ### 🐛 Проблема 2: Большое расстояние между иконкой и надписью в пункте "Выйти"
-**Дата**: 2026-01-19 19:45
-**Описание**: У пункта меню "Выйти" было большое расстояние между иконкой и текстом, отображение некорректно как на iOS, так и на Android.
+**Дата**: 2026-01-19 20:00
+**Описание**: У пункта меню "Выйти" было большое расстояние между иконкой и текстом (иконка далеко от текста).
 
-**Решение**: Обёрнута иконка в `View` с фиксированными размерами и центрированием (`width: 24, height: 24, justifyContent: 'center', alignItems: 'center'`), уменьшен размер иконки с `size={20}` до `size={18}`. Это решает проблему выравнивания иконки и текста, обеспечивая одинаковое адекватное отображение на обеих платформах.
+**Причина**: В исходном коде `@expo/react-native-action-sheet` жестко закодировано `marginRight: 32` для иконки в стилях. Это значение нельзя изменить через пропсы.
+
+**Решение**: Создан patch через `patch-package`, который изменяет `marginRight` с 32 на 12 в файлах `ActionGroup.js` библиотеки. Патч автоматически применяется после `npm install` через postinstall скрипт.
 
 **Изменено**:
-- `src/components/BottomMenu.js` - иконка обёрнута в View с центрированием, size уменьшен до 18
+- `patches/@expo+react-native-action-sheet+4.1.1.patch` - создан патч для изменения marginRight
+- `src/components/BottomMenu.js` - убрана обёртка View вокруг иконки (откат предыдущей попытки)
+
+**Как менять расстояние вручную**:
+```bash
+# Отредактируй файл:
+# node_modules/@expo/react-native-action-sheet/lib/module/ActionSheet/ActionGroup.js
+# Найди: marginRight:12
+# Измени на нужное значение (например, 8 или 16)
+# Пересоздай патч:
+npx patch-package @expo/react-native-action-sheet
+```
 
 **Источники**:
-- [GitHub Issue #174](https://github.com/expo/react-native-action-sheet/issues/174) — workaround для выравнивания иконок и текста
-- [LogRocket: Build custom React Native action sheet](https://blog.logrocket.com/build-custom-react-native-action-sheet/) — информация о кастомизации иконок
+- [GitHub expo/react-native-action-sheet](https://github.com/expo/react-native-action-sheet) — исходный код ActionGroup.tsx
+- [WebFetch ActionGroup.tsx](https://github.com/expo/react-native-action-sheet/blob/master/src/ActionSheet/ActionGroup.tsx) — хардкод marginRight: 32
