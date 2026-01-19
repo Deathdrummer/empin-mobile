@@ -1,0 +1,12 @@
+diff --git a/node_modules/@expo/react-native-action-sheet/lib/commonjs/ActionSheet/ActionGroup.js b/node_modules/@expo/react-native-action-sheet/lib/commonjs/ActionSheet/ActionGroup.js
+--- a/node_modules/@expo/react-native-action-sheet/lib/commonjs/ActionSheet/ActionGroup.js
++++ b/node_modules/@expo/react-native-action-sheet/lib/commonjs/ActionSheet/ActionGroup.js
+@@ -1 +1 @@
+-marginRight:32
++marginRight:12
+diff --git a/node_modules/@expo/react-native-action-sheet/lib/module/ActionSheet/ActionGroup.js b/node_modules/@expo/react-native-action-sheet/lib/module/ActionSheet/ActionGroup.js
+--- a/node_modules/@expo/react-native-action-sheet/lib/module/ActionSheet/ActionGroup.js
++++ b/node_modules/@expo/react-native-action-sheet/lib/module/ActionSheet/ActionGroup.js
+@@ -1 +1 @@
+-marginRight:32
++marginRight:12
