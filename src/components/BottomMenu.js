@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useActionSheet } from '@expo/react-native-action-sheet';
 
 export default function BottomMenu({
   section, // 'timesheet' | 'messenger'
@@ -15,10 +16,35 @@ export default function BottomMenu({
   onNavigateToCallHistory,
   currentScreen
 }) {
+  const { showActionSheetWithOptions } = useActionSheet();
+
+  // Обработчик нажатия на кнопку "три точки"
+  const handleDotsMenuPress = () => {
+    const options = ['Выйти'];
+    const destructiveButtonIndex = 0;
+
+    showActionSheetWithOptions(
+      {
+        options,
+        destructiveButtonIndex,
+        title: 'Меню',
+        icons: [
+          <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
+        ],
+      },
+      (selectedIndex) => {
+        if (selectedIndex === 0) {
+          // Выйти
+          onLogout?.();
+        }
+      }
+    );
+  };
+
   // Левая кнопка: "три точки" (фиксированная для всех разделов)
   const renderLeftButton = () => {
     return (
-      <TouchableOpacity style={styles.menuItem} onPress={() => {}} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.menuItem} onPress={handleDotsMenuPress} activeOpacity={0.7}>
         <Ionicons name="ellipsis-vertical" size={28} color="#999999" />
       </TouchableOpacity>
     );
