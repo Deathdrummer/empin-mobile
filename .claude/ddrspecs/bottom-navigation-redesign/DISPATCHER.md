@@ -4,7 +4,8 @@
 - Slug: bottom-navigation-redesign
 - Branch: feature/bottom-navigation-redesign
 - Created: 2026-01-19
-- Status: in_progress
+- Status: done
+- Completed: 2026-01-19
 
 ## Checkpoint
 - Current: 6
@@ -19,7 +20,7 @@
 | 3 | 003-implement-section-switch.md | done | Реализация динамической правой кнопки переключения раздела |
 | 4 | 004-integrate-timesheet.md | done | Интеграция средних кнопок для раздела "План-график работ" |
 | 5 | 005-integrate-messenger.md | done | Интеграция средних кнопок для раздела "Мессенджер" |
-| 6 | 006-testing.md | current | Тестирование и финальная проверка |
+| 6 | 006-testing.md | done | Тестирование и финальная проверка |
 
 ## Context
 - Выбрано: ActionSheet для меню "три точки" (уже используется в проекте)
