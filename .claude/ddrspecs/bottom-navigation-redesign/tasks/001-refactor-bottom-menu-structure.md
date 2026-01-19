@@ -63,3 +63,17 @@
 **Изменено**:
 - `src/components/BottomMenu.js:22` - иконка левой кнопки
 - `src/components/BottomMenu.js:28-39` - логика правой кнопки с динамической иконкой
+
+### 🐛 Проблема 2: Отсутствие пропа section в родительских компонентах
+**Дата**: 2026-01-19 18:00
+**Описание**:
+Динамическая логика правой кнопки в BottomMenu не работала, т.к. родительские компоненты не передавали проп `section`. Из-за этого `section` был `undefined` и логика выбирала неправильную иконку.
+
+**Решение**:
+- Добавлен проп `section="timesheet"` в Timesheet/index.js
+- Добавлен проп `section="messenger"` в MessengerScreen.js
+- Удалены устаревшие пропсы `showCalendar` и `showFilter` из MessengerScreen.js
+
+**Изменено**:
+- `src/screens/Timesheet/index.js:492` - добавлен проп section="timesheet"
+- `src/screens/MessengerScreen.js:72` - добавлен проп section="messenger", удалены старые пропсы
