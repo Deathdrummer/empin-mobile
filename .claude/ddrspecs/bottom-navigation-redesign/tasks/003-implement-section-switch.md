@@ -38,3 +38,16 @@
 **Источники**:
 - [GitHub Issue #173](https://github.com/expo/react-native-action-sheet/issues/173) — проблема с закрытием ActionSheet тапом вне области
 - Коммит `77933e5` — предыдущая реализация этого хака в проекте
+
+### 🐛 Проблема 2: Большое расстояние между иконкой и надписью в пункте "Выйти"
+**Дата**: 2026-01-19 19:45
+**Описание**: У пункта меню "Выйти" было большое расстояние между иконкой и текстом, отображение некорректно как на iOS, так и на Android.
+
+**Решение**: Обёрнута иконка в `View` с фиксированными размерами и центрированием (`width: 24, height: 24, justifyContent: 'center', alignItems: 'center'`), уменьшен размер иконки с `size={20}` до `size={18}`. Это решает проблему выравнивания иконки и текста, обеспечивая одинаковое адекватное отображение на обеих платформах.
+
+**Изменено**:
+- `src/components/BottomMenu.js` - иконка обёрнута в View с центрированием, size уменьшен до 18
+
+**Источники**:
+- [GitHub Issue #174](https://github.com/expo/react-native-action-sheet/issues/174) — workaround для выравнивания иконок и текста
+- [LogRocket: Build custom React Native action sheet](https://blog.logrocket.com/build-custom-react-native-action-sheet/) — информация о кастомизации иконок
