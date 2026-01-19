@@ -49,4 +49,7 @@ tmpclaude-*-cwd
 # Temporary documentation and notes
 WebRTC.md
 NUL
+
+# DDRSpecs temporary files
 .claude/ddrspecs/run-session-log.json
+.claude/ddrspecs/.do-session
