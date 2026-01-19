@@ -30,9 +30,6 @@ export default function BottomMenu({
         destructiveButtonIndex,
         cancelButtonIndex,
         title: 'Меню',
-        icons: [
-          <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
-        ],
       },
       (selectedIndex) => {
         if (selectedIndex === 0) {
