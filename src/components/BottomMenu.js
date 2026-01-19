@@ -20,9 +20,9 @@ export default function BottomMenu({
 
   // Обработчик нажатия на кнопку "три точки"
   const handleDotsMenuPress = () => {
-    const options = ['Выйти', 'Отмена'];
+    const options = ['Выйти'];
     const destructiveButtonIndex = 0;
-    const cancelButtonIndex = 1;
+    const cancelButtonIndex = 1; // Индекс за пределами массива = закрытие тапом вне области без кнопки "Отмена"
 
     showActionSheetWithOptions(
       {
@@ -39,7 +39,7 @@ export default function BottomMenu({
           // Выйти
           onLogout?.();
         }
-        // selectedIndex === 1 или undefined - отмена, ничего не делаем
+        // selectedIndex === 1 или undefined - отмена (тап вне области), ничего не делаем
       }
     );
   };
