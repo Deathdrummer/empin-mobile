@@ -20,13 +20,15 @@ export default function BottomMenu({
 
   // Обработчик нажатия на кнопку "три точки"
   const handleDotsMenuPress = () => {
-    const options = ['Выйти'];
+    const options = ['Выйти', 'Отмена'];
     const destructiveButtonIndex = 0;
+    const cancelButtonIndex = 1;
 
     showActionSheetWithOptions(
       {
         options,
         destructiveButtonIndex,
+        cancelButtonIndex,
         title: 'Меню',
         icons: [
           <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
@@ -37,6 +39,7 @@ export default function BottomMenu({
           // Выйти
           onLogout?.();
         }
+        // selectedIndex === 1 или undefined - отмена, ничего не делаем
       }
     );
   };
