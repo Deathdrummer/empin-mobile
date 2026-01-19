@@ -8,8 +8,8 @@
 
 ## Checkpoint
 - Current: 3
-- Last Updated: 2026-01-19T20:10:00.000Z
-- Last Action: Решена проблема - уменьшено расстояние между иконкой и текстом через патч библиотеки (marginRight: 32→12)
+- Last Updated: 2026-01-19T20:20:00.000Z
+- Last Action: Решена проблема - уменьшено расстояние между иконкой и текстом через патч библиотеки (marginRight: 32→4)
 
 ## Tasks
 | # | File | Status | Title |

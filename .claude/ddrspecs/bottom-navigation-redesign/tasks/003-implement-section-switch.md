@@ -45,7 +45,7 @@
 
 **Причина**: В исходном коде `@expo/react-native-action-sheet` жестко закодировано `marginRight: 32` для иконки в стилях. Это значение нельзя изменить через пропсы.
 
-**Решение**: Создан patch через `patch-package`, который изменяет `marginRight` с 32 на 12 в файлах `ActionGroup.js` библиотеки. Патч автоматически применяется после `npm install` через postinstall скрипт.
+**Решение**: Создан patch через `patch-package`, который изменяет `marginRight` с 32 на 4 в файлах `ActionGroup.js` библиотеки. Патч автоматически применяется после `npm install` через postinstall скрипт.
 
 **Изменено**:
 - `patches/@expo+react-native-action-sheet+4.1.1.patch` - создан патч для изменения marginRight
@@ -53,13 +53,16 @@
 
 **Как менять расстояние вручную**:
 ```bash
-# Отредактируй файл:
-# node_modules/@expo/react-native-action-sheet/lib/module/ActionSheet/ActionGroup.js
-# Найди: marginRight:12
-# Измени на нужное значение (например, 8 или 16)
-# Пересоздай патч:
-npx patch-package @expo/react-native-action-sheet
+# 1. Отредактируй оба файла:
+sed -i 's/marginRight:[0-9]*/marginRight:N/g' node_modules/@expo/react-native-action-sheet/lib/module/ActionSheet/ActionGroup.js
+sed -i 's/marginRight:[0-9]*/marginRight:N/g' node_modules/@expo/react-native-action-sheet/lib/commonjs/ActionSheet/ActionGroup.js
+
+# где N - нужное значение (например, 4, 8, 12 и т.д.)
+
+# 2. Пересоздай патч вручную через Write (patch-package не работает стабильно в Windows Git Bash)
 ```
+
+**Текущее значение**: `marginRight: 4`
 
 **Источники**:
 - [GitHub expo/react-native-action-sheet](https://github.com/expo/react-native-action-sheet) — исходный код ActionGroup.tsx
