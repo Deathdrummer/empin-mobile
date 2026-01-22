@@ -599,6 +599,36 @@ logs/app.log
 - Вместо ~5000+ токенов (DISPATCHER.md + все tasks/*.md)
 - Всего ~200-300 токенов на задачу в HISTORY.md
 
+## Система логирования
+
+**КРИТИЧЕСКИ ВАЖНО:** В проекте настроена система логирования. ВСЕГДА используй logger вместо console.log/console.error.
+
+**Использование:**
+```javascript
+import logger from './src/utils/logger';
+
+logger.error('Ошибка', { data: 'value' });
+logger.warn('Предупреждение', { data: 'value' });
+logger.info('Событие', { data: 'value' });
+logger.debug('Отладка', { data: 'value' });
+```
+
+**Уровни:**
+- `error` - критические ошибки
+- `warn` - предупреждения
+- `info` - важные события
+- `debug` - отладка
+
+**ВСЕГДА логируй:**
+- Ошибки с полным stack trace
+- API запросы/ответы
+- Изменения состояния
+- Критичные операции
+
+**Логи:** `{documentDirectory}/app.log`
+
+**Просмотр логов:** `/ddrspec:log`
+
 ## Важные правила
 
 1. **Не читать все task файлы** — только current
