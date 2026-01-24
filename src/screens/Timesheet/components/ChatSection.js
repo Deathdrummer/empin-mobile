@@ -1051,7 +1051,7 @@ export const ChatSection = ({
             multiline
             editable={!isRecording}
           />
-          {commentText.trim() ? (
+          {commentText.trim() || selectedMediaArray.length > 0 ? (
             <TouchableOpacity
               style={styles.chatSendButton}
               onPress={handleSendComment}
