@@ -1,9 +1,39 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import BottomMenu from '../../components/BottomMenu';
+import { LogoutModal } from '../Timesheet/components/modals/LogoutModal';
+import { timesheetAPI } from '../../services/api';
 
 export default function ChatScreen({ navigation, route }) {
-  const { staffName = 'Собеседник' } = route.params || {};
+  const { staffName = 'Собеседник', onLogout } = route.params || {};
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+
+  const handleNavigateToTimesheet = () => {
+    navigation.navigate('Timesheet');
+  };
+
+  const handleNavigateToChats = () => {
+    navigation.goBack();
+  };
+
+  const handleNavigateToCallHistory = () => {
+    navigation.navigate('Messenger');
+  };
+
+  const handleLogout = () => {
+    setLogoutModalVisible(true);
+  };
+
+  const confirmLogout = async () => {
+    setLogoutModalVisible(false);
+    try {
+      await timesheetAPI.logout();
+      if (onLogout) onLogout();
+    } catch (error) {
+      if (onLogout) onLogout();
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -19,6 +49,19 @@ export default function ChatScreen({ navigation, route }) {
         <Text style={styles.stubText}>Чат с {staffName}</Text>
         <Text style={styles.stubSubtext}>Скоро здесь будут сообщения</Text>
       </View>
+      <LogoutModal
+        visible={logoutModalVisible}
+        onClose={() => setLogoutModalVisible(false)}
+        onConfirm={confirmLogout}
+      />
+      <BottomMenu
+        section="messenger"
+        onLogout={handleLogout}
+        onNavigateToTimesheet={handleNavigateToTimesheet}
+        onNavigateToChats={handleNavigateToChats}
+        onNavigateToCallHistory={handleNavigateToCallHistory}
+        currentScreen="Chats"
+      />
     </SafeAreaView>
   );
 }

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { timesheetAPI } from '../../services/api';
+import { formatShortName } from '../../utils/formatName';
 
 export default function ChatsTab() {
   const navigation = useNavigation();
@@ -38,14 +39,10 @@ export default function ChatsTab() {
     loadStaff();
   }, [loadStaff]);
 
-  const formatName = (item) => {
-    return [item.sname, item.fname, item.mname].filter(Boolean).join(' ');
-  };
-
   const handleOpenChat = (item) => {
     navigation.navigate('Chat', {
       staffId: item.id,
-      staffName: formatName(item),
+      staffName: formatShortName(item),
     });
   };
 
@@ -53,14 +50,17 @@ export default function ChatsTab() {
     <TouchableOpacity
       style={styles.item}
       onPress={() => handleOpenChat(item)}
-      activeOpacity={0.7}
+      activeOpacity={0.5}
     >
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>
           {item.sname?.charAt(0) || '?'}
         </Text>
       </View>
-      <Text style={styles.name}>{formatName(item)}</Text>
+      <View style={styles.content}>
+        <Text style={styles.name}>{formatShortName(item)}</Text>
+      </View>
+      <View style={styles.separator} />
     </TouchableOpacity>
   );
 
@@ -97,15 +97,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   list: {
-    padding: 16,
+    flexGrow: 1,
   },
   item: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: '#fff',
-    padding: 12,
-    marginBottom: 8,
-    borderRadius: 8,
   },
   avatar: {
     width: 40,
@@ -121,9 +121,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   name: {
     fontSize: 16,
-    color: '#333',
+    color: '#000',
+  },
+  separator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 0.5,
+    backgroundColor: '#E5E5EA',
   },
   emptyText: {
     fontSize: 16,
