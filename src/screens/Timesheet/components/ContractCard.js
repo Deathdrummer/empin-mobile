@@ -131,7 +131,10 @@ export const ContractCard = ({
               replyingToComment={replyingToComment}
               deletingComment={deletingComment}
               onCommentChange={onCommentChange}
-              onAddComment={async (selectedMedia) => await onAddComment(contract.timesheet_contract_id, selectedMedia)}
+              onAddComment={async (text, selectedMedia) => {
+                // Игнорируем text из ChatSection, используем текст из commentText (состояния хука)
+                await onAddComment(contract.timesheet_contract_id, selectedMedia);
+              }}
               onDeleteComment={onDeleteComment}
               onEditComment={onEditComment}
               onReplyComment={onReplyComment}

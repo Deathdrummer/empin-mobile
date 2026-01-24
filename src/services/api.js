@@ -352,4 +352,132 @@ export const timesheetAPI = {
   },
 };
 
+export const messengerAPI = {
+  getOrCreateChat: async (participantId) => {
+    const response = await api.post('/messenger/chat', {
+      participant_id: participantId,
+    });
+    return response.data;
+  },
+
+  getMessages: async (chatId) => {
+    const response = await api.post('/messenger/chat/messages', {
+      chat_id: chatId,
+    });
+    return response.data;
+  },
+
+  addMessage: async (chatId, message, replyToId = null, mediaArray = []) => {
+    // Если есть медиа, используем FormData
+    if (mediaArray && mediaArray.length > 0) {
+      const formData = new FormData();
+      formData.append('chat_id', chatId);
+      formData.append('message', message);
+      if (replyToId) {
+        formData.append('reply_to_id', replyToId);
+      }
+
+      // Добавляем все медиа файлы в FormData
+      mediaArray.forEach((media, index) => {
+        // Извлекаем имя файла и расширение из URI или name
+        const fileName = media.name || media.fileName || media.uri.split('/').pop();
+
+        // Используем mimeType из media, если есть, иначе определяем по расширению
+        let mimeType = media.mimeType;
+
+        if (!mimeType) {
+          const extension = fileName.split('.').pop().toLowerCase();
+          const mimeTypes = {
+            // Изображения
+            jpg: 'image/jpeg',
+            jpeg: 'image/jpeg',
+            png: 'image/png',
+            gif: 'image/gif',
+            bmp: 'image/bmp',
+            webp: 'image/webp',
+            // Видео
+            mp4: 'video/mp4',
+            mov: 'video/quicktime',
+            avi: 'video/x-msvideo',
+            mkv: 'video/x-matroska',
+            // Документы
+            pdf: 'application/pdf',
+            doc: 'application/msword',
+            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            xls: 'application/vnd.ms-excel',
+            xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ppt: 'application/vnd.ms-powerpoint',
+            pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            // Архивы
+            zip: 'application/zip',
+            rar: 'application/x-rar-compressed',
+            '7z': 'application/x-7z-compressed',
+            // Текст
+            txt: 'text/plain',
+            csv: 'text/csv',
+            // Аудио
+            mp3: 'audio/mpeg',
+            wav: 'audio/wav',
+            ogg: 'audio/ogg',
+            aac: 'audio/aac',
+            flac: 'audio/flac',
+            m4a: 'audio/x-m4a',
+          };
+          mimeType = mimeTypes[extension] || 'application/octet-stream';
+        }
+
+        const mediaFile = {
+          uri: media.uri,
+          name: fileName,
+          type: mimeType,
+        };
+
+        // Используем media[] для отправки массива
+        formData.append('media[]', mediaFile);
+      });
+
+      const response = await api.post('/messenger/message', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    }
+
+    // Если медиа нет, используем обычный JSON
+    const response = await api.post('/messenger/message', {
+      chat_id: chatId,
+      message,
+      reply_to_id: replyToId,
+    });
+    return response.data;
+  },
+
+  updateMessage: async (id, message) => {
+    const response = await api.put(`/messenger/message/${id}`, { message });
+    return response.data;
+  },
+
+  removeMessage: async (id) => {
+    const response = await api.delete(`/messenger/message/${id}`);
+    return response.data;
+  },
+
+  addReaction: async (messageId, emoji) => {
+    const response = await api.post('/messenger/message/reaction', {
+      message_id: messageId,
+      emoji,
+    });
+    return response.data;
+  },
+
+  removeReaction: async (messageId, emoji) => {
+    const response = await api.post('/messenger/message/reaction', {
+      message_id: messageId,
+      emoji,
+    });
+    return response.data;
+  },
+};
+
 export default api;

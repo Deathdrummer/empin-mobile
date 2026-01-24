@@ -276,7 +276,7 @@ export const ChatSection = ({
     }
 
     try {
-      await onAddComment(selectedMediaArray);
+      await onAddComment(commentText, selectedMediaArray);
       // Очищаем выбранное медиа только после успешной отправки
       setSelectedMediaArray([]);
       setHasValidationError(false);
@@ -792,12 +792,9 @@ export const ChatSection = ({
 
   return (
     <View style={styles.chatContainer}>
-      {chat && chat.length > 0 && (
-        chat.map((comment) => {
-          const isDeletingThisComment = deletingComment === comment.id;
-          return (
+      {chat && chat.length > 0 && chat.map((comment) => (
             <View key={comment.id} style={styles.commentWrapper}>
-              {isDeletingThisComment && (
+              {deletingComment === comment.id && (
                 <View style={styles.loadingOverlay}>
                   <ActivityIndicator size="small" color="#999999" />
                 </View>
@@ -929,9 +926,7 @@ export const ChatSection = ({
                 )}
               </TouchableOpacity>
             </View>
-          );
-        })
-      )}
+        ))}
 
       <Can permission="mobile-app-can-create-comment:site">
         {replyingToComment && (
