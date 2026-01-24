@@ -11,6 +11,7 @@ import { timesheetAPI, messengerAPI } from '../../services/api';
 import { ChatMessageList } from '../Timesheet/components/ChatMessageList';
 import { ChatInputPanel } from '../Timesheet/components/ChatInputPanel';
 import { SwipeControlProvider } from '../../contexts/SwipeControlContext';
+import { AudioPlayerProvider } from '../../contexts/AudioPlayerContext';
 
 export default function ChatScreen({ navigation, route }) {
   const { staffId, staffName = 'Собеседник', onLogout } = route.params || {};
@@ -120,6 +121,13 @@ export default function ChatScreen({ navigation, route }) {
     try {
       const replyToId = replyingToComment?.id || null;
       const newMessage = await messengerAPI.addMessage(chatId, text, replyToId, mediaArray);
+
+      // 🔍 DEBUG: Логируем структуру newMessage после ответа сервера
+      console.log('[ChatScreen] New message from server:', {
+        id: newMessage.id,
+        mediaCount: newMessage.media?.length || 0,
+        media: newMessage.media
+      });
 
       setMessages(prev => [...prev, newMessage]);
       setCommentText('');
@@ -325,65 +333,67 @@ export default function ChatScreen({ navigation, route }) {
   };
 
   return (
-    <SwipeControlProvider>
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <View style={styles.backArrow} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle} numberOfLines={1}>{staffName}</Text>
-          <View style={styles.placeholder} />
-        </View>
+    <AudioPlayerProvider>
+      <SwipeControlProvider>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+              <View style={styles.backArrow} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle} numberOfLines={1}>{staffName}</Text>
+            <View style={styles.placeholder} />
+          </View>
 
-        <View style={styles.contentContainer}>
-          <ScrollView
-            ref={scrollViewRef}
-            style={styles.scrollView}
-            contentContainerStyle={styles.scrollViewContent}
-            keyboardShouldPersistTaps='handled'
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleRefresh}
+          <View style={styles.contentContainer}>
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollViewContent}
+              keyboardShouldPersistTaps='handled'
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleRefresh}
+                />
+              }
+            >
+              <ChatMessageList
+                chat={messages}
+                currentUserId={currentUserId}
+                deletingComment={deletingComment}
+                onEditComment={handleEditMessage}
+                onDeleteComment={handleDeleteMessage}
+                onReplyComment={handleReplyMessage}
+                onToggleReaction={handleToggleReaction}
+                onDownloadDocument={handleDownloadDocument}
               />
-            }
-          >
-            <ChatMessageList
-              chat={messages}
-              currentUserId={currentUserId}
-              deletingComment={deletingComment}
-              onEditComment={handleEditMessage}
-              onDeleteComment={handleDeleteMessage}
-              onReplyComment={handleReplyMessage}
-              onToggleReaction={handleToggleReaction}
-              onDownloadDocument={handleDownloadDocument}
+            </ScrollView>
+
+            <ChatInputPanel
+              commentText={commentText}
+              replyingToComment={replyingToComment}
+              onCommentChange={handleCommentChange}
+              onAddComment={handleAddMessage}
+              onCancelReply={handleCancelReply}
             />
-          </ScrollView>
+          </View>
 
-          <ChatInputPanel
-            commentText={commentText}
-            replyingToComment={replyingToComment}
-            onCommentChange={handleCommentChange}
-            onAddComment={handleAddMessage}
-            onCancelReply={handleCancelReply}
+          <LogoutModal
+            visible={logoutModalVisible}
+            onClose={() => setLogoutModalVisible(false)}
+            onConfirm={confirmLogout}
           />
-        </View>
-
-        <LogoutModal
-          visible={logoutModalVisible}
-          onClose={() => setLogoutModalVisible(false)}
-          onConfirm={confirmLogout}
-        />
-        <BottomMenu
-          section="messenger"
-          onLogout={handleLogout}
-          onNavigateToTimesheet={handleNavigateToTimesheet}
-          onNavigateToChats={handleNavigateToChats}
-          onNavigateToCallHistory={handleNavigateToCallHistory}
-          currentScreen="Chats"
-        />
-      </SafeAreaView>
-    </SwipeControlProvider>
+          <BottomMenu
+            section="messenger"
+            onLogout={handleLogout}
+            onNavigateToTimesheet={handleNavigateToTimesheet}
+            onNavigateToChats={handleNavigateToChats}
+            onNavigateToCallHistory={handleNavigateToCallHistory}
+            currentScreen="Chats"
+          />
+        </SafeAreaView>
+      </SwipeControlProvider>
+    </AudioPlayerProvider>
   );
 }
 

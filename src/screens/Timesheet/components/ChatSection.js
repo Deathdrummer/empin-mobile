@@ -879,8 +879,8 @@ export const ChatSection = ({
                       )}
                       {audio.length > 0 && (
                         <>
-                          {audio.map((audioFile, index) => (
-                            <SwipeBlocker key={index}>
+                          {audio.map((audioFile) => (
+                            <SwipeBlocker key={audioFile.uri}>
                               <AudioPlayer
                                 audioUri={audioFile.uri}
                                 fileName={audioFile.name}
@@ -901,13 +901,13 @@ export const ChatSection = ({
                 })()}
                 {comment.reactions && comment.reactions.length > 0 && (
                   <View style={styles.reactionsContainer}>
-                    {groupReactions(comment.reactions, currentUserId).map((reaction, index) => {
+                    {groupReactions(comment.reactions, currentUserId).map((reaction) => {
                       const iconData = EMOJI_TO_ICON[reaction.emoji];
                       if (!iconData) return null;
 
                       return (
                         <TouchableOpacity
-                          key={index}
+                          key={reaction.emoji}
                           style={[
                             styles.reactionBubble,
                             reaction.hasCurrentUserReacted && styles.reactionBubbleActive
@@ -973,8 +973,8 @@ export const ChatSection = ({
               )}
               {audio.length > 0 && (
                 <View style={styles.audioListContainer}>
-                  {audio.map((audioFile, index) => (
-                    <View key={index} style={styles.audioItemContainer}>
+                  {audio.map((audioFile) => (
+                    <View key={audioFile.uri} style={styles.audioItemContainer}>
                       <SwipeBlocker style={{ flex: 1 }}>
                         <AudioPlayer
                           audioUri={audioFile.uri}

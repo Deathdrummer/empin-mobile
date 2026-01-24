@@ -410,8 +410,11 @@ export const ChatInputPanel = ({
       setIsRecording(false);
       setRecordingDuration(0);
 
+      console.log('[handleStopRecording] Recording stopped, duration:', duration);
+
       // Проверка минимальной длительности записи
       if (duration < 1) {
+        console.log('[handleStopRecording] Duration < 1, aborting');
         Toast.show({
           type: 'info',
           text1: 'Слишком короткая запись',
@@ -424,8 +427,10 @@ export const ChatInputPanel = ({
 
       // Получаем URI записанного файла
       const audioUri = audioRecorder.uri;
+      console.log('[handleStopRecording] audioRecorder.uri:', audioUri);
 
       if (!audioUri) {
+        console.log('[handleStopRecording] No audioUri, aborting');
         Toast.show({
           type: 'error',
           text1: 'Ошибка',
@@ -445,8 +450,13 @@ export const ChatInputPanel = ({
         mimeType: 'audio/mp4',
       };
 
+      console.log('[handleStopRecording] Created audioFile:', audioFile);
+      console.log('[handleStopRecording] Calling onAddComment with:', { text: '', mediaArray: [audioFile] });
+
       // Автоматически отправляем аудио
-      await onAddComment([audioFile]);
+      await onAddComment('', [audioFile]);
+
+      console.log('[handleStopRecording] onAddComment completed successfully');
 
     } catch (error) {
       console.error('Failed to stop recording', { error: error.message });
@@ -508,8 +518,8 @@ export const ChatInputPanel = ({
                 )}
                 {audio.length > 0 && (
                   <View style={styles.audioListContainer}>
-                    {audio.map((audioFile, index) => (
-                      <View key={index} style={styles.audioItemContainer}>
+                    {audio.map((audioFile) => (
+                      <View key={audioFile.uri} style={styles.audioItemContainer}>
                         <SwipeBlocker style={{ flex: 1 }}>
                           <AudioPlayer
                             audioUri={audioFile.uri}

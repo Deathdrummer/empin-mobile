@@ -455,7 +455,26 @@ export const ChatMessageList = ({
                   size: m.size
                 }));
 
+                // 🔍 DEBUG: Логируем RAW comment.media ПЕРЕД маппингом
+                console.log('[ChatMessageList] RAW comment.media for comment', comment.id, ':', comment.media);
+                console.log('[ChatMessageList] mappedMedia:', mappedMedia);
+
                 const { media, audio, documents } = separateMediaAndDocuments(mappedMedia);
+
+                // 🔍 DEBUG: Логируем audio для диагностики проблемы с key prop
+                if (audio.length > 0) {
+                  console.log('[ChatMessageList] Audio files in comment:', comment.id);
+                  audio.forEach((audioFile, index) => {
+                    console.log(`  [${index}] uri="${audioFile.uri}", path="${audioFile.path}", name="${audioFile.name}"`);
+                  });
+
+                  // Проверяем дубликаты key
+                  const uris = audio.map(a => a.uri);
+                  const uniqueUris = new Set(uris);
+                  if (uris.length !== uniqueUris.size) {
+                    console.error('[ChatMessageList] ⚠️ DUPLICATE URI KEYS DETECTED!', uris);
+                  }
+                }
 
                 return (
                   <>
@@ -470,7 +489,7 @@ export const ChatMessageList = ({
                     {audio.length > 0 && (
                       <>
                         {audio.map((audioFile, index) => (
-                          <SwipeBlocker key={index}>
+                          <SwipeBlocker key={audioFile.uri || audioFile.path || `audio-${comment.id}-${index}`}>
                             <AudioPlayer
                               audioUri={audioFile.uri}
                               fileName={audioFile.name}
@@ -491,13 +510,13 @@ export const ChatMessageList = ({
               })()}
               {comment.reactions && comment.reactions.length > 0 && (
                 <View style={styles.reactionsContainer}>
-                  {groupReactions(comment.reactions, currentUserId).map((reaction, index) => {
+                  {groupReactions(comment.reactions, currentUserId).map((reaction) => {
                     const iconData = EMOJI_TO_ICON[reaction.emoji];
                     if (!iconData) return null;
 
                     return (
                       <TouchableOpacity
-                        key={index}
+                        key={reaction.emoji}
                         style={[
                           styles.reactionBubble,
                           reaction.hasCurrentUserReacted && styles.reactionBubbleActive

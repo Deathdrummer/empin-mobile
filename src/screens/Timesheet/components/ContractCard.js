@@ -132,8 +132,12 @@ export const ContractCard = ({
               deletingComment={deletingComment}
               onCommentChange={onCommentChange}
               onAddComment={async (text, selectedMedia) => {
-                // Игнорируем text из ChatSection, используем текст из commentText (состояния хука)
-                await onAddComment(contract.timesheet_contract_id, selectedMedia);
+                console.log('[ContractCard] onAddComment wrapper called:', { text, selectedMedia, contractId: contract.timesheet_contract_id });
+                // ИСПРАВЛЕНИЕ: если selectedMedia undefined, значит text содержит массив медиа (голосовое сообщение)
+                const mediaArray = selectedMedia !== undefined ? selectedMedia : (Array.isArray(text) ? text : []);
+                console.log('[ContractCard] Resolved mediaArray:', mediaArray);
+                await onAddComment(contract.timesheet_contract_id, mediaArray);
+                console.log('[ContractCard] onAddComment wrapper completed');
               }}
               onDeleteComment={onDeleteComment}
               onEditComment={onEditComment}

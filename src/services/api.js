@@ -241,6 +241,8 @@ export const timesheetAPI = {
   },
 
   addComment: async (timesheetContractId, message, replyToId = null, mediaArray = []) => {
+    console.log('[addComment] CALL START', { timesheetContractId, message, replyToId, mediaArray });
+
     // Если есть медиа, используем FormData
     if (mediaArray && mediaArray.length > 0) {
       const formData = new FormData();
@@ -250,8 +252,16 @@ export const timesheetAPI = {
         formData.append('reply_to_id', replyToId);
       }
 
+      console.log('[addComment] FormData creation start, mediaArray:', mediaArray);
+
       // Добавляем все медиа файлы в FormData
       mediaArray.forEach((media, index) => {
+        console.log(`[addComment] Processing media ${index}:`, {
+          uri: media.uri,
+          name: media.name,
+          mimeType: media.mimeType,
+        });
+
         // Извлекаем имя файла и расширение из URI или name
         const fileName = media.name || media.fileName || media.uri.split('/').pop();
 
@@ -307,7 +317,12 @@ export const timesheetAPI = {
 
         // Используем media[] для отправки массива
         formData.append('media[]', mediaFile);
+
+        console.log(`[addComment] Appended media ${index}:`, mediaFile);
       });
+
+      console.log('[addComment] FormData keys:', Array.from(formData.keys()));
+      console.log('[addComment] Sending request to /timesheet/comment');
 
       const response = await api.post('/timesheet/comment', formData, {
         headers: {

@@ -15,6 +15,7 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
   const [deletingComment, setDeletingComment] = useState(null);
 
   const handleAddComment = async (timesheetContractId, selectedMediaArray = []) => {
+    console.log('[useCommentActions] handleAddComment called:', { timesheetContractId, selectedMediaArray, commentText });
     setAddingComment(timesheetContractId);
     try {
       const permissions = await refreshPermissions();
@@ -35,7 +36,11 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
       const replyToId = replyingToComment ? replyingToComment.id : null;
       const messageText = commentText.trim();
 
+      console.log('[useCommentActions] Calling timesheetAPI.addComment:', { timesheetContractId, messageText, replyToId, selectedMediaArray });
+
       await timesheetAPI.addComment(timesheetContractId, messageText, replyToId, selectedMediaArray);
+
+      console.log('[useCommentActions] timesheetAPI.addComment completed');
 
       setCommentText('');
       setReplyingToComment(null);
