@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Directory, File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import Toast from 'react-native-toast-message';
 import BottomMenu from '../../components/BottomMenu';
 import { LogoutModal } from '../Timesheet/components/modals/LogoutModal';
 import { timesheetAPI, messengerAPI } from '../../services/api';
-import { ChatSection } from '../Timesheet/components/ChatSection';
+import { ChatMessageList } from '../Timesheet/components/ChatMessageList';
+import { ChatInputPanel } from '../Timesheet/components/ChatInputPanel';
 import { SwipeControlProvider } from '../../contexts/SwipeControlContext';
 
 export default function ChatScreen({ navigation, route }) {
@@ -235,6 +238,66 @@ export default function ChatScreen({ navigation, route }) {
     setReplyingToComment(null);
   }, []);
 
+  // Скачивание документа
+  const handleDownloadDocument = useCallback(async (document) => {
+    try {
+      const fileName = document.name || document.uri.split('/').pop();
+
+      Toast.show({
+        type: 'info',
+        text1: 'Скачивание',
+        text2: `Загрузка файла ${fileName}...`,
+        position: 'top',
+        visibilityTime: 2000,
+      });
+
+      // Создаем директорию для загрузок (если не существует)
+      const downloadDir = new Directory(Paths.cache, 'downloads');
+      if (!downloadDir.exists) {
+        downloadDir.create();
+      }
+
+      // Создаем целевой файл с нужным именем
+      const outputFile = new File(downloadDir, fileName);
+
+      // Скачиваем файл (новый API v54)
+      const downloadedFile = await File.downloadFileAsync(document.uri, outputFile);
+
+      // Проверяем доступность шаринга
+      const isSharingAvailable = await Sharing.isAvailableAsync();
+
+      if (isSharingAvailable) {
+        // Открываем диалог шаринга (позволяет сохранить или открыть файл)
+        await Sharing.shareAsync(downloadedFile.uri);
+
+        Toast.show({
+          type: 'success',
+          text1: 'Готово',
+          text2: 'Файл загружен',
+          position: 'top',
+          visibilityTime: 2000,
+        });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Ошибка',
+          text2: 'Шаринг недоступен на этом устройстве',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+      }
+    } catch (error) {
+      console.error('Error downloading document', { error: error.message });
+      Toast.show({
+        type: 'error',
+        text1: 'Ошибка',
+        text2: 'Не удалось скачать документ',
+        position: 'top',
+        visibilityTime: 3000,
+      });
+    }
+  }, []);
+
   const handleNavigateToTimesheet = () => {
     navigation.navigate('Timesheet');
   };
@@ -272,11 +335,7 @@ export default function ChatScreen({ navigation, route }) {
           <View style={styles.placeholder} />
         </View>
 
-        <KeyboardAvoidingView
-          style={styles.keyboardAvoidingView}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
+        <View style={styles.contentContainer}>
           <ScrollView
             ref={scrollViewRef}
             style={styles.scrollView}
@@ -289,21 +348,26 @@ export default function ChatScreen({ navigation, route }) {
               />
             }
           >
-            <ChatSection
+            <ChatMessageList
               chat={messages}
-              commentText={commentText}
-              replyingToComment={replyingToComment}
+              currentUserId={currentUserId}
               deletingComment={deletingComment}
-              onCommentChange={handleCommentChange}
-              onAddComment={handleAddMessage}
-              onDeleteComment={handleDeleteMessage}
               onEditComment={handleEditMessage}
+              onDeleteComment={handleDeleteMessage}
               onReplyComment={handleReplyMessage}
               onToggleReaction={handleToggleReaction}
-              onCancelReply={handleCancelReply}
+              onDownloadDocument={handleDownloadDocument}
             />
           </ScrollView>
-        </KeyboardAvoidingView>
+
+          <ChatInputPanel
+            commentText={commentText}
+            replyingToComment={replyingToComment}
+            onCommentChange={handleCommentChange}
+            onAddComment={handleAddMessage}
+            onCancelReply={handleCancelReply}
+          />
+        </View>
 
         <LogoutModal
           visible={logoutModalVisible}
@@ -364,7 +428,7 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
-  keyboardAvoidingView: {
+  contentContainer: {
     flex: 1,
   },
   scrollView: {

@@ -1,3 +1,8 @@
+/**
+ * @deprecated для Messenger/ChatScreen
+ * Для мессенджера используйте ChatMessageList + ChatInputPanel
+ * Этот компонент используется только в Timesheet (ContractCard)
+ */
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
