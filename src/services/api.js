@@ -176,6 +176,11 @@ export const timesheetAPI = {
     return response.data;
   },
 
+  getAllStaff: async () => {
+    const response = await api.get('/timesheet/all-staff');
+    return response.data;
+  },
+
   getFilterOptions: async () => {
     const response = await api.get('/timesheet/filter-options');
     return response.data;

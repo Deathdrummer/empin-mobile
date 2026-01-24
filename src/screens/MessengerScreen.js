@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import BottomMenu from '../components/BottomMenu';
 import { LogoutModal } from './Timesheet/components/modals/LogoutModal';
 import { timesheetAPI } from '../services/api';
+import ChatsTab from './Messenger/ChatsTab';
 
 export default function MessengerScreen({ onLogout }) {
   const navigation = useNavigation();
@@ -40,11 +41,7 @@ export default function MessengerScreen({ onLogout }) {
   const renderContent = () => {
     switch (activeTab) {
       case 'chats':
-        return (
-          <View style={styles.content}>
-            <Text style={styles.title}>Чаты</Text>
-          </View>
-        );
+        return <ChatsTab />;
       case 'callHistory':
         return (
           <View style={styles.content}>
