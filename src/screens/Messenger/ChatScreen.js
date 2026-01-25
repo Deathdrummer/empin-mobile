@@ -122,13 +122,6 @@ export default function ChatScreen({ navigation, route }) {
       const replyToId = replyingToComment?.id || null;
       const newMessage = await messengerAPI.addMessage(chatId, text, replyToId, mediaArray);
 
-      // 🔍 DEBUG: Логируем структуру newMessage после ответа сервера
-      console.log('[ChatScreen] New message from server:', {
-        id: newMessage.id,
-        mediaCount: newMessage.media?.length || 0,
-        media: newMessage.media
-      });
-
       setMessages(prev => [...prev, newMessage]);
       setCommentText('');
       setReplyingToComment(null);

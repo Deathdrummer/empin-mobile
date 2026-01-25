@@ -455,26 +455,7 @@ export const ChatMessageList = ({
                   size: m.size
                 }));
 
-                // 🔍 DEBUG: Логируем RAW comment.media ПЕРЕД маппингом
-                console.log('[ChatMessageList] RAW comment.media for comment', comment.id, ':', comment.media);
-                console.log('[ChatMessageList] mappedMedia:', mappedMedia);
-
                 const { media, audio, documents } = separateMediaAndDocuments(mappedMedia);
-
-                // 🔍 DEBUG: Логируем audio для диагностики проблемы с key prop
-                if (audio.length > 0) {
-                  console.log('[ChatMessageList] Audio files in comment:', comment.id);
-                  audio.forEach((audioFile, index) => {
-                    console.log(`  [${index}] uri="${audioFile.uri}", path="${audioFile.path}", name="${audioFile.name}"`);
-                  });
-
-                  // Проверяем дубликаты key
-                  const uris = audio.map(a => a.uri);
-                  const uniqueUris = new Set(uris);
-                  if (uris.length !== uniqueUris.size) {
-                    console.error('[ChatMessageList] ⚠️ DUPLICATE URI KEYS DETECTED!', uris);
-                  }
-                }
 
                 return (
                   <>

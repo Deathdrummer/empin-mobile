@@ -410,11 +410,8 @@ export const ChatInputPanel = ({
       setIsRecording(false);
       setRecordingDuration(0);
 
-      console.log('[handleStopRecording] Recording stopped, duration:', duration);
-
       // Проверка минимальной длительности записи
       if (duration < 1) {
-        console.log('[handleStopRecording] Duration < 1, aborting');
         Toast.show({
           type: 'info',
           text1: 'Слишком короткая запись',
@@ -427,10 +424,8 @@ export const ChatInputPanel = ({
 
       // Получаем URI записанного файла
       const audioUri = audioRecorder.uri;
-      console.log('[handleStopRecording] audioRecorder.uri:', audioUri);
 
       if (!audioUri) {
-        console.log('[handleStopRecording] No audioUri, aborting');
         Toast.show({
           type: 'error',
           text1: 'Ошибка',
@@ -450,13 +445,8 @@ export const ChatInputPanel = ({
         mimeType: 'audio/mp4',
       };
 
-      console.log('[handleStopRecording] Created audioFile:', audioFile);
-      console.log('[handleStopRecording] Calling onAddComment with:', { text: '', mediaArray: [audioFile] });
-
       // Автоматически отправляем аудио
       await onAddComment('', [audioFile]);
-
-      console.log('[handleStopRecording] onAddComment completed successfully');
 
     } catch (error) {
       console.error('Failed to stop recording', { error: error.message });
@@ -717,16 +707,16 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   audioListContainer: {
-    position: 'relative',
+    marginTop: 8,
   },
   audioItemContainer: {
-    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
   audioRemoveButton: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
+    marginLeft: 8,
+    marginTop: 12,
     width: 24,
     height: 24,
     borderRadius: 12,
