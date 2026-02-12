@@ -1,0 +1,44 @@
+diff --git a/node_modules/metro/src/Server.js b/node_modules/metro/src/Server.js
+index 6adc6d1..cff33d8 100644
+--- a/node_modules/metro/src/Server.js
++++ b/node_modules/metro/src/Server.js
+@@ -1,5 +1,17 @@
+ "use strict";
+ 
++// Polyfill for URL.canParse (missing in whatwg-url-without-unicode used by Expo)
++if (typeof URL !== 'undefined' && !URL.canParse) {
++  URL.canParse = function(url, base) {
++    try {
++      new URL(url, base);
++      return true;
++    } catch {
++      return false;
++    }
++  };
++}
++
+ Object.defineProperty(exports, "__esModule", {
+   value: true,
+ });
+diff --git a/node_modules/metro/src/lib/parseBundleOptionsFromBundleRequestUrl.js b/node_modules/metro/src/lib/parseBundleOptionsFromBundleRequestUrl.js
+index fa4a967..8037308 100644
+--- a/node_modules/metro/src/lib/parseBundleOptionsFromBundleRequestUrl.js
++++ b/node_modules/metro/src/lib/parseBundleOptionsFromBundleRequestUrl.js
+@@ -1,5 +1,17 @@
+ "use strict";
+ 
++// Polyfill for URL.canParse (missing in whatwg-url-without-unicode used by Expo)
++if (typeof URL !== 'undefined' && !URL.canParse) {
++  URL.canParse = function(url, base) {
++    try {
++      new URL(url, base);
++      return true;
++    } catch {
++      return false;
++    }
++  };
++}
++
+ Object.defineProperty(exports, "__esModule", {
+   value: true,
+ });

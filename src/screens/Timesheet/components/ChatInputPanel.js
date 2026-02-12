@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, StatusBar, ActivityIndicator } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -93,6 +93,7 @@ export const ChatInputPanel = ({
   const [isRecording, setIsRecording] = React.useState(false);
   const [recordingDuration, setRecordingDuration] = React.useState(0);
   const { showActionSheetWithOptions } = useActionSheet();
+  const [isSending, setIsSending] = React.useState(false);
   const inputRef = React.useRef(null);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recordingTimerRef = React.useRef(null);
@@ -115,6 +116,9 @@ export const ChatInputPanel = ({
 
   // Функция отправки комментария с медиа
   const handleSendComment = async () => {
+    // Блокировка повторных вызовов во время отправки
+    if (isSending) return;
+
     // Валидация: должен быть текст или медиа
     if (!commentText.trim() && selectedMediaArray.length === 0) {
       setHasValidationError(true);
@@ -128,6 +132,8 @@ export const ChatInputPanel = ({
       return;
     }
 
+    setIsSending(true);
+
     try {
       await onAddComment(commentText, selectedMediaArray);
       // Очищаем выбранное медиа только после успешной отправки
@@ -136,6 +142,8 @@ export const ChatInputPanel = ({
     } catch (error) {
       // Ошибка уже обработана в onAddComment, медиа не очищаем
       console.error('Failed to send comment', { error: error.message });
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -554,11 +562,12 @@ export const ChatInputPanel = ({
                 style={styles.chatAttachButton}
                 onPress={showMediaOptions}
                 activeOpacity={0.7}
+                disabled={isSending}
               >
                 <MaterialCommunityIcons
                   name="paperclip"
                   size={22}
-                  color="#999999"
+                  color={isSending ? "#cccccc" : "#999999"}
                 />
               </TouchableOpacity>
             )}
@@ -591,8 +600,13 @@ export const ChatInputPanel = ({
                 style={styles.chatSendButton}
                 onPress={handleSendComment}
                 activeOpacity={0.7}
+                disabled={isSending}
               >
-                <Text style={styles.chatSendButtonIcon}>➤</Text>
+                {isSending ? (
+                  <ActivityIndicator size={16} color="#999999" />
+                ) : (
+                  <Text style={styles.chatSendButtonIcon}>➤</Text>
+                )}
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
