@@ -50,23 +50,12 @@ api.interceptors.response.use(
       // Блокируем приложение
       apiBlockEmitter.block();
     }
-    // 401 - невалидный токен
+    // 401 - невалидный токен, выкидываем пользователя на экран логина
     else if (error.response?.status === 401) {
-      const url = error.config?.url || '';
-
-      // Игнорируем 401 на фоновых проверках /auth/me - не выкидываем пользователя
-      // Выкидываем только при 401 на реальных запросах данных
-      if (url === '/auth/me') {
-        console.warn('Token expired on background check, ignoring');
-        return Promise.reject(error);
-      }
-
-      // Для остальных запросов - удаляем токен и выкидываем пользователя
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('user');
       await AsyncStorage.removeItem('permissions');
 
-      // Вызываем callback для принудительного выхода
       if (onUnauthorizedCallback) {
         onUnauthorizedCallback();
       }
@@ -477,6 +466,40 @@ export const messengerAPI = {
       message_id: messageId,
       emoji,
     });
+    return response.data;
+  },
+
+  // Calls API
+  initiateCall: async (calleeId) => {
+    const response = await api.post('/messenger/calls/initiate', {
+      callee_id: calleeId,
+    });
+    return response.data;
+  },
+
+  acceptCall: async (callId) => {
+    const response = await api.post(`/messenger/calls/${callId}/accept`);
+    return response.data;
+  },
+
+  rejectCall: async (callId) => {
+    const response = await api.post(`/messenger/calls/${callId}/reject`);
+    return response.data;
+  },
+
+  endCall: async (callId) => {
+    const response = await api.post(`/messenger/calls/${callId}/end`);
+    return response.data;
+  },
+
+  getCallHistory: async () => {
+    const response = await api.get('/messenger/calls/history');
+    return response.data;
+  },
+
+  // Polling: проверка входящих звонков (временно, до FCM)
+  getPendingCall: async () => {
+    const response = await api.get('/messenger/calls/pending');
     return response.data;
   },
 };

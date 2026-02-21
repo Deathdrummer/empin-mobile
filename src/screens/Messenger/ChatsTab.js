@@ -11,12 +11,16 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { timesheetAPI } from '../../services/api';
 import { formatShortName } from '../../utils/formatName';
+import { CallButton } from '../../components/messenger/CallButton';
+import { useCallContext } from '../../contexts/CallContext';
 
 export default function ChatsTab() {
   const navigation = useNavigation();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const { initiateCall } = useCallContext();
 
   const loadStaff = useCallback(async () => {
     try {
@@ -46,6 +50,10 @@ export default function ChatsTab() {
     });
   };
 
+  const handleCallPress = useCallback((item) => {
+    initiateCall(item.id, formatShortName(item));
+  }, [initiateCall]);
+
   const renderItem = ({ item }) => (
     <TouchableOpacity
       style={styles.item}
@@ -60,6 +68,10 @@ export default function ChatsTab() {
       <View style={styles.content}>
         <Text style={styles.name}>{formatShortName(item)}</Text>
       </View>
+      <CallButton
+        userId={item.id}
+        onPress={() => handleCallPress(item)}
+      />
       <View style={styles.separator} />
     </TouchableOpacity>
   );

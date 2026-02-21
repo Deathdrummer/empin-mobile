@@ -6,6 +6,7 @@ import BottomMenu from '../components/BottomMenu';
 import { LogoutModal } from './Timesheet/components/modals/LogoutModal';
 import { timesheetAPI } from '../services/api';
 import ChatsTab from './Messenger/ChatsTab';
+import CallHistoryTab from './Messenger/CallHistoryTab';
 
 export default function MessengerScreen({ onLogout }) {
   const navigation = useNavigation();
@@ -43,11 +44,7 @@ export default function MessengerScreen({ onLogout }) {
       case 'chats':
         return <ChatsTab />;
       case 'callHistory':
-        return (
-          <View style={styles.content}>
-            <Text style={styles.title}>История звонков</Text>
-          </View>
-        );
+        return <CallHistoryTab />;
       default:
         return (
           <View style={styles.content}>
@@ -58,7 +55,7 @@ export default function MessengerScreen({ onLogout }) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       {renderContent()}
       <LogoutModal
         visible={logoutModalVisible}

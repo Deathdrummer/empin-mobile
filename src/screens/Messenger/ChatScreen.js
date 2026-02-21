@@ -12,6 +12,8 @@ import { ChatMessageList } from '../Timesheet/components/ChatMessageList';
 import { ChatInputPanel } from '../Timesheet/components/ChatInputPanel';
 import { SwipeControlProvider } from '../../contexts/SwipeControlContext';
 import { AudioPlayerProvider } from '../../contexts/AudioPlayerContext';
+import { CallButton } from '../../components/messenger/CallButton';
+import { useCallContext } from '../../contexts/CallContext';
 
 export default function ChatScreen({ navigation, route }) {
   const { staffId, staffName = 'Собеседник', onLogout } = route.params || {};
@@ -26,6 +28,8 @@ export default function ChatScreen({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
   const scrollViewRef = React.useRef(null);
+
+  const { initiateCall } = useCallContext();
 
   // Загрузка текущего пользователя
   useEffect(() => {
@@ -325,16 +329,20 @@ export default function ChatScreen({ navigation, route }) {
     }
   };
 
+  const handleCallPress = useCallback(() => {
+    initiateCall(staffId, staffName);
+  }, [staffId, staffName, initiateCall]);
+
   return (
     <AudioPlayerProvider>
       <SwipeControlProvider>
-        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={styles.container} edges={['bottom']}>
           <View style={styles.header}>
             <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
               <View style={styles.backArrow} />
             </TouchableOpacity>
             <Text style={styles.headerTitle} numberOfLines={1}>{staffName}</Text>
-            <View style={styles.placeholder} />
+            <CallButton userId={staffId} onPress={handleCallPress} />
           </View>
 
           <View style={styles.contentContainer}>

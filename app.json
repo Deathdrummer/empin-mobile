@@ -14,6 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "ru.deathdrumer.empinmobile",
       "infoPlist": {
         "NSCameraUsageDescription": "Разрешите доступ к камере для съемки фото и видео в комментариях",
         "NSPhotoLibraryUsageDescription": "Разрешите доступ к галерее для выбора фото и видео в комментариях",
@@ -46,6 +47,8 @@
       }
     },
     "plugins": [
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc",
       "expo-video",
       "expo-audio",
       "expo-speech-recognition"

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function BottomMenu({
   section, // 'timesheet' | 'messenger'
@@ -17,6 +18,7 @@ export default function BottomMenu({
   currentScreen
 }) {
   const { showActionSheetWithOptions } = useActionSheet();
+  const insets = useSafeAreaInsets();
 
   // Обработчик нажатия на кнопку "три точки"
   const handleDotsMenuPress = () => {
@@ -33,6 +35,7 @@ export default function BottomMenu({
         icons: [
           <Ionicons name="log-out-outline" size={20} color="#FF3B30" />
         ],
+        containerStyle: { paddingBottom: insets.bottom },
       },
       (selectedIndex) => {
         if (selectedIndex === 0) {

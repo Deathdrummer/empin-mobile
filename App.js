@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet, StatusBar } from 'react-native';
+import * as NavigationBar from 'expo-navigation-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
@@ -14,6 +15,8 @@ import { setUnauthorizedCallback, checkApiAvailability } from './src/services/ap
 import { useAppStatePermissions } from './src/hooks/useAppStatePermissions';
 import apiBlockEmitter from './src/utils/apiBlockEmitter';
 import { ApiBlockModal } from './src/components/ApiBlockModal';
+import { CallProvider } from './src/contexts/CallContext';
+import { GlobalCallModal } from './src/components/messenger/GlobalCallModal';
 
 const Stack = createNativeStackNavigator();
 
@@ -24,6 +27,10 @@ export default function App() {
 
   // Автоматическое обновление прав при возврате в приложение
   useAppStatePermissions();
+
+  useEffect(() => {
+    NavigationBar.setVisibilityAsync('hidden');
+  }, []);
 
   useEffect(() => {
     checkAuth();
@@ -39,7 +46,7 @@ export default function App() {
     });
 
     return unsubscribe;
-  }, []);
+  }, [isLoggedIn]);
 
   const checkAuth = async () => {
     try {
@@ -80,28 +87,31 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.appContainer}>
       <ActionSheetProvider>
-        <>
-          <StatusBar hidden={true} />
-          <View style={styles.appContainer}>
-            {isLoggedIn ? (
-              <NavigationContainer>
-                <Stack.Navigator screenOptions={{ headerShown: false }}>
-                  <Stack.Screen name="Timesheet">
-                    {props => <TimesheetScreen {...props} onLogout={handleLogout} />}
-                  </Stack.Screen>
-                  <Stack.Screen name="Messenger">
-                    {props => <MessengerScreen {...props} onLogout={handleLogout} />}
-                  </Stack.Screen>
-                  <Stack.Screen name="Chat" component={ChatScreen} />
-                </Stack.Navigator>
-              </NavigationContainer>
-            ) : (
-              <LoginScreen onLoginSuccess={handleLoginSuccess} />
-            )}
-            <Toast />
-            <ApiBlockModal visible={isApiBlocked} onRetry={handleRetryApi} />
-          </View>
-        </>
+        <CallProvider>
+          <>
+            <StatusBar hidden={true} />
+            <View style={styles.appContainer}>
+              {isLoggedIn ? (
+                <NavigationContainer>
+                  <Stack.Navigator screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="Timesheet">
+                      {props => <TimesheetScreen {...props} onLogout={handleLogout} />}
+                    </Stack.Screen>
+                    <Stack.Screen name="Messenger">
+                      {props => <MessengerScreen {...props} onLogout={handleLogout} />}
+                    </Stack.Screen>
+                    <Stack.Screen name="Chat" component={ChatScreen} />
+                  </Stack.Navigator>
+                </NavigationContainer>
+              ) : (
+                <LoginScreen onLoginSuccess={handleLoginSuccess} />
+              )}
+              <Toast />
+              <ApiBlockModal visible={isApiBlocked} onRetry={handleRetryApi} />
+              {isLoggedIn && <GlobalCallModal />}
+            </View>
+          </>
+        </CallProvider>
       </ActionSheetProvider>
     </GestureHandlerRootView>
   );

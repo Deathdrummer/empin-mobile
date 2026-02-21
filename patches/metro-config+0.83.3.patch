@@ -1,0 +1,17 @@
+diff --git a/node_modules/metro-config/src/loadConfig.js b/node_modules/metro-config/src/loadConfig.js
+index 7ac9d88..62984a7 100644
+--- a/node_modules/metro-config/src/loadConfig.js
++++ b/node_modules/metro-config/src/loadConfig.js
+@@ -1,5 +1,12 @@
+ "use strict";
+ 
++// Polyfill for Array.prototype.toReversed (ES2023)
++if (!Array.prototype.toReversed) {
++  Array.prototype.toReversed = function() {
++    return this.slice().reverse();
++  };
++}
++
+ Object.defineProperty(exports, "__esModule", {
+   value: true,
+ });
