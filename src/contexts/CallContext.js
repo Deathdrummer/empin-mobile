@@ -37,6 +37,7 @@ export const CallProvider = ({ children }) => {
         const { call } = await messengerAPI.getPendingCall();
         if (call && String(call.id) !== handledCallIdRef.current) {
           console.log('[CallContext] Incoming call detected:', call.id);
+          console.log('[CallContext] Pending call data:', JSON.stringify(call, null, 2));
           handledCallIdRef.current = String(call.id);
           handleIncomingCall({
             callId: String(call.id),

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { messengerAPI } from '../../services/api';
 import { formatShortName } from '../../utils/formatName';
 
@@ -68,16 +69,24 @@ const groupByDate = (calls) => {
 /**
  * Элемент списка звонка
  */
-const CallHistoryItem = ({ call, onPress }) => {
+const CallHistoryItem = ({ call, currentUserId, onPress }) => {
+  const isOutgoing = call.caller_id === currentUserId;
+  const otherParticipant = isOutgoing ? call.callee : call.caller;
+  const participantName = otherParticipant
+    ? (formatShortName(otherParticipant) !== 'Без имени'
+        ? formatShortName(otherParticipant)
+        : otherParticipant.full_name || 'Неизвестный')
+    : 'Неизвестный';
+
   const getCallIcon = () => {
     if (call.status === 'missed') {
       return { name: 'phone-missed', color: '#EF4444' };
     } else if (call.status === 'rejected') {
       return { name: 'phone-disabled', color: '#EF4444' };
-    } else if (call.type === 'incoming') {
-      return { name: 'phone-callback', color: '#10B981' };
-    } else {
+    } else if (isOutgoing) {
       return { name: 'phone-forwarded', color: '#3B82F6' };
+    } else {
+      return { name: 'phone-callback', color: '#10B981' };
     }
   };
 
@@ -91,7 +100,6 @@ const CallHistoryItem = ({ call, onPress }) => {
   };
 
   const icon = getCallIcon();
-  const participantName = call.participant?.name || 'Неизвестный';
 
   return (
     <TouchableOpacity style={styles.item} onPress={onPress} activeOpacity={0.5}>
@@ -141,6 +149,22 @@ export default function CallHistoryTab() {
   const [calls, setCalls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        const userJson = await AsyncStorage.getItem('user');
+        if (userJson) {
+          const user = JSON.parse(userJson);
+          setCurrentUserId(user.id);
+        }
+      } catch (error) {
+        console.error('Failed to load current user in CallHistoryTab', error);
+      }
+    };
+    loadCurrentUser();
+  }, []);
 
   const loadCallHistory = useCallback(async () => {
     try {
@@ -164,17 +188,21 @@ export default function CallHistoryTab() {
   }, [loadCallHistory]);
 
   const handleItemPress = (call) => {
-    // Открыть чат с участником
-    if (call.participant?.id) {
+    const isOutgoing = call.caller_id === currentUserId;
+    const otherParticipant = isOutgoing ? call.callee : call.caller;
+    if (otherParticipant?.id) {
+      const name = formatShortName(otherParticipant) !== 'Без имени'
+        ? formatShortName(otherParticipant)
+        : otherParticipant.full_name || 'Собеседник';
       navigation.navigate('Chat', {
-        staffId: call.participant.id,
-        staffName: call.participant.name,
+        staffId: otherParticipant.id,
+        staffName: name,
       });
     }
   };
 
   const renderItem = ({ item }) => (
-    <CallHistoryItem call={item} onPress={() => handleItemPress(item)} />
+    <CallHistoryItem call={item} currentUserId={currentUserId} onPress={() => handleItemPress(item)} />
   );
 
   const renderSectionList = () => {
@@ -198,6 +226,7 @@ export default function CallHistoryTab() {
           <CallHistoryItem
             key={call.id || index}
             call={call}
+            currentUserId={currentUserId}
             onPress={() => handleItemPress(call)}
           />
         ))}

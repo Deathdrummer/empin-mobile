@@ -1,6 +1,7 @@
 import React from 'react';
 import { CallModal } from './CallModal';
 import { useCallContext } from '../../contexts/CallContext';
+import { formatShortName } from '../../utils/formatName';
 
 /**
  * Глобальный CallModal, управляемый через CallContext
@@ -28,10 +29,20 @@ export const GlobalCallModal = () => {
     : callState;
 
   // Определяем участника звонка
+  console.log('[GlobalCallModal] incomingCallData:', JSON.stringify(incomingCallData));
+  console.log('[GlobalCallModal] callState.callData:', JSON.stringify(callState.callData));
+
+  const resolveCallerName = (caller) => {
+    if (!caller) return 'Неизвестный';
+    const shortName = formatShortName(caller);
+    if (shortName && shortName !== 'Без имени') return shortName;
+    return caller.full_name || 'Неизвестный';
+  };
+
   const participant = incomingCallData?.caller
     ? {
         id: incomingCallData.caller.id,
-        name: incomingCallData.caller.full_name || 'Неизвестный',
+        name: resolveCallerName(incomingCallData.caller),
         avatar: incomingCallData.caller.avatar,
       }
     : callState.callData?.participant || {
@@ -39,6 +50,8 @@ export const GlobalCallModal = () => {
         name: 'Неизвестный',
         avatar: undefined,
       };
+
+  console.log('[GlobalCallModal] resolved participant:', participant);
 
   return (
     <CallModal
