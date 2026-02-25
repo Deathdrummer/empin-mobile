@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   RefreshControl,
   TouchableOpacity,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { timesheetAPI } from '../../services/api';
 import { formatShortName } from '../../utils/formatName';
@@ -19,13 +20,22 @@ export default function ChatsTab() {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const currentUserIdRef = useRef(null);
 
   const { initiateCall } = useCallContext();
+
+  useEffect(() => {
+    AsyncStorage.getItem('user').then(userJson => {
+      if (userJson) {
+        currentUserIdRef.current = JSON.parse(userJson).id;
+      }
+    });
+  }, []);
 
   const loadStaff = useCallback(async () => {
     try {
       const data = await timesheetAPI.getAllStaff();
-      setStaff(data);
+      setStaff(data.filter(s => s.id !== currentUserIdRef.current));
     } catch (error) {
       console.error('Failed to load staff:', error);
     } finally {
