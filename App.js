@@ -17,6 +17,7 @@ import apiBlockEmitter from './src/utils/apiBlockEmitter';
 import { ApiBlockModal } from './src/components/ApiBlockModal';
 import { CallProvider } from './src/contexts/CallContext';
 import { GlobalCallModal } from './src/components/messenger/GlobalCallModal';
+import { registerPushNotifications } from './src/services/pushNotifications';
 
 const Stack = createNativeStackNavigator();
 
@@ -51,7 +52,11 @@ export default function App() {
   const checkAuth = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      setIsLoggedIn(!!token);
+      const loggedIn = !!token;
+      setIsLoggedIn(loggedIn);
+      if (loggedIn) {
+        registerPushNotifications();
+      }
     } catch (error) {
       setIsLoggedIn(false);
     } finally {
@@ -61,6 +66,7 @@ export default function App() {
 
   const handleLoginSuccess = () => {
     setIsLoggedIn(true);
+    registerPushNotifications();
   };
 
   const handleLogout = async () => {

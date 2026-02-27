@@ -1,12 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { AppState } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { useCall } from '../services/livekit/useCall';
-import { messengerAPI } from '../services/api';
 
 const CallContext = createContext(null);
-
-// Интервал polling (временно, до FCM)
-const POLL_INTERVAL = 5000;
 
 export const useCallContext = () => {
   const context = useContext(CallContext);
@@ -19,74 +15,87 @@ export const useCallContext = () => {
 export const CallProvider = ({ children }) => {
   const [callModalVisible, setCallModalVisible] = useState(false);
   const [incomingCallData, setIncomingCallData] = useState(null);
+  const [outgoingParticipant, setOutgoingParticipant] = useState(null);
   const [callTimeoutId, setCallTimeoutId] = useState(null);
-  const pollRef = useRef(null);
-  const handledCallIdRef = useRef(null); // Трекинг обработанного звонка
+
+  const handledCallIdRef = useRef(null);
+  const notifListenerRef = useRef(null);
+  const notifResponseListenerRef = useRef(null);
 
   const callState = useCall();
 
   /**
-   * Polling входящих звонков (временно, до FCM push-уведомлений)
-   * TODO: заменить на FCM push notifications
+   * Обработка входящего push-уведомления
    */
-  useEffect(() => {
-    const isIdle = callState.status === 'idle';
+  const handlePushNotification = useCallback((notification) => {
+    const data = notification.request.content.data ?? {};
 
-    const poll = async () => {
-      try {
-        const { call } = await messengerAPI.getPendingCall();
-        if (call && String(call.id) !== handledCallIdRef.current) {
-          console.log('[CallContext] Incoming call detected:', call.id);
-          console.log('[CallContext] Pending call data:', JSON.stringify(call, null, 2));
-          handledCallIdRef.current = String(call.id);
-          handleIncomingCall({
-            callId: String(call.id),
-            caller: call.caller,
-            callType: call.call_type,
-          });
-        }
-      } catch (err) {
-        // Тихо игнорируем — polling не должен ломать приложение
-      }
-    };
+    if (data.type === 'incoming_call') {
+      const callId = String(data.call_id);
 
-    if (isIdle && !callModalVisible) {
-      poll(); // Первый запрос сразу
-      pollRef.current = setInterval(poll, POLL_INTERVAL);
+      // Не обрабатываем повторно
+      if (handledCallIdRef.current === callId) return;
+
+      handledCallIdRef.current = callId;
+
+      handleIncomingCall({
+        callId,
+        caller: {
+          id: data.caller_id,
+          sname: data.caller_name ?? 'Неизвестный',
+          fname: '',
+          mname: '',
+        },
+        callType: 'audio',
+      });
     }
 
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [callState.status, callModalVisible]);
+    if (data.type === 'call_cancelled') {
+      const callId = String(data.call_id);
 
-  // Останавливаем polling когда приложение свернуто
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active' && pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
+      // Если это наш активный/ожидающий звонок — закрываем модал
+      if (
+        callModalVisible &&
+        incomingCallData?.callId === callId &&
+        callState.status !== 'active'
+      ) {
+        setCallTimeoutId((prev) => { if (prev) clearTimeout(prev); return null; });
+        setCallModalVisible(false);
+        setIncomingCallData(null);
       }
-    });
-
-    return () => sub.remove();
-  }, []);
+    }
+  }, [callModalVisible, incomingCallData, callState.status]);
 
   /**
-   * Обработка входящего звонка (из polling или будущего FCM)
+   * Подписка на уведомления (foreground + tap)
+   */
+  useEffect(() => {
+    // Уведомления пришедшие пока приложение открыто
+    notifListenerRef.current = Notifications.addNotificationReceivedListener(handlePushNotification);
+
+    // Тап по уведомлению когда приложение свёрнуто/закрыто
+    notifResponseListenerRef.current = Notifications.addNotificationResponseReceivedListener((response) => {
+      handlePushNotification(response.notification);
+    });
+
+    return () => {
+      notifListenerRef.current?.remove();
+      notifResponseListenerRef.current?.remove();
+    };
+  }, [handlePushNotification]);
+
+  /**
+   * Обработка входящего звонка
    */
   const handleIncomingCall = useCallback((callData) => {
-    console.log('Incoming call:', callData);
+    console.log('[CallContext] Incoming call:', callData);
 
     setIncomingCallData(callData);
     setCallModalVisible(true);
 
-    // Таймаут 30 секунд для автоматического отклонения
+    // Автоотклонение через 30 секунд
     const timeoutId = setTimeout(() => {
-      console.log('Call timeout - auto rejecting');
+      console.log('[CallContext] Call timeout - auto rejecting');
       handleRejectCall();
     }, 30000);
 
@@ -97,8 +106,9 @@ export const CallProvider = ({ children }) => {
    * Инициация исходящего звонка
    */
   const initiateCall = useCallback(async (userId, userName, userAvatar) => {
-    await callState.initiateCall(userId, userName, userAvatar);
+    setOutgoingParticipant({ id: userId, name: userName, avatar: userAvatar });
     setCallModalVisible(true);
+    await callState.initiateCall(userId, userName, userAvatar);
   }, [callState]);
 
   /**
@@ -146,27 +156,22 @@ export const CallProvider = ({ children }) => {
     setIncomingCallData(null);
   }, [callState, callTimeoutId]);
 
-  // Сброс handledCallId при завершении/отклонении (чтобы новый звонок от того же человека работал)
+  // Сброс при закрытии модала
   useEffect(() => {
     if (!callModalVisible && !incomingCallData) {
       handledCallIdRef.current = null;
+      setOutgoingParticipant(null);
     }
   }, [callModalVisible, incomingCallData]);
 
-  /**
-   * Cleanup таймаута
-   */
+  // Cleanup таймаута
   useEffect(() => {
     return () => {
-      if (callTimeoutId) {
-        clearTimeout(callTimeoutId);
-      }
+      if (callTimeoutId) clearTimeout(callTimeoutId);
     };
   }, [callTimeoutId]);
 
-  /**
-   * Закрытие модального окна при завершении звонка
-   */
+  // Закрытие модала при завершении звонка
   useEffect(() => {
     if (callState.status === 'ended' || callState.status === 'error') {
       const timer = setTimeout(() => {
@@ -182,6 +187,7 @@ export const CallProvider = ({ children }) => {
     callState,
     callModalVisible,
     incomingCallData,
+    outgoingParticipant,
     initiateCall,
     acceptCall: handleAcceptCall,
     rejectCall: handleRejectCall,

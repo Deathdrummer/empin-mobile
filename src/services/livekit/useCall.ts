@@ -27,6 +27,7 @@ export const useCall = (): UseCallReturn => {
   });
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ringingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const roomRef = useRef<Room | null>(null);
 
   /**
@@ -56,9 +57,8 @@ export const useCall = (): UseCallReturn => {
    */
   useEffect(() => {
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current);
       if (roomRef.current) {
         roomRef.current.disconnect();
         roomRef.current = null;
@@ -92,18 +92,46 @@ export const useCall = (): UseCallReturn => {
   };
 
   /**
+   * Сброс в idle через 3с чтобы polling возобновился после завершения/ошибки звонка
+   */
+  const scheduleIdleReset = (fromStatus: CallStatus) => {
+    setTimeout(() => {
+      setState((prev) =>
+        prev.status === fromStatus
+          ? { status: 'idle', callData: null, duration: 0, isMuted: false, isSpeakerOn: false, error: null }
+          : prev
+      );
+    }, 3000);
+  };
+
+  /**
    * Подключение к LiveKit комнате
    */
   const connectToRoom = async (livekitUrl: string, token: string): Promise<Room> => {
+    console.log('[connectToRoom] connecting to:', livekitUrl, '| token length:', token?.length);
+
     if (roomRef.current) {
       await roomRef.current.disconnect();
     }
 
     await AudioSession.startAudioSession();
 
-    const room = new Room();
+    // Ограничиваем автоматические попытки переподключения (max 3)
+    const room = new Room({
+      reconnectPolicy: {
+        nextRetryDelayInMs: (context) => {
+          if (context.retryCount >= 3) return null; // Остановить реконнект
+          return (context.retryCount + 1) * 2000;
+        },
+      },
+    });
 
     room.on(RoomEvent.ParticipantConnected, () => {
+      // Callee ответил — отменяем таймаут
+      if (ringingTimeoutRef.current) {
+        clearTimeout(ringingTimeoutRef.current);
+        ringingTimeoutRef.current = null;
+      }
       setState((prev) => ({ ...prev, status: 'active' }));
     });
 
@@ -111,22 +139,38 @@ export const useCall = (): UseCallReturn => {
       // Если другой участник отключился - звонок завершен
       setState((prev) => {
         if (prev.status === 'active') {
+          scheduleIdleReset('ended');
+          return { ...prev, status: 'ended' };
+        }
+        return prev;
+      });
+      // Отключаем комнату явно, чтобы остановить бесконечный реконнект LiveKit
+      room.disconnect();
+      if (roomRef.current === room) roomRef.current = null;
+      AudioSession.stopAudioSession();
+    });
+
+    room.on(RoomEvent.Disconnected, () => {
+      AudioSession.stopAudioSession();
+      setState((prev) => {
+        if (prev.status !== 'ended') {
+          scheduleIdleReset('ended');
           return { ...prev, status: 'ended' };
         }
         return prev;
       });
     });
 
-    room.on(RoomEvent.Disconnected, () => {
-      AudioSession.stopAudioSession();
-      setState((prev) =>
-        prev.status !== 'ended'
-          ? { ...prev, status: 'ended' }
-          : prev
-      );
-    });
-
-    await room.connect(livekitUrl, token);
+    try {
+      await room.connect(livekitUrl, token);
+      console.log('[connectToRoom] connected successfully');
+      // Публикуем микрофон — без этого аудио не передаётся
+      await room.localParticipant.setMicrophoneEnabled(true);
+      console.log('[connectToRoom] microphone enabled');
+    } catch (err) {
+      console.error('[connectToRoom] connection failed:', err);
+      throw err;
+    }
 
     roomRef.current = room;
     return room;
@@ -181,6 +225,23 @@ export const useCall = (): UseCallReturn => {
         }));
 
         await connectToRoom(livekit_url, token);
+
+        // Таймаут: если callee не ответил за 45 сек — завершаем звонок
+        ringingTimeoutRef.current = setTimeout(() => {
+          setState((prev) => {
+            if (prev.status === 'ringing') {
+              console.log('[initiateCall] ringing timeout — no answer');
+              return { ...prev, status: 'ended' };
+            }
+            return prev;
+          });
+          if (roomRef.current) {
+            roomRef.current.disconnect();
+            roomRef.current = null;
+          }
+          AudioSession.stopAudioSession();
+          scheduleIdleReset('ended');
+        }, 45000);
       } catch (error: any) {
         console.error('Ошибка инициации звонка:', error);
         setState((prev) => ({
@@ -188,6 +249,7 @@ export const useCall = (): UseCallReturn => {
           status: 'error',
           error: error.response?.data?.message ?? 'Не удалось инициировать звонок',
         }));
+        scheduleIdleReset('error');
       }
     },
     []
@@ -227,6 +289,7 @@ export const useCall = (): UseCallReturn => {
         status: 'error',
         error: error.response?.data?.message ?? 'Не удалось принять звонок',
       }));
+      scheduleIdleReset('error');
     }
   }, []);
 

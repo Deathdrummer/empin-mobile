@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "740259280375",
+    "project_id": "empin-mobile",
+    "storage_bucket": "empin-mobile.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:740259280375:android:f0cf1e5c0a2e15142d2af2",
+        "android_client_info": {
+          "package_name": "ru.deathdrumer.empinmobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCkPfuQRbqd9iVhnVqRWi4wfCJnTdSnqAI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,22 +20,17 @@ export default function ChatsTab() {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const currentUserIdRef = useRef(null);
-
   const { initiateCall } = useCallContext();
-
-  useEffect(() => {
-    AsyncStorage.getItem('user').then(userJson => {
-      if (userJson) {
-        currentUserIdRef.current = JSON.parse(userJson).id;
-      }
-    });
-  }, []);
 
   const loadStaff = useCallback(async () => {
     try {
-      const data = await timesheetAPI.getAllStaff();
-      setStaff(data.filter(s => s.id !== currentUserIdRef.current));
+      const [data, userJson] = await Promise.all([
+        timesheetAPI.getAllStaff(),
+        AsyncStorage.getItem('user'),
+      ]);
+      const parsedUser = userJson ? JSON.parse(userJson) : null;
+      const staffId = parsedUser?.staff_id ?? null;
+      setStaff(data.filter(s => s.id !== staffId));
     } catch (error) {
       console.error('Failed to load staff:', error);
     } finally {

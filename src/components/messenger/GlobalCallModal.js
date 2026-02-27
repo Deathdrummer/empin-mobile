@@ -11,6 +11,7 @@ export const GlobalCallModal = () => {
     callModalVisible,
     callState,
     incomingCallData,
+    outgoingParticipant,
     acceptCall,
     rejectCall,
     endCall,
@@ -45,11 +46,9 @@ export const GlobalCallModal = () => {
         name: resolveCallerName(incomingCallData.caller),
         avatar: incomingCallData.caller.avatar,
       }
-    : callState.callData?.participant || {
-        id: null,
-        name: 'Неизвестный',
-        avatar: undefined,
-      };
+    : callState.callData?.participant
+      || outgoingParticipant
+      || { id: null, name: 'Неизвестный', avatar: undefined };
 
   console.log('[GlobalCallModal] resolved participant:', participant);
 

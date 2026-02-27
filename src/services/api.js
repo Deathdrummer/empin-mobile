@@ -20,6 +20,11 @@ const api = axios.create({
   },
 });
 
+// Rate limit guard — пауза после получения 429
+let _rateLimitPausedUntil = 0;
+export const isRateLimited = () => Date.now() < _rateLimitPausedUntil;
+export const getRateLimitRemainingMs = () => Math.max(0, _rateLimitPausedUntil - Date.now());
+
 // Добавляем токен к каждому запросу
 api.interceptors.request.use(
   async (config) => {
@@ -497,9 +502,20 @@ export const messengerAPI = {
     return response.data;
   },
 
-  // Polling: проверка входящих звонков (временно, до FCM)
+  // Регистрация Expo Push Token
+  registerPushToken: async (token) => {
+    const response = await api.post('/messenger/calls/push-token', { token });
+    return response.data;
+  },
+
+  // Polling: проверка входящих звонков (оставлен как fallback)
   getPendingCall: async () => {
     const response = await api.get('/messenger/calls/pending');
+    return response.data;
+  },
+
+  getCallDetails: async (callId) => {
+    const response = await api.get(`/messenger/calls/${callId}`);
     return response.data;
   },
 };

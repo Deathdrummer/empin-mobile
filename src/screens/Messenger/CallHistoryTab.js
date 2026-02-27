@@ -157,7 +157,7 @@ export default function CallHistoryTab() {
         const userJson = await AsyncStorage.getItem('user');
         if (userJson) {
           const user = JSON.parse(userJson);
-          setCurrentUserId(user.id);
+          setCurrentUserId(user.staff_id);
         }
       } catch (error) {
         console.error('Failed to load current user in CallHistoryTab', error);
