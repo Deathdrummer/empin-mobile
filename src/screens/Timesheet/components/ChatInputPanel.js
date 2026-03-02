@@ -8,7 +8,6 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
-import { Can } from '../../../components/Can';
 import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
@@ -340,7 +339,6 @@ export const ChatInputPanel = ({
     try {
       // Проверяем, что запись не идёт
       if (audioRecorder.isRecording) {
-        console.log('[Audio] Recording already in progress');
         return;
       }
 
@@ -397,7 +395,6 @@ export const ChatInputPanel = ({
 
       // Проверяем, что запись действительно идёт
       if (!audioRecorder.isRecording) {
-        console.log('[Audio] Recording already stopped');
         setIsRecording(false);
         setRecordingDuration(0);
         return;
@@ -409,7 +406,7 @@ export const ChatInputPanel = ({
       } catch (stopError) {
         // Игнорируем IllegalStateException, если запись уже остановлена
         if (stopError.message?.includes('IllegalStateException')) {
-          console.log('[Audio] IllegalStateException caught (known expo-audio bug on Android)', { error: stopError.message });
+          // known expo-audio bug on Android — ignore
         } else {
           throw stopError;
         }
@@ -475,8 +472,7 @@ export const ChatInputPanel = ({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
-      <Can permission="mobile-app-can-create-comment:site">
-        <View style={styles.container}>
+      <View style={styles.container}>
           {replyingToComment && (
             <View style={styles.replyBanner}>
               <View style={styles.replyBannerContent}>
@@ -624,7 +620,6 @@ export const ChatInputPanel = ({
             )}
           </View>
         </View>
-      </Can>
     </KeyboardAvoidingView>
   );
 };
