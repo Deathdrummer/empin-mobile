@@ -5,8 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 let Notifications = null;
 try {
   Notifications = require('expo-notifications');
-} catch (error) {
-  console.log('expo-notifications not available (Expo Go mode)');
+} catch (_error) {
 }
 
 class PushNotificationService {
@@ -23,7 +22,6 @@ class PushNotificationService {
   async init() {
     // Проверка доступности expo-notifications
     if (!this.isAvailable) {
-      console.warn('Push notifications unavailable (Expo Go mode). Use development build for full functionality.');
       return;
     }
 
@@ -41,17 +39,13 @@ class PushNotificationService {
       const hasPermission = await this.requestPermission();
 
       if (!hasPermission) {
-        console.warn('Push notification permission denied');
         return;
       }
 
       // Получение Expo Push Token
       const token = await this.getToken();
       if (token) {
-        console.log('Expo Push Token:', token);
         await AsyncStorage.setItem('expo_push_token', token);
-      } else {
-        console.warn('Failed to get Expo Push Token (emulator?)');
       }
 
       // Обработка foreground уведомлений
@@ -128,8 +122,6 @@ class PushNotificationService {
     if (!this.isAvailable) return;
 
     this.notificationListener = Notifications.addNotificationReceivedListener((notification) => {
-      console.log('Foreground notification received:', notification);
-
       // Преобразуем в формат, совместимый с Firebase
       const message = {
         data: notification.request.content.data,
@@ -150,8 +142,6 @@ class PushNotificationService {
     if (!this.isAvailable) return;
 
     this.responseListener = Notifications.addNotificationResponseReceivedListener((response) => {
-      console.log('Notification response received:', response);
-
       // Преобразуем в формат, совместимый с Firebase
       const message = {
         data: response.notification.request.content.data,
@@ -174,8 +164,6 @@ class PushNotificationService {
     const response = await Notifications.getLastNotificationResponseAsync();
 
     if (response) {
-      console.log('App opened from quit state via notification:', response);
-
       // Преобразуем в формат, совместимый с Firebase
       const message = {
         data: response.notification.request.content.data,

@@ -19,7 +19,6 @@ export const useAppStatePermissions = () => {
         try {
           // Обновляем права с сервера
           await refreshPermissions();
-          console.log('Permissions refreshed on app focus');
         } catch (error) {
           console.error('Failed to refresh permissions on app focus', { error: error.message });
         }

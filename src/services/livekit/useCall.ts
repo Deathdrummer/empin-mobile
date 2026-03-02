@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { PermissionsAndroid, Platform, Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Room, RoomEvent } from 'livekit-client';
-import { AudioSession } from '@livekit/react-native';
+import { AudioSession, AndroidAudioTypePresets } from '@livekit/react-native';
 import { messengerAPI } from '../api';
 import { CallStatus, CallData, CallState } from './types';
 
@@ -12,7 +11,7 @@ interface UseCallReturn extends CallState {
   rejectCall: (callId: string) => Promise<void>;
   endCall: () => Promise<void>;
   toggleMute: () => Promise<void>;
-  toggleSpeaker: () => void;
+  toggleSpeaker: () => Promise<void>;
   room: Room | null;
 }
 
@@ -29,6 +28,12 @@ export const useCall = (): UseCallReturn => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ringingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const roomRef = useRef<Room | null>(null);
+
+  // Счётчик поколений комнат. Каждый новый connectToRoom инкрементирует его.
+  // Обработчики событий старой комнаты сравнивают свой generation с текущим
+  // и игнорируют события от устаревших комнат — это предотвращает порчу
+  // состояния нового звонка при асинхронном отключении старой комнаты.
+  const roomGenerationRef = useRef(0);
 
   /**
    * Таймер для подсчета длительности звонка
@@ -84,7 +89,6 @@ export const useCall = (): UseCallReturn => {
         );
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       } catch (err) {
-        console.warn('Ошибка запроса разрешения на микрофон:', err);
         return false;
       }
     }
@@ -108,49 +112,107 @@ export const useCall = (): UseCallReturn => {
    * Подключение к LiveKit комнате
    */
   const connectToRoom = async (livekitUrl: string, token: string): Promise<Room> => {
-    console.log('[connectToRoom] connecting to:', livekitUrl, '| token length:', token?.length);
-
     if (roomRef.current) {
       await roomRef.current.disconnect();
+      roomRef.current = null;
     }
+
+    // Инкрементируем generation — все обработчики событий этой комнаты
+    // замыкают этот номер и сравнивают с roomGenerationRef.current.
+    // Если к моменту события generation уже изменился (новый звонок),
+    // обработчик игнорирует событие — zombie room не портит новый звонок.
+    const generation = ++roomGenerationRef.current;
+
+    // configureAudio должен вызываться ДО startAudioSession
+    AudioSession.configureAudio({
+      android: {
+        preferredOutputList: ['earpiece', 'speaker'],
+        audioTypeOptions: AndroidAudioTypePresets.communication,
+      },
+      ios: {
+        defaultOutput: 'earpiece',
+      },
+    });
 
     await AudioSession.startAudioSession();
 
-    // Ограничиваем автоматические попытки переподключения (max 3)
     const room = new Room({
+      // Time-based reconnect policy: даём 90 секунд на восстановление.
+      // Count-based (3 попытки) был исчерпан комбинацией NegotiationError +
+      // ping timeout (оба вызывают handleDisconnect и расходуют общий бюджет).
+      // Экспоненциальный backoff: 2, 4, 8, 15, 15, ... секунд до 90s total.
       reconnectPolicy: {
         nextRetryDelayInMs: (context) => {
-          if (context.retryCount >= 3) return null; // Остановить реконнект
-          return (context.retryCount + 1) * 2000;
+          if (context.elapsedMs > 90_000) return null;
+          return Math.min(2000 * Math.pow(2, context.retryCount), 15_000);
         },
       },
     });
 
+    // Fallback-таймер: если callee не переподключится после brief disconnect —
+    // disconnect через 15с. При нормальном завершении бэкенд вызывает deleteRoom →
+    // RoomEvent.Disconnected сработает раньше этого таймера.
+    let participantDisconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Флаг: livekit выполняет внутренний реконнект (сигнал/ICE).
+    // Пока true — ParticipantDisconnected не меняет статус звонка,
+    // т.к. remote participant может исчезнуть на время переподключения.
+    let isRoomReconnecting = false;
+
+    room.on(RoomEvent.Reconnecting, () => {
+      if (roomGenerationRef.current !== generation) return; // Stale room
+      isRoomReconnecting = true;
+    });
+
+    room.on(RoomEvent.Reconnected, () => {
+      if (roomGenerationRef.current !== generation) return; // Stale room
+      isRoomReconnecting = false;
+      // Восстанавливаем 'active' если статус был изменён во время реконнекта
+      setState((prev) => {
+        if (prev.status !== 'active' && prev.status !== 'idle' && prev.status !== 'ended') {
+          return { ...prev, status: 'active' };
+        }
+        return prev;
+      });
+    });
+
     room.on(RoomEvent.ParticipantConnected, () => {
-      // Callee ответил — отменяем таймаут
+      if (roomGenerationRef.current !== generation) return; // Stale room
       if (ringingTimeoutRef.current) {
         clearTimeout(ringingTimeoutRef.current);
         ringingTimeoutRef.current = null;
+      }
+      if (participantDisconnectTimer) {
+        clearTimeout(participantDisconnectTimer);
+        participantDisconnectTimer = null;
       }
       setState((prev) => ({ ...prev, status: 'active' }));
     });
 
     room.on(RoomEvent.ParticipantDisconnected, () => {
-      // Если другой участник отключился - звонок завершен
-      setState((prev) => {
-        if (prev.status === 'active') {
-          scheduleIdleReset('ended');
-          return { ...prev, status: 'ended' };
-        }
-        return prev;
-      });
-      // Отключаем комнату явно, чтобы остановить бесконечный реконнект LiveKit
-      room.disconnect();
-      if (roomRef.current === room) roomRef.current = null;
-      AudioSession.stopAudioSession();
+      if (roomGenerationRef.current !== generation) return; // Stale room
+      // Во время внутреннего реконнекта livekit remote participant может исчезнуть
+      // временно — не завершаем звонок, ждём RoomEvent.Reconnected
+      if (isRoomReconnecting) return;
+
+      // НЕ меняем status — модал остаётся открытым.
+      // Remote participant может быть в процессе reconnect (createOffer занимает 20+ сек).
+      // Если вернётся — ParticipantConnected отменит таймер и восстановит 'active'.
+      // Если бэкенд закроет комнату (endCall) — RoomEvent.Disconnected придёт раньше.
+      // Fallback-таймер нужен только для crash/потери сети без явного endCall.
+      if (participantDisconnectTimer) clearTimeout(participantDisconnectTimer);
+      participantDisconnectTimer = setTimeout(() => {
+        participantDisconnectTimer = null;
+        if (roomGenerationRef.current !== generation) return; // Stale room
+        // Disconnected-обработчик сделает полный cleanup
+        room.disconnect();
+      }, 60_000);
     });
 
     room.on(RoomEvent.Disconnected, () => {
+      if (roomGenerationRef.current !== generation) return; // Stale room
+      isRoomReconnecting = false;
+      roomRef.current = null;
       AudioSession.stopAudioSession();
       setState((prev) => {
         if (prev.status !== 'ended') {
@@ -163,14 +225,22 @@ export const useCall = (): UseCallReturn => {
 
     try {
       await room.connect(livekitUrl, token);
-      console.log('[connectToRoom] connected successfully');
-      // Публикуем микрофон — без этого аудио не передаётся
-      await room.localParticipant.setMicrophoneEnabled(true);
-      console.log('[connectToRoom] microphone enabled');
     } catch (err) {
-      console.error('[connectToRoom] connection failed:', err);
+      console.error('[connectToRoom] connect failed:', err);
+      await room.disconnect();
+      AudioSession.stopAudioSession();
       throw err;
     }
+
+    // setMicrophoneEnabled вызываем ПОСЛЕ room.connect(), но НЕ прерываем звонок при ошибке.
+    // В livekit-client 2.17.2 при наличии существующих subscriber-треков добавление
+    // publisher-трека может вызвать brief NegotiationError (PC momentarily disconnected
+    // во время SDP renegotiation). Если мы throwим → room.disconnect() убивает звонок.
+    // Если НЕ throwим → livekit's internal reconnect (до 3 попыток, 2+4+6с) самостоятельно
+    // переопубликует трек после восстановления соединения.
+    room.localParticipant.setMicrophoneEnabled(true).catch((err) => {
+      console.warn('[connectToRoom] mic enable failed, livekit will retry after reconnect:', err);
+    });
 
     roomRef.current = room;
     return room;
@@ -194,8 +264,6 @@ export const useCall = (): UseCallReturn => {
         setState((prev) => ({ ...prev, status: 'initiating' }));
 
         const response = await messengerAPI.initiateCall(calleeId);
-
-        console.log('[initiateCall] API response:', JSON.stringify(response));
 
         // Валидация ответа API (бэкенд может вернуть ошибку в теле HTTP 200)
         if (!response.call_id || !response.token || !response.livekit_url) {
@@ -230,7 +298,6 @@ export const useCall = (): UseCallReturn => {
         ringingTimeoutRef.current = setTimeout(() => {
           setState((prev) => {
             if (prev.status === 'ringing') {
-              console.log('[initiateCall] ringing timeout — no answer');
               return { ...prev, status: 'ended' };
             }
             return prev;
@@ -375,18 +442,18 @@ export const useCall = (): UseCallReturn => {
 
   /**
    * Переключение динамик/наушники
+   *
+   * Используем selectAudioOutput — он переключает маршрут аудио без перезапуска
+   * AudioSession, что не прерывает активное WebRTC-соединение.
    */
-  const toggleSpeaker = useCallback(() => {
+  const toggleSpeaker = useCallback(async () => {
     const newSpeakerOn = !state.isSpeakerOn;
 
-    AudioSession.configureAudio({
-      android: {
-        preferredOutputList: newSpeakerOn ? ['speaker'] : ['earpiece'],
-      },
-      ios: {
-        defaultOutput: newSpeakerOn ? 'speaker' : 'earpiece',
-      },
-    });
+    if (Platform.OS === 'android') {
+      await AudioSession.selectAudioOutput(newSpeakerOn ? 'speaker' : 'earpiece');
+    } else if (Platform.OS === 'ios') {
+      await AudioSession.selectAudioOutput(newSpeakerOn ? 'force_speaker' : 'default');
+    }
 
     setState((prev) => ({ ...prev, isSpeakerOn: newSpeakerOn }));
   }, [state.isSpeakerOn]);

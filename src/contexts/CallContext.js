@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { useCall } from '../services/livekit/useCall';
+import { useCall } from '../services/agora/useCall';
 
 const CallContext = createContext(null);
 
@@ -21,6 +21,7 @@ export const CallProvider = ({ children }) => {
   const handledCallIdRef = useRef(null);
   const notifListenerRef = useRef(null);
   const notifResponseListenerRef = useRef(null);
+  const handleEndCallRef = useRef(null);
 
   const callState = useCall();
 
@@ -52,19 +53,26 @@ export const CallProvider = ({ children }) => {
 
     if (data.type === 'call_cancelled') {
       const callId = String(data.call_id);
+      const currentCallId = callState.callData?.callId;
 
-      // Если это наш активный/ожидающий звонок — закрываем модал
-      if (
-        callModalVisible &&
-        incomingCallData?.callId === callId &&
-        callState.status !== 'active'
-      ) {
-        setCallTimeoutId((prev) => { if (prev) clearTimeout(prev); return null; });
-        setCallModalVisible(false);
-        setIncomingCallData(null);
+      // Проверяем: это уведомление о нашем текущем звонке?
+      const isOurCall =
+        (incomingCallData?.callId === callId) ||
+        (currentCallId === callId);
+
+      if (callModalVisible && isOurCall) {
+        if (callState.status === 'active') {
+          // Активный звонок: принудительно завершаем через ref (избегаем stale closure)
+          handleEndCallRef.current?.();
+        } else {
+          // Ожидающий звонок: просто скрываем модал
+          setCallTimeoutId((prev) => { if (prev) clearTimeout(prev); return null; });
+          setCallModalVisible(false);
+          setIncomingCallData(null);
+        }
       }
     }
-  }, [callModalVisible, incomingCallData, callState.status]);
+  }, [callModalVisible, incomingCallData, callState.status, callState.callData]);
 
   /**
    * Подписка на уведомления (foreground + tap)
@@ -88,14 +96,11 @@ export const CallProvider = ({ children }) => {
    * Обработка входящего звонка
    */
   const handleIncomingCall = useCallback((callData) => {
-    console.log('[CallContext] Incoming call:', callData);
-
     setIncomingCallData(callData);
     setCallModalVisible(true);
 
     // Автоотклонение через 30 секунд
     const timeoutId = setTimeout(() => {
-      console.log('[CallContext] Call timeout - auto rejecting');
       handleRejectCall();
     }, 30000);
 
@@ -155,6 +160,11 @@ export const CallProvider = ({ children }) => {
     setCallModalVisible(false);
     setIncomingCallData(null);
   }, [callState, callTimeoutId]);
+
+  // Синхронизируем ref с актуальной версией handleEndCall
+  useEffect(() => {
+    handleEndCallRef.current = handleEndCall;
+  }, [handleEndCall]);
 
   // Сброс при закрытии модала
   useEffect(() => {

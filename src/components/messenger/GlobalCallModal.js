@@ -30,9 +30,6 @@ export const GlobalCallModal = () => {
     : callState;
 
   // Определяем участника звонка
-  console.log('[GlobalCallModal] incomingCallData:', JSON.stringify(incomingCallData));
-  console.log('[GlobalCallModal] callState.callData:', JSON.stringify(callState.callData));
-
   const resolveCallerName = (caller) => {
     if (!caller) return 'Неизвестный';
     const shortName = formatShortName(caller);
@@ -49,8 +46,6 @@ export const GlobalCallModal = () => {
     : callState.callData?.participant
       || outgoingParticipant
       || { id: null, name: 'Неизвестный', avatar: undefined };
-
-  console.log('[GlobalCallModal] resolved participant:', participant);
 
   return (
     <CallModal
