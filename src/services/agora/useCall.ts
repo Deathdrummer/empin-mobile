@@ -19,6 +19,7 @@ interface UseCallReturn extends CallState {
   acceptCall: (callId: string) => Promise<void>;
   rejectCall: (callId: string) => Promise<void>;
   endCall: () => Promise<void>;
+  resetToIdle: () => void;
   toggleMute: () => void;
   toggleSpeaker: () => void;
 }
@@ -233,12 +234,12 @@ export const useCall = (): UseCallReturn => {
 
         await joinChannel(agora_app_id, token, channel_name, uid);
 
-        // Таймаут: callee не ответил за 45 секунд
+        // Таймаут: страховка если call_cancelled FCM не пришёл
         ringingTimeoutRef.current = setTimeout(() => {
           setState((prev) => {
             if (prev.status === 'ringing') {
-              scheduleIdleReset('ended');
-              return { ...prev, status: 'ended' };
+              scheduleIdleReset('no_answer');
+              return { ...prev, status: 'no_answer' };
             }
             return prev;
           });
@@ -285,7 +286,7 @@ export const useCall = (): UseCallReturn => {
 
       await joinChannel(agora_app_id, token, channel_name, uid);
     } catch (error: any) {
-      console.error('[Agora] Ошибка принятия звонка:', error);
+      console.error('[Agora] Ошибка принятия звонка:', error, '| response data:', (error as any).response?.data, '| callId was:', callId);
       destroyEngine();
       setState((prev) => ({
         ...prev,
@@ -361,12 +362,33 @@ export const useCall = (): UseCallReturn => {
     setState((prev) => ({ ...prev, isSpeakerOn: newSpeakerOn }));
   }, [state.isSpeakerOn]);
 
+  /**
+   * Локальный сброс состояния без API вызова.
+   * Используется когда внешнее событие (call_cancelled FCM) уже обработано бэкендом.
+   */
+  const resetToIdle = useCallback(() => {
+    if (ringingTimeoutRef.current) {
+      clearTimeout(ringingTimeoutRef.current);
+      ringingTimeoutRef.current = null;
+    }
+    destroyEngine();
+    setState({
+      status: 'idle',
+      callData: null,
+      duration: 0,
+      isMuted: false,
+      isSpeakerOn: false,
+      error: null,
+    });
+  }, []);
+
   return {
     ...state,
     initiateCall,
     acceptCall,
     rejectCall,
     endCall,
+    resetToIdle,
     toggleMute,
     toggleSpeaker,
   };

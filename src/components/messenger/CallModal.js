@@ -88,6 +88,10 @@ export const CallModal = ({
         return 'Разговор';
       case 'ended':
         return 'Звонок завершён';
+      case 'no_answer':
+        return 'Нет ответа';
+      case 'rejected':
+        return 'Звонок отклонён';
       case 'error':
         return `Ошибка: ${callState.error || 'Неизвестная ошибка'}`;
       default:
@@ -185,8 +189,7 @@ export const CallModal = ({
       );
     }
 
-    if (callState.status === 'error' || callState.status === 'ended') {
-      // Ошибка или завершён
+    if (['error', 'ended', 'no_answer', 'rejected'].includes(callState.status)) {
       return null;
     }
 

@@ -88,9 +88,8 @@ export const checkApiAvailability = async () => {
         // В production используем expo-updates
         await Updates.reloadAsync();
       }
-    } catch (reloadError) {
+    } catch (_reloadError) {
       // Если перезагрузка не удалась, просто разблокируем
-      console.warn('Перезагрузка не удалась, приложение разблокировано', { error: reloadError.message });
     }
 
     return true;
@@ -123,9 +122,8 @@ export const authAPI = {
   logout: async () => {
     try {
       await api.post('/auth/logout');
-    } catch (error) {
+    } catch (_error) {
       // Игнорируем ошибки logout на сервере
-      console.log('Logout error (ignored)', { error: error.message });
     }
     await AsyncStorage.removeItem('token');
     await AsyncStorage.removeItem('user');

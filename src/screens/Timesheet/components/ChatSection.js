@@ -501,7 +501,6 @@ export const ChatSection = ({
         return;
       }
 
-      console.log('[Haptics] Medium impact triggered');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       onEditComment(comment);
     } else {
@@ -510,7 +509,6 @@ export const ChatSection = ({
   };
 
   const handleCommentLongPress = (comment, event) => {
-    console.log('[Haptics] Heavy impact triggered');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     // Получаем позицию нажатия
@@ -605,7 +603,6 @@ export const ChatSection = ({
     try {
       // Проверяем, что запись не идёт
       if (audioRecorder.isRecording) {
-        console.log('[Audio] Recording already in progress');
         return;
       }
 
@@ -662,7 +659,6 @@ export const ChatSection = ({
 
       // Проверяем, что запись действительно идёт
       if (!audioRecorder.isRecording) {
-        console.log('[Audio] Recording already stopped');
         setIsRecording(false);
         setRecordingDuration(0);
         return;
@@ -674,7 +670,7 @@ export const ChatSection = ({
       } catch (stopError) {
         // Игнорируем IllegalStateException, если запись уже остановлена
         if (stopError.message?.includes('IllegalStateException')) {
-          console.log('[Audio] IllegalStateException caught (known expo-audio bug on Android)', { error: stopError.message });
+          // known expo-audio bug on Android — ignore
         } else {
           throw stopError;
         }

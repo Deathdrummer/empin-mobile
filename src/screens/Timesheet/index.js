@@ -131,7 +131,6 @@ function TimesheetScreenContent({ onLogout }) {
   React.useEffect(() => {
     if (localFlatListRef.current && flatListRef) {
       flatListRef.current = localFlatListRef.current;
-      console.log('📋 [TimesheetScreen] FlatList ref синхронизирован');
     }
   }, [localFlatListRef, flatListRef]);
 
@@ -452,25 +451,10 @@ function TimesheetScreenContent({ onLogout }) {
           const distanceToMinBoundary = currentDayIndex - minIndex;
           const distanceToMaxBoundary = maxIndex - currentDayIndex;
 
-          console.log('📊 [SCROLL] Позиция:', {
-            arrayIndex: newIndex,
-            dayIndex: currentDayIndex,
-            date: currentDayData?.date,
-            totalDays: days.length,
-            loadedRange: `${minIndex} .. ${maxIndex}`,
-            distanceToMinBoundary,
-            distanceToMaxBoundary,
-            threshold: LOAD_MORE_THRESHOLD,
-          });
-
           if (distanceToMinBoundary <= LOAD_MORE_THRESHOLD) {
-            console.log('⬅️ [LOAD] Подгрузка НАЗАД (близко к minIndex)');
             loadMoreBackward(newIndex);
           } else if (distanceToMaxBoundary <= LOAD_MORE_THRESHOLD) {
-            console.log('➡️ [LOAD] Подгрузка ВПЕРЕД (близко к maxIndex)');
             loadMoreForward();
-          } else {
-            console.log('✅ [SCROLL] Подгрузка не требуется');
           }
         }}
         onScrollToIndexFailed={(info) => {

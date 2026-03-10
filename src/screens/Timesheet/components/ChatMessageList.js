@@ -233,7 +233,6 @@ export const ChatMessageList = ({
         return;
       }
 
-      console.log('[Haptics] Medium impact triggered');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       onEditComment(comment);
     } else {
@@ -242,7 +241,6 @@ export const ChatMessageList = ({
   };
 
   const handleCommentLongPress = (comment, event) => {
-    console.log('[Haptics] Heavy impact triggered');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     event.target.measure((x, y, width, height, pageX, pageY) => {

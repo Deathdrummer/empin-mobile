@@ -12,6 +12,7 @@ export const GlobalCallModal = () => {
     callState,
     incomingCallData,
     outgoingParticipant,
+    callEndReason,
     acceptCall,
     rejectCall,
     endCall,
@@ -21,13 +22,18 @@ export const GlobalCallModal = () => {
 
   // Для входящего звонка из polling — формируем "синтетический" callState,
   // т.к. useCall() ещё не знает об этом звонке (он в idle)
-  const effectiveCallState = incomingCallData && callState.status === 'idle'
+  const baseCallState = incomingCallData && callState.status === 'idle'
     ? {
         ...callState,
         status: 'ringing',
         callData: { isIncoming: true, callId: incomingCallData.callId },
       }
     : callState;
+
+  // При отклонении звонка вызываемым — переопределяем статус
+  const effectiveCallState = callEndReason === 'rejected'
+    ? { ...baseCallState, status: 'rejected' }
+    : baseCallState;
 
   // Определяем участника звонка
   const resolveCallerName = (caller) => {

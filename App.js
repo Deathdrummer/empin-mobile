@@ -13,6 +13,7 @@ import MessengerScreen from './src/screens/MessengerScreen';
 import ChatScreen from './src/screens/Messenger/ChatScreen';
 import { setUnauthorizedCallback, checkApiAvailability } from './src/services/api';
 import { useAppStatePermissions } from './src/hooks/useAppStatePermissions';
+import { requestCallPermissions } from './src/utils/requestCallPermissions';
 import apiBlockEmitter from './src/utils/apiBlockEmitter';
 import { ApiBlockModal } from './src/components/ApiBlockModal';
 import { CallProvider } from './src/contexts/CallContext';
@@ -31,6 +32,7 @@ export default function App() {
 
   useEffect(() => {
     NavigationBar.setVisibilityAsync('hidden');
+    requestCallPermissions();
   }, []);
 
   useEffect(() => {

@@ -21,9 +21,10 @@ const setupAndroidChannel = async (): Promise<void> => {
       name: 'Звонки',
       importance: Notifications.AndroidImportance.MAX,
       sound: 'default',
-      vibrationPattern: [0, 250, 250, 250],
+      vibrationPattern: [0, 500, 500, 500],
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       bypassDnd: true,
+      enableLights: true,
     });
   }
 };

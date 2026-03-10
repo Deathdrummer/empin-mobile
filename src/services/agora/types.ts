@@ -1,4 +1,4 @@
-export type CallStatus = 'idle' | 'initiating' | 'ringing' | 'active' | 'ended' | 'error';
+export type CallStatus = 'idle' | 'initiating' | 'ringing' | 'active' | 'ended' | 'no_answer' | 'error';
 
 export interface CallData {
   callId: string;
