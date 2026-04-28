@@ -22,6 +22,7 @@ interface UseCallReturn extends CallState {
   resetToIdle: () => void;
   toggleMute: () => void;
   toggleSpeaker: () => void;
+  clearRingingTimeout: () => void;
 }
 
 export const useCall = (): UseCallReturn => {
@@ -244,7 +245,7 @@ export const useCall = (): UseCallReturn => {
             return prev;
           });
           destroyEngine();
-        }, 45000);
+        }, 90000); // Увеличен с 45s до 90s — WebSocket обычно уведомит раньше
       } catch (error: any) {
         console.error('[Agora] Ошибка инициации звонка:', error);
         destroyEngine();
@@ -364,7 +365,7 @@ export const useCall = (): UseCallReturn => {
 
   /**
    * Локальный сброс состояния без API вызова.
-   * Используется когда внешнее событие (call_cancelled FCM) уже обработано бэкендом.
+   * Используется когда внешнее событие (WebSocket) уже обработано бэкендом.
    */
   const resetToIdle = useCallback(() => {
     if (ringingTimeoutRef.current) {
@@ -382,6 +383,17 @@ export const useCall = (): UseCallReturn => {
     });
   }, []);
 
+  /**
+   * Сбрасывает таймаут ожидания ответа (вызывается при получении call.accepted через WebSocket).
+   * Agora onUserJoined сам переключит статус на 'active'.
+   */
+  const clearRingingTimeout = useCallback(() => {
+    if (ringingTimeoutRef.current) {
+      clearTimeout(ringingTimeoutRef.current);
+      ringingTimeoutRef.current = null;
+    }
+  }, []);
+
   return {
     ...state,
     initiateCall,
@@ -391,5 +403,6 @@ export const useCall = (): UseCallReturn => {
     resetToIdle,
     toggleMute,
     toggleSpeaker,
+    clearRingingTimeout,
   };
 };
