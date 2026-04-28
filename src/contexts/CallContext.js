@@ -6,6 +6,7 @@ import { AppState } from 'react-native';
 import { useAudioPlayer } from 'expo-audio';
 import RNNotificationCall from 'react-native-full-screen-notification-incoming-call';
 import { useCall } from '../services/agora/useCall';
+import { subscribeToCalls, unsubscribeFromCalls } from '../services/pusher';
 
 const CallContext = createContext(null);
 
@@ -38,11 +39,76 @@ export const CallProvider = ({ children }) => {
   // между answer event и 30s native timeout → endCall event
   const isAnsweringRef = useRef(false);
 
+  const [currentUserStaffId, setCurrentUserStaffId] = useState(null);
+
   const callState = useCall();
+
+  // Загружаем staff_id текущего пользователя для WebSocket подписки
+  useEffect(() => {
+    AsyncStorage.getItem('user').then(raw => {
+      if (!raw) return;
+      try {
+        const u = JSON.parse(raw);
+        setCurrentUserStaffId(u.staff_id ?? null);
+      } catch {}
+    });
+  }, []);
 
   // Синхронизируем refs для использования в closures с [] deps
   useEffect(() => { incomingCallDataRef.current = incomingCallData; }, [incomingCallData]);
   useEffect(() => { callStateRef.current = callState; }, [callState]);
+
+  // WebSocket подписка на события звонков
+  useEffect(() => {
+    if (!currentUserStaffId) return;
+
+    subscribeToCalls(currentUserStaffId, {
+      onCallAccepted: (data) => {
+        // Caller получает подтверждение: callee принял звонок — убираем ringing timeout
+        console.log('[WS] Call accepted:', data.call_id);
+        callStateRef.current?.clearRingingTimeout?.();
+      },
+
+      onCallRejected: (data) => {
+        // Caller получает: callee отклонил
+        console.log('[WS] Call rejected:', data.call_id);
+        setCallTimeoutId(prev => { if (prev) clearTimeout(prev); return null; });
+        callStateRef.current?.resetToIdle?.();
+        setCallEndReason('rejected');
+        setTimeout(() => {
+          setCallEndReason(null);
+          setCallModalVisible(false);
+          setIncomingCallData(null);
+        }, 3000);
+      },
+
+      onCallCancelled: (data) => {
+        // Callee получает: caller отменил до ответа
+        console.log('[WS] Call cancelled:', data.call_id);
+        RNNotificationCall.hideNotification();
+        setCallTimeoutId(prev => { if (prev) clearTimeout(prev); return null; });
+        callStateRef.current?.resetToIdle?.();
+        setCallEndReason('rejected');
+        setTimeout(() => {
+          setCallEndReason(null);
+          setCallModalVisible(false);
+          setIncomingCallData(null);
+        }, 3000);
+      },
+
+      onCallEnded: (data) => {
+        // Другой участник завершил активный звонок
+        console.log('[WS] Call ended:', data.call_id);
+        if (callStateRef.current?.status === 'active' || callStateRef.current?.status === 'ringing') {
+          handleEndCallRef.current?.();
+        }
+      },
+    });
+
+    return () => {
+      unsubscribeFromCalls(currentUserStaffId);
+    };
+  }, [currentUserStaffId]);
 
   // Восстанавливаем данные звонка из AsyncStorage (background handler не имеет React state)
   useEffect(() => {
@@ -214,34 +280,6 @@ export const CallProvider = ({ children }) => {
       setCallTimeoutId(timeoutId);
     }
 
-    if (data.type === 'call_cancelled') {
-      const callId = String(data.call_id);
-      // Используем ref для получения актуального callData без зависимости от closure
-      const currentCallId = callStateRef.current?.callData?.callId;
-
-      const isOurCall =
-        (incomingCallData?.callId === callId) ||
-        (currentCallId === callId);
-
-      if (isOurCall) {
-        RNNotificationCall.hideNotification();
-
-        if (callModalVisible && callStateRef.current?.status === 'active') {
-          handleEndCallRef.current?.();
-        } else {
-          setCallTimeoutId((prev) => { if (prev) clearTimeout(prev); return null; });
-          // Сбрасываем таймер и Agora engine — без API вызова (бэкенд уже обработал)
-          callStateRef.current?.resetToIdle?.();
-          // Показываем "Звонок отклонён" 3 секунды, потом закрываем
-          setCallEndReason('rejected');
-          setTimeout(() => {
-            setCallEndReason(null);
-            setCallModalVisible(false);
-            setIncomingCallData(null);
-          }, 3000);
-        }
-      }
-    }
   }, [callModalVisible, incomingCallData]);
 
   // Синхронизируем ref с актуальной версией handlePushNotification
