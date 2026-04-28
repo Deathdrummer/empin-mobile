@@ -50,6 +50,8 @@ setBackgroundMessageHandler(getMessaging(), async (remoteMessage) => {
   }
 
   if (data.type === 'call_cancelled') {
+    // FCM fallback: скрываем нативное окно звонка если app в killed/background
+    // (WebSocket не работает в killed state — foreground обрабатывает через CallContext)
     await AsyncStorage.removeItem('@pendingCall');
     RNNotificationCall.hideNotification();
   }
