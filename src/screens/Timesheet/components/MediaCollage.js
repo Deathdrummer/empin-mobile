@@ -37,7 +37,6 @@ const VideoPreview = ({ uri, style, showPlayIcon }) => {
   }, [uri]);
 
   const handleFirstFrame = () => {
-    console.log('[VideoPreview] First frame loaded for URI:', uri);
     setShowSpinner(false);
   };
 

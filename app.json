@@ -36,7 +36,12 @@
         "WRITE_EXTERNAL_STORAGE",
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_PHONE_CALL",
+        "WAKE_LOCK",
+        "VIBRATE",
+        "SYSTEM_ALERT_WINDOW"
       ]
     },
     "web": {
@@ -48,11 +53,15 @@
       }
     },
     "plugins": [
-      "@livekit/react-native-expo-plugin",
-      "@config-plugins/react-native-webrtc",
+      "@react-native-firebase/app",
+      "./plugins/withFirebaseMessagingPriority",
+      "./plugins/withScreenOnCallFix",
       "expo-video",
       "expo-audio",
-      "expo-speech-recognition"
+      "expo-speech-recognition",
+      ["react-native-full-screen-notification-incoming-call", {
+        "statusBarColor": "#000000"
+      }]
     ]
   }
 }

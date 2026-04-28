@@ -42,7 +42,6 @@ export const TeamCard = ({
         style={styles.team}
         activeOpacity={0.7}
         onLongPress={() => {
-          console.log('[Haptics] Heavy impact triggered');
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           onDeleteTeam(team.id, masterName);
         }}

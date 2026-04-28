@@ -35,7 +35,6 @@ export const ContractCard = ({
   const contractRef = useRef(null);
 
   const handleLongPress = (event) => {
-    console.log('[Haptics] Heavy impact triggered');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     if (contractRef.current) {

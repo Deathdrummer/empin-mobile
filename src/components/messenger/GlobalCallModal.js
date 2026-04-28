@@ -12,6 +12,7 @@ export const GlobalCallModal = () => {
     callState,
     incomingCallData,
     outgoingParticipant,
+    callEndReason,
     acceptCall,
     rejectCall,
     endCall,
@@ -21,7 +22,7 @@ export const GlobalCallModal = () => {
 
   // Для входящего звонка из polling — формируем "синтетический" callState,
   // т.к. useCall() ещё не знает об этом звонке (он в idle)
-  const effectiveCallState = incomingCallData && callState.status === 'idle'
+  const baseCallState = incomingCallData && callState.status === 'idle'
     ? {
         ...callState,
         status: 'ringing',
@@ -29,10 +30,12 @@ export const GlobalCallModal = () => {
       }
     : callState;
 
-  // Определяем участника звонка
-  console.log('[GlobalCallModal] incomingCallData:', JSON.stringify(incomingCallData));
-  console.log('[GlobalCallModal] callState.callData:', JSON.stringify(callState.callData));
+  // При отклонении звонка вызываемым — переопределяем статус
+  const effectiveCallState = callEndReason === 'rejected'
+    ? { ...baseCallState, status: 'rejected' }
+    : baseCallState;
 
+  // Определяем участника звонка
   const resolveCallerName = (caller) => {
     if (!caller) return 'Неизвестный';
     const shortName = formatShortName(caller);
@@ -49,8 +52,6 @@ export const GlobalCallModal = () => {
     : callState.callData?.participant
       || outgoingParticipant
       || { id: null, name: 'Неизвестный', avatar: undefined };
-
-  console.log('[GlobalCallModal] resolved participant:', participant);
 
   return (
     <CallModal
