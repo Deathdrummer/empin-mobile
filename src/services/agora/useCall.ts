@@ -132,8 +132,9 @@ export const useCall = (): UseCallReturn => {
     engine.enableAudio();
     engine.setAudioProfile(
       AudioProfileType.AudioProfileDefault,
-      AudioScenarioType.AudioScenarioChatRoom
+      AudioScenarioType.AudioScenarioChatroom
     );
+    engine.adjustPlaybackSignalVolume(150);
 
     // По умолчанию — наушник (не громкая связь)
     engine.setEnableSpeakerphone(false);

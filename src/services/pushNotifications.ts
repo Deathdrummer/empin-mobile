@@ -6,7 +6,8 @@ import { messengerAPI } from './api';
 // Настройка поведения уведомлений в foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),

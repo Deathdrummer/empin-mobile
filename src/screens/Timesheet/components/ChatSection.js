@@ -26,6 +26,7 @@ import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
 import { useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
+import { isPermissionError, showPermissionSettingsAlert } from '../../../utils/permissionSettingsAlert';
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -294,19 +295,6 @@ export const ChatSection = ({
   // Функция для выбора изображения из галереи
   const pickImageFromLibrary = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (status !== 'granted') {
-        Toast.show({
-          type: 'error',
-          text1: 'Доступ запрещен',
-          text2: 'Необходим доступ к галерее для выбора медиа',
-          position: 'top',
-          visibilityTime: 3000,
-        });
-        return;
-      }
-
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images', 'videos'],
         quality: 0.8,
@@ -326,6 +314,15 @@ export const ChatSection = ({
       }
     } catch (error) {
       console.error('Error picking image from library', { error: error.message });
+
+      if (isPermissionError(error)) {
+        showPermissionSettingsAlert(
+          'Доступ к галерее',
+          'Разрешите доступ к фото и видео в настройках устройства, чтобы выбрать медиа.'
+        );
+        return;
+      }
+
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
@@ -342,13 +339,10 @@ export const ChatSection = ({
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
       if (status !== 'granted') {
-        Toast.show({
-          type: 'error',
-          text1: 'Доступ запрещен',
-          text2: 'Необходим доступ к камере для съемки',
-          position: 'top',
-          visibilityTime: 3000,
-        });
+        showPermissionSettingsAlert(
+          'Доступ к камере',
+          'Разрешите доступ к камере в настройках устройства, чтобы сделать фото.'
+        );
         return;
       }
 
@@ -385,13 +379,10 @@ export const ChatSection = ({
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
       if (status !== 'granted') {
-        Toast.show({
-          type: 'error',
-          text1: 'Доступ запрещен',
-          text2: 'Необходим доступ к камере для съемки',
-          position: 'top',
-          visibilityTime: 3000,
-        });
+        showPermissionSettingsAlert(
+          'Доступ к камере',
+          'Разрешите доступ к камере в настройках устройства, чтобы снять видео.'
+        );
         return;
       }
 
@@ -610,13 +601,10 @@ export const ChatSection = ({
       const permission = await AudioModule.requestRecordingPermissionsAsync();
 
       if (!permission.granted) {
-        Toast.show({
-          type: 'error',
-          text1: 'Доступ запрещен',
-          text2: 'Необходим доступ к микрофону для записи',
-          position: 'top',
-          visibilityTime: 3000,
-        });
+        showPermissionSettingsAlert(
+          'Доступ к микрофону',
+          'Разрешите доступ к микрофону в настройках устройства, чтобы записывать голосовые сообщения.'
+        );
         return;
       }
 

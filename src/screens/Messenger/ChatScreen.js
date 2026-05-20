@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, KeyboardAvoidingView, Platform, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
@@ -15,6 +15,8 @@ import { AudioPlayerProvider } from '../../contexts/AudioPlayerContext';
 import { CallButton } from '../../components/messenger/CallButton';
 import { useCallContext } from '../../contexts/CallContext';
 
+const MESSAGE_POLL_INTERVAL_MS = 5000;
+
 export default function ChatScreen({ navigation, route }) {
   const { staffId, staffName = 'Собеседник', onLogout } = route.params || {};
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
@@ -27,9 +29,50 @@ export default function ChatScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const isMountedRef = React.useRef(true);
+  const messagesLoadingRef = React.useRef(false);
+  const previousMessageCountRef = React.useRef(0);
   const scrollViewRef = React.useRef(null);
 
   const { initiateCall } = useCallContext();
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    previousMessageCountRef.current = 0;
+  }, [staffId]);
+
+  const loadMessages = useCallback(async (targetChatId, options = {}) => {
+    const resolvedChatId = targetChatId;
+    const { showError = false } = options;
+
+    if (!resolvedChatId || messagesLoadingRef.current) return;
+
+    messagesLoadingRef.current = true;
+    try {
+      const messagesData = await messengerAPI.getMessages(resolvedChatId);
+      if (isMountedRef.current) {
+        setMessages(messagesData.messages || []);
+      }
+    } catch (error) {
+      console.error('Failed to load messages', { error: error.message });
+      if (showError) {
+        Toast.show({
+          type: 'error',
+          text1: 'Ошибка обновления',
+          text2: 'Не удалось обновить сообщения',
+          position: 'top',
+          visibilityTime: 3000,
+        });
+      }
+    } finally {
+      messagesLoadingRef.current = false;
+    }
+  }, []);
 
   // Загрузка текущего пользователя
   useEffect(() => {
@@ -67,9 +110,7 @@ export default function ChatScreen({ navigation, route }) {
         const chatData = await messengerAPI.getOrCreateChat(staffId);
         setChatId(chatData.chat_id);
 
-        // Загружаем сообщения
-        const messagesData = await messengerAPI.getMessages(chatData.chat_id);
-        setMessages(messagesData.messages || []);
+        await loadMessages(chatData.chat_id, { showError: true });
       } catch (error) {
         console.error('Failed to initialize chat', { error: error.message });
         Toast.show({
@@ -85,11 +126,50 @@ export default function ChatScreen({ navigation, route }) {
     };
 
     initializeChat();
-  }, [staffId]);
+  }, [staffId, loadMessages]);
+
+  // Обновление сообщений без ручного pull-to-refresh, пока чат открыт
+  useEffect(() => {
+    if (!chatId) return;
+
+    let intervalId = null;
+
+    const startPolling = () => {
+      if (intervalId) return;
+      intervalId = setInterval(() => {
+        loadMessages(chatId);
+      }, MESSAGE_POLL_INTERVAL_MS);
+    };
+
+    const stopPolling = () => {
+      if (!intervalId) return;
+      clearInterval(intervalId);
+      intervalId = null;
+    };
+
+    const appStateSubscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        loadMessages(chatId);
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    });
+
+    startPolling();
+
+    return () => {
+      stopPolling();
+      appStateSubscription.remove();
+    };
+  }, [chatId, loadMessages]);
 
   // Автоскролл при новых сообщениях
   useEffect(() => {
-    if (messages.length > 0 && scrollViewRef.current) {
+    const previousMessageCount = previousMessageCountRef.current;
+    previousMessageCountRef.current = messages.length;
+
+    if (messages.length > previousMessageCount && scrollViewRef.current) {
       setTimeout(() => {
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -102,8 +182,7 @@ export default function ChatScreen({ navigation, route }) {
 
     try {
       setRefreshing(true);
-      const messagesData = await messengerAPI.getMessages(chatId);
-      setMessages(messagesData.messages || []);
+      await loadMessages(chatId, { showError: true });
     } catch (error) {
       console.error('Failed to refresh messages', { error: error.message });
       Toast.show({
@@ -116,7 +195,7 @@ export default function ChatScreen({ navigation, route }) {
     } finally {
       setRefreshing(false);
     }
-  }, [chatId]);
+  }, [chatId, loadMessages]);
 
   // Отправка сообщения
   const handleAddMessage = useCallback(async (text, mediaArray) => {
@@ -124,23 +203,26 @@ export default function ChatScreen({ navigation, route }) {
 
     try {
       const replyToId = replyingToComment?.id || null;
-      const newMessage = await messengerAPI.addMessage(chatId, text, replyToId, mediaArray);
+      await messengerAPI.addMessage(chatId, text, replyToId, mediaArray);
 
-      setMessages(prev => [...prev, newMessage]);
+      await loadMessages(chatId);
       setCommentText('');
       setReplyingToComment(null);
     } catch (error) {
       console.error('Failed to add message', { error: error.message });
+      const isTimeout = error.code === 'ECONNABORTED' || error.message?.toLowerCase().includes('timeout');
       Toast.show({
         type: 'error',
         text1: 'Ошибка отправки',
-        text2: 'Не удалось отправить сообщение',
+        text2: isTimeout
+          ? 'Загрузка заняла слишком много времени. Проверьте соединение или попробуйте файл меньшего размера.'
+          : 'Не удалось отправить сообщение',
         position: 'top',
         visibilityTime: 3000,
       });
       throw error;
     }
-  }, [chatId, replyingToComment]);
+  }, [chatId, replyingToComment, loadMessages]);
 
   // Удаление сообщения
   const handleDeleteMessage = useCallback(async (messageId) => {
@@ -345,39 +427,45 @@ export default function ChatScreen({ navigation, route }) {
             <CallButton userId={staffId} onPress={handleCallPress} />
           </View>
 
-          <View style={styles.contentContainer}>
-            <ScrollView
-              ref={scrollViewRef}
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollViewContent}
-              keyboardShouldPersistTaps='handled'
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleRefresh}
+          <KeyboardAvoidingView
+            style={styles.keyboardAvoidingView}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+          >
+            <View style={styles.contentContainer}>
+              <ScrollView
+                ref={scrollViewRef}
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollViewContent}
+                keyboardShouldPersistTaps='handled'
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                  />
+                }
+              >
+                <ChatMessageList
+                  chat={messages}
+                  currentUserId={currentUserId}
+                  deletingComment={deletingComment}
+                  onEditComment={handleEditMessage}
+                  onDeleteComment={handleDeleteMessage}
+                  onReplyComment={handleReplyMessage}
+                  onToggleReaction={handleToggleReaction}
+                  onDownloadDocument={handleDownloadDocument}
                 />
-              }
-            >
-              <ChatMessageList
-                chat={messages}
-                currentUserId={currentUserId}
-                deletingComment={deletingComment}
-                onEditComment={handleEditMessage}
-                onDeleteComment={handleDeleteMessage}
-                onReplyComment={handleReplyMessage}
-                onToggleReaction={handleToggleReaction}
-                onDownloadDocument={handleDownloadDocument}
-              />
-            </ScrollView>
+              </ScrollView>
 
-            <ChatInputPanel
-              commentText={commentText}
-              replyingToComment={replyingToComment}
-              onCommentChange={handleCommentChange}
-              onAddComment={handleAddMessage}
-              onCancelReply={handleCancelReply}
-            />
-          </View>
+              <ChatInputPanel
+                commentText={commentText}
+                replyingToComment={replyingToComment}
+                onCommentChange={handleCommentChange}
+                onAddComment={handleAddMessage}
+                onCancelReply={handleCancelReply}
+              />
+            </View>
+          </KeyboardAvoidingView>
 
           <LogoutModal
             visible={logoutModalVisible}
@@ -438,6 +526,9 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
   },
   contentContainer: {
     flex: 1,

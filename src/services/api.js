@@ -12,6 +12,9 @@ const API_BASE_URL = 'https://empin-pro.ru/api'; // Production
 // URL сервера без /api для доступа к файлам
 export const SERVER_URL = API_BASE_URL.replace('/api', '');
 
+const MESSAGE_REFRESH_TIMEOUT_MS = 15000;
+const MESSAGE_SEND_TIMEOUT_MS = 30000;
+
 // Создаем экземпляр axios
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -315,7 +318,7 @@ export const timesheetAPI = {
       timesheet_contract_id: timesheetContractId,
       message,
       reply_to_id: replyToId,
-    });
+    }, { timeout: MESSAGE_SEND_TIMEOUT_MS });
     return response.data;
   },
 
@@ -356,7 +359,7 @@ export const messengerAPI = {
   getMessages: async (chatId) => {
     const response = await api.post('/messenger/chat/messages', {
       chat_id: chatId,
-    });
+    }, { timeout: MESSAGE_REFRESH_TIMEOUT_MS });
     return response.data;
   },
 
@@ -442,7 +445,7 @@ export const messengerAPI = {
       chat_id: chatId,
       message,
       reply_to_id: replyToId,
-    });
+    }, { timeout: MESSAGE_SEND_TIMEOUT_MS });
     return response.data;
   },
 

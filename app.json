@@ -2,7 +2,7 @@
   "expo": {
     "name": "empin-mobile",
     "slug": "empin-mobile",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -30,12 +30,14 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "ru.deathdrumer.empinmobile",
+      "versionCode": 11,
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
         "READ_MEDIA_IMAGES",
         "READ_MEDIA_VIDEO",
+        "POST_NOTIFICATIONS",
         "RECORD_AUDIO",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_PHONE_CALL",
@@ -56,12 +58,25 @@
       "@react-native-firebase/app",
       "./plugins/withFirebaseMessagingPriority",
       "./plugins/withScreenOnCallFix",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
       "expo-video",
       "expo-audio",
       "expo-speech-recognition",
-      ["react-native-full-screen-notification-incoming-call", {
-        "statusBarColor": "#000000"
-      }]
+      [
+        "react-native-full-screen-notification-incoming-call",
+        {
+          "statusBarColor": "#000000"
+        }
+      ],
+      "./plugins/withAndroidReleaseManifest",
+      "expo-asset"
     ]
   }
 }
