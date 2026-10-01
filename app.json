@@ -2,6 +2,7 @@
   "expo": {
     "name": "empin-mobile",
     "slug": "empin-mobile",
+    "owner": "empin",
     "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
