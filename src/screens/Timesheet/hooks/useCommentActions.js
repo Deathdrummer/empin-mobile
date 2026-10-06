@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Toast from 'react-native-toast-message';
 import { timesheetAPI } from '../../../services/api';
 import { refreshPermissions } from '../../../utils/permissions';
+import { getUserFacingError } from '../../../utils/userFacingError';
 
 export const useCommentActions = (loadDays, minIndex, maxIndex) => {
   const [expandedContract, setExpandedContract] = useState(null);
@@ -46,7 +47,7 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: error.message || 'Не удалось добавить комментарий',
+        text2: getUserFacingError(error, 'Не удалось добавить комментарий.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -94,7 +95,7 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: error.message || 'Не удалось удалить комментарий',
+        text2: getUserFacingError(error, 'Не удалось удалить комментарий.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -132,7 +133,7 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: error.message || 'Не удалось обновить комментарий',
+        text2: getUserFacingError(error, 'Не удалось обновить комментарий.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -165,7 +166,10 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: error.response?.data?.message || error.message || (hasReacted ? 'Не удалось удалить реакцию' : 'Не удалось добавить реакцию'),
+        text2: getUserFacingError(
+          error,
+          hasReacted ? 'Не удалось удалить реакцию.' : 'Не удалось добавить реакцию.'
+        ),
         position: 'top',
         visibilityTime: 2000,
       });

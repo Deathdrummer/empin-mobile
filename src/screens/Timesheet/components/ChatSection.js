@@ -27,6 +27,7 @@ import { AudioPlayer } from './AudioPlayer';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
 import { useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
 import { isPermissionError, showPermissionSettingsAlert } from '../../../utils/permissionSettingsAlert';
+import { formatDateTime, formatEditTime } from '../../../utils/dateTime';
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -43,60 +44,6 @@ const CONTEXT_MENU_HEIGHT = 240; // Приблизительная высота 
 const SCREEN_PADDING = 20; // Отступ от края экрана
 const EMOJI_OFFSET = 60; // EmojiPicker находится на 60px выше комментария
 const MENU_OFFSET = 10; // CommentContextMenu находится на 10px ниже комментария
-
-// Функция форматирования даты в формат "20:41 10.11.25"
-const formatDateTime = (dateString) => {
-  if (!dateString) return '';
-
-  // Пробуем создать объект Date из строки
-  const date = new Date(dateString);
-
-  // Проверяем, является ли дата валидной
-  if (isNaN(date.getTime())) {
-    // Если не получилось распарсить, возвращаем оригинальную строку
-    return dateString;
-  }
-
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = String(date.getFullYear()).slice(-2);
-
-  return `${hours}:${minutes} ${day}.${month}.${year}`;
-};
-
-// Функция форматирования времени редактирования (с датой если день отличается)
-const formatEditTime = (createdAt, updatedAt) => {
-  if (!updatedAt) return '';
-
-  const updated = new Date(updatedAt);
-  if (isNaN(updated.getTime())) return '';
-
-  const hours = String(updated.getHours()).padStart(2, '0');
-  const minutes = String(updated.getMinutes()).padStart(2, '0');
-  const timeStr = `${hours}:${minutes}`;
-
-  // Если есть created_at, проверяем, в один ли день было создание и редактирование
-  if (createdAt) {
-    const created = new Date(createdAt);
-    if (!isNaN(created.getTime())) {
-      // Сравниваем даты (без времени)
-      const createdDate = created.toDateString();
-      const updatedDate = updated.toDateString();
-
-      // Если дни отличаются, добавляем дату
-      if (createdDate !== updatedDate) {
-        const day = String(updated.getDate()).padStart(2, '0');
-        const month = String(updated.getMonth() + 1).padStart(2, '0');
-        return `${timeStr} ${day}.${month}`;
-      }
-    }
-  }
-
-  return timeStr;
-};
 
 // Функция проверки, был ли комментарий отредактирован
 const isCommentEdited = (createdAt, updatedAt) => {

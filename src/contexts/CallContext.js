@@ -1,14 +1,56 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
-import { getMessaging, onMessage } from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useAudioPlayer } from 'expo-audio';
-import RNNotificationCall from 'react-native-full-screen-notification-incoming-call';
 import { useCall } from '../services/agora/useCall';
 import { subscribeToCalls, unsubscribeFromCalls } from '../services/pusher';
+import {
+  endIosSystemCall,
+  startIosVoip,
+} from '../services/iosVoip';
+
+const createNoopIncomingCallModule = () => ({
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  backToApp: () => {},
+  hideNotification: () => {},
+});
+
+const RNNotificationCall = Platform.OS === 'android'
+  ? (() => {
+      const incomingCallModule = require('react-native-full-screen-notification-incoming-call');
+      return incomingCallModule.default ?? incomingCallModule;
+    })()
+  : createNoopIncomingCallModule();
 
 const CallContext = createContext(null);
+
+const getCallParticipant = (callData) => {
+  const caller = callData?.caller ?? {};
+  const name = [caller.sname, caller.fname, caller.mname]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return {
+    id: Number(caller.id) || 0,
+    name: name || 'Неизвестный',
+    avatar: caller.avatar,
+  };
+};
+
+const getCallDataFromVoipEvent = (event) => ({
+  callId: String(event.callId),
+  caller: {
+    id: event.callerId,
+    sname: event.callerName ?? 'Неизвестный',
+    fname: '',
+    mname: '',
+    avatar: event.callerAvatar,
+  },
+  callType: 'audio',
+});
 
 export const useCallContext = () => {
   const context = useContext(CallContext);
@@ -18,7 +60,7 @@ export const useCallContext = () => {
   return context;
 };
 
-export const CallProvider = ({ children }) => {
+export const CallProvider = ({ children, isLoggedIn }) => {
   const [callModalVisible, setCallModalVisible] = useState(false);
   const [incomingCallData, setIncomingCallData] = useState(null);
   const [outgoingParticipant, setOutgoingParticipant] = useState(null);
@@ -35,6 +77,7 @@ export const CallProvider = ({ children }) => {
   const incomingCallDataRef = useRef(null);
   const callStateRef = useRef(null);
   const handlePushNotificationRef = useRef(null);
+  const isLoggedInRef = useRef(isLoggedIn);
   // Флаг: пользователь уже принял звонок — предотвращает race condition
   // между answer event и 30s native timeout → endCall event
   const isAnsweringRef = useRef(false);
@@ -43,16 +86,39 @@ export const CallProvider = ({ children }) => {
 
   const callState = useCall();
 
+  useEffect(() => {
+    isLoggedInRef.current = isLoggedIn;
+  }, [isLoggedIn]);
+
   // Загружаем staff_id текущего пользователя для WebSocket подписки
   useEffect(() => {
+    let cancelled = false;
+
+    if (!isLoggedIn) {
+      setCurrentUserStaffId(null);
+      return undefined;
+    }
+
     AsyncStorage.getItem('user').then(raw => {
-      if (!raw) return;
+      if (cancelled) return;
+
+      if (!raw) {
+        setCurrentUserStaffId(null);
+        return;
+      }
+
       try {
-        const u = JSON.parse(raw);
-        setCurrentUserStaffId(u.staff_id ?? null);
-      } catch {}
+        const user = JSON.parse(raw);
+        setCurrentUserStaffId(user.staff_id ?? null);
+      } catch {
+        setCurrentUserStaffId(null);
+      }
     });
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn]);
 
   // Синхронизируем refs для использования в closures с [] deps
   useEffect(() => { incomingCallDataRef.current = incomingCallData; }, [incomingCallData]);
@@ -86,6 +152,7 @@ export const CallProvider = ({ children }) => {
         // Callee получает: caller отменил до ответа
         console.log('[WS] Call cancelled:', data.call_id);
         RNNotificationCall.hideNotification();
+        endIosSystemCall(data.call_id, 'remoteEnded');
         setCallTimeoutId(prev => { if (prev) clearTimeout(prev); return null; });
         callStateRef.current?.resetToIdle?.();
         setCallEndReason('rejected');
@@ -99,6 +166,7 @@ export const CallProvider = ({ children }) => {
       onCallEnded: (data) => {
         // Другой участник завершил активный звонок
         console.log('[WS] Call ended:', data.call_id);
+        endIosSystemCall(data.call_id, 'remoteEnded');
         if (callStateRef.current?.status === 'active' || callStateRef.current?.status === 'ringing') {
           handleEndCallRef.current?.();
         }
@@ -112,8 +180,11 @@ export const CallProvider = ({ children }) => {
 
   // Восстанавливаем данные звонка из AsyncStorage (background handler не имеет React state)
   useEffect(() => {
+    if (!isLoggedIn) return undefined;
+
+    let cancelled = false;
     AsyncStorage.getItem('@pendingCall').then(stored => {
-      if (!stored) return;
+      if (!stored || cancelled) return;
       try {
         const callData = JSON.parse(stored);
         incomingCallDataRef.current = callData;
@@ -122,7 +193,11 @@ export const CallProvider = ({ children }) => {
         AsyncStorage.removeItem('@pendingCall');
       } catch {}
     });
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn]);
 
   // Рингтон (foreground)
   const ringtonePlayer = useAudioPlayer(require('../../assets/ringtone.mp3'));
@@ -164,6 +239,12 @@ export const CallProvider = ({ children }) => {
    */
   useEffect(() => {
     RNNotificationCall.addEventListener('answer', async () => {
+      if (!isLoggedInRef.current) {
+        RNNotificationCall.hideNotification();
+        await AsyncStorage.removeItem('@pendingCall').catch(() => {});
+        return;
+      }
+
       isAnsweringRef.current = true;
       // backToApp() до hideNotification() — пока IncomingCallActivity видима,
       // Android 12+ разрешает запуск из фона (нет BAL restriction)
@@ -195,13 +276,19 @@ export const CallProvider = ({ children }) => {
 
       if (callData?.callId) {
         console.log('[CallCtx][answer] calling acceptCall with callId:', callData.callId);
-        await callStateRef.current?.acceptCall(callData.callId);
+        await callStateRef.current?.acceptCall(callData.callId, getCallParticipant(callData));
       } else {
         console.log('[CallCtx][answer] NO callId, acceptCall skipped');
       }
     });
 
     RNNotificationCall.addEventListener('endCall', async () => {
+      if (!isLoggedInRef.current) {
+        RNNotificationCall.hideNotification();
+        await AsyncStorage.removeItem('@pendingCall').catch(() => {});
+        return;
+      }
+
       // Race condition guard: если пользователь уже принял звонок (answer event
       // сработал одновременно с 30s native timeout) — не отклоняем
       if (isAnsweringRef.current) return;
@@ -245,6 +332,8 @@ export const CallProvider = ({ children }) => {
    * Обработка входящего push-уведомления
    */
   const handlePushNotification = useCallback((notification) => {
+    if (!isLoggedIn) return;
+
     const data = notification.request.content.data ?? {};
 
     if (data.type === 'incoming_call') {
@@ -280,7 +369,22 @@ export const CallProvider = ({ children }) => {
       setCallTimeoutId(timeoutId);
     }
 
-  }, [callModalVisible, incomingCallData]);
+    if (data.type === 'call_cancelled' || data.type === 'call_ended') {
+      RNNotificationCall.hideNotification();
+      endIosSystemCall(data.call_id, 'remoteEnded');
+      setCallTimeoutId(previousTimeoutId => {
+        if (previousTimeoutId) clearTimeout(previousTimeoutId);
+        return null;
+      });
+      callStateRef.current?.resetToIdle?.();
+      incomingCallDataRef.current = null;
+      setIncomingCallData(null);
+      setCallModalVisible(false);
+      setCallEndReason(data.type === 'call_cancelled' ? 'rejected' : 'ended');
+      setTimeout(() => setCallEndReason(null), 2000);
+    }
+
+  }, [isLoggedIn]);
 
   // Синхронизируем ref с актуальной версией handlePushNotification
   useEffect(() => {
@@ -296,16 +400,20 @@ export const CallProvider = ({ children }) => {
   useEffect(() => {
     // Firebase foreground handler (data-only FCM, modular API)
     // Expo Push API оборачивает наш data-объект в строку remoteMessage.data.body
-    const unsubscribeFirebase = onMessage(getMessaging(), (remoteMessage) => {
-      const raw = remoteMessage.data ?? {};
-      let data = raw;
-      try {
-        if (raw.body) data = JSON.parse(raw.body);
-      } catch {}
-      handlePushNotificationRef.current?.({
-        request: { content: { data } },
+    let unsubscribeFirebase = () => {};
+    if (Platform.OS === 'android') {
+      const { getMessaging, onMessage } = require('@react-native-firebase/messaging');
+      unsubscribeFirebase = onMessage(getMessaging(), (remoteMessage) => {
+        const raw = remoteMessage.data ?? {};
+        let data = raw;
+        try {
+          if (raw.body) data = JSON.parse(raw.body);
+        } catch {}
+        handlePushNotificationRef.current?.({
+          request: { content: { data } },
+        });
       });
-    });
+    }
 
     // expo-notifications: тап по уведомлению (когда app в background и юзер тапнул)
     notifResponseListenerRef.current = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -317,6 +425,72 @@ export const CallProvider = ({ children }) => {
       notifResponseListenerRef.current?.remove();
     };
   }, []);
+
+  /**
+   * PushKit/CallKit на iOS. Нативный модуль показывает системный экран звонка
+   * ещё до запуска JavaScript, а сюда передаёт действия пользователя.
+   */
+  useEffect(() => {
+    if (Platform.OS !== 'ios' || !isLoggedIn) return undefined;
+
+    let disposed = false;
+    let unsubscribe = () => {};
+
+    const handleVoipCallEvent = async (event) => {
+      if (disposed || !event?.callId) return;
+
+      const callData = getCallDataFromVoipEvent(event);
+      const participant = getCallParticipant(callData);
+
+      if (event.type === 'incoming') {
+        handledCallIdRef.current = callData.callId;
+        incomingCallDataRef.current = callData;
+        setIncomingCallData(callData);
+        // CallKit уже показывает системный экран и воспроизводит рингтон.
+        setCallModalVisible(false);
+        return;
+      }
+
+      if (event.type === 'answer') {
+        handledCallIdRef.current = callData.callId;
+        incomingCallDataRef.current = callData;
+        setIncomingCallData(callData);
+        setCallModalVisible(true);
+        await callStateRef.current?.acceptCall(callData.callId, participant);
+        return;
+      }
+
+      if (event.type === 'end' && callStateRef.current?.status === 'active') {
+        await callStateRef.current?.endCall();
+      } else {
+        await callStateRef.current?.rejectCall(callData.callId);
+        callStateRef.current?.resetToIdle?.();
+      }
+
+      incomingCallDataRef.current = null;
+      setIncomingCallData(null);
+      setCallModalVisible(false);
+      setCallEndReason(event.type === 'timeout' ? 'ended' : 'rejected');
+      setTimeout(() => setCallEndReason(null), 2000);
+    };
+
+    startIosVoip(handleVoipCallEvent)
+      .then((cleanup) => {
+        if (disposed) {
+          cleanup();
+        } else {
+          unsubscribe = cleanup;
+        }
+      })
+      .catch((error) => {
+        console.warn('[VoIP] Не удалось запустить PushKit:', error?.message ?? error);
+      });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [isLoggedIn]);
 
   /**
    * Обработка входящего звонка (foreground)
@@ -353,7 +527,10 @@ export const CallProvider = ({ children }) => {
     }
 
     if (incomingCallData?.callId) {
-      await callState.acceptCall(incomingCallData.callId);
+      await callState.acceptCall(
+        incomingCallData.callId,
+        getCallParticipant(incomingCallData)
+      );
     }
   }, [callState, callTimeoutId, incomingCallData]);
 
@@ -369,6 +546,7 @@ export const CallProvider = ({ children }) => {
     }
 
     if (incomingCallData?.callId) {
+      await endIosSystemCall(incomingCallData.callId, 'declined');
       await callState.rejectCall(incomingCallData.callId);
     }
 
@@ -387,10 +565,12 @@ export const CallProvider = ({ children }) => {
       setCallTimeoutId(null);
     }
 
+    const callId = callState.callData?.callId ?? incomingCallData?.callId;
+    await endIosSystemCall(callId, 'remoteEnded');
     await callState.endCall();
     setCallModalVisible(false);
     setIncomingCallData(null);
-  }, [callState, callTimeoutId]);
+  }, [callState, callTimeoutId, incomingCallData]);
 
   // Синхронизируем refs с актуальными версиями обработчиков (избегаем stale closure в event listeners)
   useEffect(() => {

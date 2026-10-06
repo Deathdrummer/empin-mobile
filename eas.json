@@ -12,10 +12,31 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "ios": {
+        "image": "sdk-54",
+        "credentialsSource": "local",
+        "env": {
+          "IOS_WITHOUT_FIREBASE": "true"
+        }
+      }
+    },
+    "testflight": {
+      "extends": "production",
+      "credentialsSource": "local",
+      "environment": "production",
+      "env": {
+        "IOS_WITHOUT_FIREBASE": "true"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {},
+    "testflight": {
+      "ios": {
+        "appleId": "vlad161rswork@gmail.com",
+        "ascAppId": "6817777415"
+      }
+    }
   }
 }

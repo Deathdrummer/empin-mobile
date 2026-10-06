@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Toast from 'react-native-toast-message';
 import { timesheetAPI } from '../../../services/api';
 import { refreshPermissions } from '../../../utils/permissions';
+import { getUserFacingError } from '../../../utils/userFacingError';
 
 export const useContractActions = (loadDays, minIndex, maxIndex) => {
   const [contractModalVisible, setContractModalVisible] = useState(false);
@@ -68,7 +69,7 @@ export const useContractActions = (loadDays, minIndex, maxIndex) => {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: 'Не удалось добавить договор',
+        text2: getUserFacingError(error, 'Не удалось добавить договор.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -120,7 +121,7 @@ export const useContractActions = (loadDays, minIndex, maxIndex) => {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: 'Не удалось удалить договор',
+        text2: getUserFacingError(error, 'Не удалось удалить договор.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -149,7 +150,7 @@ export const useContractActions = (loadDays, minIndex, maxIndex) => {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: 'Не удалось удалить договор',
+        text2: getUserFacingError(error, 'Не удалось удалить договор.'),
         position: 'top',
         visibilityTime: 3000,
       });

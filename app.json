@@ -20,7 +20,13 @@
         "NSCameraUsageDescription": "Разрешите доступ к камере для съемки фото и видео в комментариях",
         "NSPhotoLibraryUsageDescription": "Разрешите доступ к галерее для выбора фото и видео в комментариях",
         "NSMicrophoneUsageDescription": "Разрешите доступ к микрофону для записи видео с камеры и голосового ввода комментариев",
-        "NSSpeechRecognitionUsageDescription": "Разрешите доступ к распознаванию речи для голосового ввода комментариев"
+        "NSSpeechRecognitionUsageDescription": "Разрешите доступ к распознаванию речи для голосового ввода комментариев",
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "audio",
+          "voip",
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -50,12 +56,13 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "f6eb001a-e226-4bfc-acd6-8b5e10107463"
-      }
-    },
     "plugins": [
+      [
+        "expo-notifications",
+        {
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
       "@react-native-firebase/app",
       "./plugins/withFirebaseMessagingPriority",
       "./plugins/withScreenOnCallFix",
@@ -64,6 +71,9 @@
         {
           "android": {
             "minSdkVersion": 26
+          },
+          "ios": {
+            "useFrameworks": "static"
           }
         }
       ],
@@ -78,6 +88,12 @@
       ],
       "./plugins/withAndroidReleaseManifest",
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f6eb001a-e226-4bfc-acd6-8b5e10107463"
+      }
+    },
+    "owner": "empin"
   }
 }

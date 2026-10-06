@@ -7,18 +7,19 @@ import * as Sharing from 'expo-sharing';
 import Toast from 'react-native-toast-message';
 import BottomMenu from '../../components/BottomMenu';
 import { LogoutModal } from '../Timesheet/components/modals/LogoutModal';
-import { timesheetAPI, messengerAPI } from '../../services/api';
+import { messengerAPI } from '../../services/api';
 import { ChatMessageList } from '../Timesheet/components/ChatMessageList';
 import { ChatInputPanel } from '../Timesheet/components/ChatInputPanel';
 import { SwipeControlProvider } from '../../contexts/SwipeControlContext';
 import { AudioPlayerProvider } from '../../contexts/AudioPlayerContext';
 import { CallButton } from '../../components/messenger/CallButton';
 import { useCallContext } from '../../contexts/CallContext';
+import { getUserFacingError } from '../../utils/userFacingError';
 
 const MESSAGE_POLL_INTERVAL_MS = 5000;
 
-export default function ChatScreen({ navigation, route }) {
-  const { staffId, staffName = 'Собеседник', onLogout } = route.params || {};
+export default function ChatScreen({ navigation, route, onLogout }) {
+  const { staffId, staffName = 'Собеседник' } = route.params || {};
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [chatId, setChatId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -64,7 +65,7 @@ export default function ChatScreen({ navigation, route }) {
         Toast.show({
           type: 'error',
           text1: 'Ошибка обновления',
-          text2: 'Не удалось обновить сообщения',
+          text2: getUserFacingError(error, 'Не удалось обновить сообщения.'),
           position: 'top',
           visibilityTime: 3000,
         });
@@ -116,7 +117,7 @@ export default function ChatScreen({ navigation, route }) {
         Toast.show({
           type: 'error',
           text1: 'Ошибка загрузки',
-          text2: 'Не удалось загрузить чат',
+          text2: getUserFacingError(error, 'Не удалось загрузить чат.'),
           position: 'top',
           visibilityTime: 3000,
         });
@@ -210,13 +211,10 @@ export default function ChatScreen({ navigation, route }) {
       setReplyingToComment(null);
     } catch (error) {
       console.error('Failed to add message', { error: error.message });
-      const isTimeout = error.code === 'ECONNABORTED' || error.message?.toLowerCase().includes('timeout');
       Toast.show({
         type: 'error',
         text1: 'Ошибка отправки',
-        text2: isTimeout
-          ? 'Загрузка заняла слишком много времени. Проверьте соединение или попробуйте файл меньшего размера.'
-          : 'Не удалось отправить сообщение',
+        text2: getUserFacingError(error, 'Не удалось отправить сообщение.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -236,7 +234,7 @@ export default function ChatScreen({ navigation, route }) {
       Toast.show({
         type: 'error',
         text1: 'Ошибка удаления',
-        text2: 'Не удалось удалить сообщение',
+        text2: getUserFacingError(error, 'Не удалось удалить сообщение.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -272,7 +270,7 @@ export default function ChatScreen({ navigation, route }) {
         Toast.show({
           type: 'error',
           text1: 'Ошибка редактирования',
-          text2: 'Не удалось отредактировать сообщение',
+          text2: getUserFacingError(error, 'Не удалось отредактировать сообщение.'),
           position: 'top',
           visibilityTime: 3000,
         });
@@ -308,7 +306,7 @@ export default function ChatScreen({ navigation, route }) {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: 'Не удалось изменить реакцию',
+        text2: getUserFacingError(error, 'Не удалось изменить реакцию.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -378,7 +376,7 @@ export default function ChatScreen({ navigation, route }) {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: 'Не удалось скачать документ',
+        text2: getUserFacingError(error, 'Не удалось скачать документ.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -403,12 +401,7 @@ export default function ChatScreen({ navigation, route }) {
 
   const confirmLogout = async () => {
     setLogoutModalVisible(false);
-    try {
-      await timesheetAPI.logout();
-      if (onLogout) onLogout();
-    } catch (error) {
-      if (onLogout) onLogout();
-    }
+    await onLogout();
   };
 
   const handleCallPress = useCallback(() => {

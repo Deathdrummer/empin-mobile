@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet, StatusBar } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, ActivityIndicator, StyleSheet, StatusBar, Platform } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
@@ -11,14 +11,19 @@ import LoginScreen from './src/screens/LoginScreen';
 import TimesheetScreen from './src/screens/TimesheetScreen';
 import MessengerScreen from './src/screens/MessengerScreen';
 import ChatScreen from './src/screens/Messenger/ChatScreen';
-import { setUnauthorizedCallback, checkApiAvailability } from './src/services/api';
+import { authAPI, setUnauthorizedCallback, checkApiAvailability } from './src/services/api';
+import { disconnectPusher } from './src/services/pusher';
 import { useAppStatePermissions } from './src/hooks/useAppStatePermissions';
 import { requestCallPermissions } from './src/utils/requestCallPermissions';
 import apiBlockEmitter from './src/utils/apiBlockEmitter';
 import { ApiBlockModal } from './src/components/ApiBlockModal';
 import { CallProvider } from './src/contexts/CallContext';
 import { GlobalCallModal } from './src/components/messenger/GlobalCallModal';
-import { registerPushNotifications } from './src/services/pushNotifications';
+import {
+  registerPushNotifications,
+  unregisterPushNotifications,
+} from './src/services/pushNotifications';
+import { disableIosVoip, unregisterIosVoipToken } from './src/services/iosVoip';
 
 const Stack = createNativeStackNavigator();
 
@@ -30,8 +35,29 @@ export default function App() {
   // Автоматическое обновление прав при возврате в приложение
   useAppStatePermissions();
 
+  const clearSession = useCallback(async ({ notifyServer = false } = {}) => {
+    try {
+      if (notifyServer) {
+        await Promise.allSettled([
+          unregisterPushNotifications(),
+          unregisterIosVoipToken(),
+        ]);
+        await authAPI.logout();
+      }
+    } finally {
+      await Promise.allSettled([
+        disconnectPusher(),
+        disableIosVoip(),
+        AsyncStorage.multiRemove(['token', 'user', 'permissions', '@pendingCall']),
+      ]);
+      setIsLoggedIn(false);
+    }
+  }, []);
+
   useEffect(() => {
-    NavigationBar.setVisibilityAsync('hidden');
+    if (Platform.OS === 'android') {
+      NavigationBar.setVisibilityAsync('hidden');
+    }
     requestCallPermissions();
   }, []);
 
@@ -39,17 +65,18 @@ export default function App() {
     checkAuth();
 
     // Устанавливаем callback для принудительного выхода при 401
-    setUnauthorizedCallback(() => {
-      setIsLoggedIn(false);
-    });
+    setUnauthorizedCallback(() => clearSession());
 
     // Подписываемся на события блокировки API
     const unsubscribe = apiBlockEmitter.subscribe((isBlocked) => {
       setIsApiBlocked(isBlocked);
     });
 
-    return unsubscribe;
-  }, [isLoggedIn]);
+    return () => {
+      setUnauthorizedCallback(null);
+      unsubscribe();
+    };
+  }, [clearSession]);
 
   const checkAuth = async () => {
     try {
@@ -72,12 +99,7 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    try {
-      await AsyncStorage.removeItem('token');
-      setIsLoggedIn(false);
-    } catch (error) {
-      // Игнорируем ошибку
-    }
+    await clearSession({ notifyServer: true });
   };
 
   const handleRetryApi = async () => {
@@ -95,7 +117,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.appContainer}>
       <ActionSheetProvider>
-        <CallProvider>
+        <CallProvider isLoggedIn={isLoggedIn}>
           <>
             <StatusBar hidden={true} />
             <View style={styles.appContainer}>
@@ -108,7 +130,9 @@ export default function App() {
                     <Stack.Screen name="Messenger">
                       {props => <MessengerScreen {...props} onLogout={handleLogout} />}
                     </Stack.Screen>
-                    <Stack.Screen name="Chat" component={ChatScreen} />
+                    <Stack.Screen name="Chat">
+                      {props => <ChatScreen {...props} onLogout={handleLogout} />}
+                    </Stack.Screen>
                   </Stack.Navigator>
                 </NavigationContainer>
               ) : (

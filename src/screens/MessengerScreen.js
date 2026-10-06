@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import BottomMenu from '../components/BottomMenu';
 import { LogoutModal } from './Timesheet/components/modals/LogoutModal';
-import { timesheetAPI } from '../services/api';
 import ChatsTab from './Messenger/ChatsTab';
 import CallHistoryTab from './Messenger/CallHistoryTab';
 
@@ -31,12 +30,7 @@ export default function MessengerScreen({ onLogout }) {
 
   const confirmLogout = async () => {
     setLogoutModalVisible(false);
-    try {
-      await timesheetAPI.logout();
-      onLogout();
-    } catch (error) {
-      onLogout();
-    }
+    await onLogout();
   };
 
   const renderContent = () => {

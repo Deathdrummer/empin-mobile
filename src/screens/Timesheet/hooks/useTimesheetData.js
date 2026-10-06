@@ -3,6 +3,7 @@ import { Alert, Dimensions } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { timesheetAPI } from '../../../services/api';
 import { refreshPermissions } from '../../../utils/permissions';
+import { getUserFacingError } from '../../../utils/userFacingError';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -153,11 +154,10 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
         return;
       }
 
-      const errorMsg = error.response?.data?.message || error.message || 'Неизвестная ошибка';
       Toast.show({
         type: 'error',
         text1: 'Ошибка загрузки',
-        text2: errorMsg,
+        text2: getUserFacingError(error, 'Не удалось загрузить табель.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -351,11 +351,10 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
           }
         }
       } catch (error) {
-        const errorMsg = error.response?.data?.message || error.message || 'Ошибка загрузки';
         Toast.show({
           type: 'error',
           text1: 'Ошибка',
-          text2: errorMsg,
+          text2: getUserFacingError(error, 'Не удалось загрузить выбранную дату.'),
           position: 'top',
           visibilityTime: 3000,
         });

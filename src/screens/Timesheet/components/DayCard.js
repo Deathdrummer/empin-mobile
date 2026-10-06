@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TouchableHighligh
 import { Can } from '../../../components/Can';
 import { TeamCard } from './TeamCard';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
+import { formatTimesheetDay } from '../../../utils/dateTime';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -29,22 +30,21 @@ export const DayCard = ({
   onToggleReaction,
   onCancelReply,
 }) => {
-  const dateMatch = item.humanDate?.match(/(\d{4})/);
-  const year = dateMatch ? dateMatch[1] : '';
-  const dateWithoutYear = item.humanDate?.replace(/\s*\d{4}\s*г?\.?/, '').trim() || item.humanDate;
+  const { dateText, weekDay, year } = formatTimesheetDay(item);
 
   return (
     <View style={styles.dayContainer}>
       <View style={[styles.card, item.isToday && styles.cardToday]}>
         <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.dateText}>{dateWithoutYear}</Text>
-            <Text style={styles.weekDay}>{item.weekDay}</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <Text style={styles.yearText}>{year} г</Text>
-            <View style={styles.spacer} />
-            {item.isToday && <Text style={styles.todayLabel}>Сегодня</Text>}
+          <View style={styles.headerContent}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.dateText}>{dateText}</Text>
+              {!!weekDay && <Text style={styles.weekDay}>{weekDay}</Text>}
+            </View>
+            <View style={styles.headerRight}>
+              {!!year && <Text style={styles.yearText}>{year} г</Text>}
+              {item.isToday && <Text style={styles.todayLabel}>Сегодня</Text>}
+            </View>
           </View>
         </View>
 
@@ -115,24 +115,29 @@ const styles = StyleSheet.create({
 
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     borderBottomWidth: 1,
     borderBottomColor: '#e2dde7',
-    //paddingBottom: 15,
     marginBottom: 4,
-	padding: 15,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    minHeight: 58,
   },
   headerLeft: {
     flex: 1,
+    paddingRight: 12,
   },
   headerRight: {
     flex: 1,
     alignItems: 'flex-end',
-  },
-  spacer: {
-    flex: 1,
+    justifyContent: 'space-between',
   },
   dateText: {
     fontSize: 22,

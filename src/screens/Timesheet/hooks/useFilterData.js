@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Toast from 'react-native-toast-message';
 import { timesheetAPI } from '../../../services/api';
+import { getUserFacingError } from '../../../utils/userFacingError';
 
 export const useFilterData = () => {
   const [filters, setFilters] = useState({
@@ -30,7 +31,7 @@ export const useFilterData = () => {
       Toast.show({
         type: 'error',
         text1: 'Ошибка загрузки фильтров',
-        text2: error.response?.data?.message || error.message || 'Не удалось загрузить данные для фильтров',
+        text2: getUserFacingError(error, 'Не удалось загрузить данные для фильтров.'),
         position: 'top',
         visibilityTime: 3000,
       });

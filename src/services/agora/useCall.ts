@@ -13,10 +13,11 @@ import {
 } from 'react-native-agora';
 import { messengerAPI } from '../api';
 import { CallStatus, CallData, CallState } from './types';
+import { getUserFacingError } from '../../utils/userFacingError';
 
 interface UseCallReturn extends CallState {
   initiateCall: (calleeId: number, calleeName: string, calleeAvatar?: string) => Promise<void>;
-  acceptCall: (callId: string) => Promise<void>;
+  acceptCall: (callId: string, participant?: CallData['participant']) => Promise<void>;
   rejectCall: (callId: string) => Promise<void>;
   endCall: () => Promise<void>;
   resetToIdle: () => void;
@@ -253,7 +254,7 @@ export const useCall = (): UseCallReturn => {
         setState((prev) => ({
           ...prev,
           status: 'error',
-          error: error.response?.data?.message ?? 'Не удалось инициировать звонок',
+          error: getUserFacingError(error, 'Не удалось инициировать звонок.'),
         }));
         scheduleIdleReset('error');
       }
@@ -264,7 +265,7 @@ export const useCall = (): UseCallReturn => {
   /**
    * Принятие входящего звонка
    */
-  const acceptCall = useCallback(async (callId: string) => {
+  const acceptCall = useCallback(async (callId: string, participant?: CallData['participant']) => {
     try {
       const hasPermission = await requestMicrophonePermission();
       if (!hasPermission) {
@@ -283,7 +284,17 @@ export const useCall = (): UseCallReturn => {
         status: 'active',
         callData: prev.callData
           ? { ...prev.callData, channelName: channel_name, token, uid }
-          : null,
+          : {
+              callId: String(callId),
+              channelName: channel_name,
+              token,
+              uid,
+              participant: participant ?? {
+                id: 0,
+                name: 'Неизвестный',
+              },
+              isIncoming: true,
+            },
       }));
 
       await joinChannel(agora_app_id, token, channel_name, uid);
@@ -293,7 +304,7 @@ export const useCall = (): UseCallReturn => {
       setState((prev) => ({
         ...prev,
         status: 'error',
-        error: error.response?.data?.message ?? 'Не удалось принять звонок',
+        error: getUserFacingError(error, 'Не удалось принять звонок.'),
       }));
       scheduleIdleReset('error');
     }

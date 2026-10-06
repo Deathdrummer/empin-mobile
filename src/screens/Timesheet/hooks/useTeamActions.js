@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Toast from 'react-native-toast-message';
 import { timesheetAPI } from '../../../services/api';
 import { refreshPermissions } from '../../../utils/permissions';
+import { getUserFacingError } from '../../../utils/userFacingError';
 
 export const useTeamActions = (loadDays, minIndex, maxIndex) => {
   const [staffModalVisible, setStaffModalVisible] = useState(false);
@@ -35,7 +36,7 @@ export const useTeamActions = (loadDays, minIndex, maxIndex) => {
       Toast.show({
         type: 'error',
         text1: 'Ошибка',
-        text2: error.message || 'Не удалось загрузить список сотрудников',
+        text2: getUserFacingError(error, 'Не удалось загрузить список сотрудников.'),
         position: 'top',
         visibilityTime: 3000,
       });
@@ -52,7 +53,7 @@ export const useTeamActions = (loadDays, minIndex, maxIndex) => {
         Toast.show({
           type: 'error',
           text1: 'Нет прав',
-          text2: error.response?.data?.error || 'У вас нет прав для добавления бригады',
+          text2: getUserFacingError(error, 'У вас нет прав для добавления бригады.'),
           position: 'top',
           visibilityTime: 3000,
         });

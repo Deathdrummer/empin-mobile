@@ -3,7 +3,6 @@ import { View, StyleSheet, FlatList, Dimensions, ActivityIndicator } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { DeviceMotion } from 'expo-sensors';
-import { timesheetAPI } from '../../services/api';
 import BottomMenu from '../../components/BottomMenu';
 import { DayCard } from './components/DayCard';
 import { StaffModal } from './components/modals/StaffModal';
@@ -26,6 +25,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function TimesheetScreenContent({ onLogout }) {
   const navigation = useNavigation();
+  const isPrependingRef = useRef(false);
 
   const {
     filters,
@@ -124,7 +124,6 @@ function TimesheetScreenContent({ onLogout }) {
   const scrollStartX = useRef(0);
   const isScrolling = useRef(false);
   const lastScrollTime = useRef(0);
-  const isPrependingRef = useRef(false);
   const { flatListRef, scrollEnabled } = useSwipeControl();
 
   // Синхронизируем ref из хука с ref из контекста
@@ -181,12 +180,7 @@ function TimesheetScreenContent({ onLogout }) {
 
   const confirmLogout = async () => {
     setLogoutModalVisible(false);
-    try {
-      await timesheetAPI.logout();
-      onLogout();
-    } catch (error) {
-      onLogout();
-    }
+    await onLogout();
   };
 
   const handleCalendarPress = () => {

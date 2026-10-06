@@ -5,9 +5,10 @@ import * as Updates from 'expo-updates';
 import { Platform } from 'react-native';
 import permissionsEmitter from '../utils/permissionsEmitter';
 import apiBlockEmitter from '../utils/apiBlockEmitter';
+import { getInstallationId } from './deviceInstallation';
 
-const API_BASE_URL = 'https://empin-pro.ru/api'; // Production
-// const API_BASE_URL = 'http://192.168.0.102/api'; // Local development
+const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://empin-pro.ru/api')
+  .replace(/\/$/, '');
 
 // URL сервера без /api для доступа к файлам
 export const SERVER_URL = API_BASE_URL.replace('/api', '');
@@ -504,8 +505,40 @@ export const messengerAPI = {
   },
 
   // Регистрация Expo Push Token
-  registerPushToken: async (token) => {
-    const response = await api.post('/messenger/calls/push-token', { token });
+  registerPushToken: async (token, platform = Platform.OS) => {
+    const installationId = await getInstallationId();
+    const response = await api.post('/messenger/calls/push-token', {
+      token,
+      platform,
+      token_type: 'expo',
+      installation_id: installationId,
+    });
+    return response.data;
+  },
+
+  unregisterPushToken: async (token) => {
+    const response = await api.delete('/messenger/calls/push-token', {
+      data: { token },
+    });
+    return response.data;
+  },
+
+  // Отдельный APNs VoIP token для PushKit/CallKit на iOS
+  registerVoipToken: async (token) => {
+    const installationId = await getInstallationId();
+    const response = await api.post('/messenger/calls/voip-token', {
+      token,
+      platform: 'ios',
+      token_type: 'voip',
+      installation_id: installationId,
+    });
+    return response.data;
+  },
+
+  unregisterVoipToken: async (token) => {
+    const response = await api.delete('/messenger/calls/voip-token', {
+      data: { token },
+    });
     return response.data;
   },
 

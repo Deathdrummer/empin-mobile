@@ -16,6 +16,7 @@ import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
+import { formatDateTime, formatEditTime } from '../../../utils/dateTime';
 
 // Маппинг эмоджи на иконки MaterialCommunityIcons
 const EMOJI_TO_ICON = {
@@ -32,54 +33,6 @@ const CONTEXT_MENU_HEIGHT = 240;
 const SCREEN_PADDING = 20;
 const EMOJI_OFFSET = 60;
 const MENU_OFFSET = 10;
-
-// Функция форматирования даты в формат "20:41 10.11.25"
-const formatDateTime = (dateString) => {
-  if (!dateString) return '';
-
-  const date = new Date(dateString);
-
-  if (isNaN(date.getTime())) {
-    return dateString;
-  }
-
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = String(date.getFullYear()).slice(-2);
-
-  return `${hours}:${minutes} ${day}.${month}.${year}`;
-};
-
-// Функция форматирования времени редактирования
-const formatEditTime = (createdAt, updatedAt) => {
-  if (!updatedAt) return '';
-
-  const updated = new Date(updatedAt);
-  if (isNaN(updated.getTime())) return '';
-
-  const hours = String(updated.getHours()).padStart(2, '0');
-  const minutes = String(updated.getMinutes()).padStart(2, '0');
-  const timeStr = `${hours}:${minutes}`;
-
-  if (createdAt) {
-    const created = new Date(createdAt);
-    if (!isNaN(created.getTime())) {
-      const createdDate = created.toDateString();
-      const updatedDate = updated.toDateString();
-
-      if (createdDate !== updatedDate) {
-        const day = String(updated.getDate()).padStart(2, '0');
-        const month = String(updated.getMonth() + 1).padStart(2, '0');
-        return `${timeStr} ${day}.${month}`;
-      }
-    }
-  }
-
-  return timeStr;
-};
 
 // Функция проверки, был ли комментарий отредактирован
 const isCommentEdited = (createdAt, updatedAt) => {

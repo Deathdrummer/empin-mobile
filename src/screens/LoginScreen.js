@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { authAPI } from '../services/api';
+import { getUserFacingError } from '../utils/userFacingError';
 
 export default function LoginScreen({ onLoginSuccess }) {
   const [email, setEmail] = useState('');
@@ -58,26 +59,9 @@ export default function LoginScreen({ onLoginSuccess }) {
       if (!emailError) setEmailError(true);
       if (!passwordError) setPasswordError(true);
 
-      // Определяем тип ошибки
-      let errorMessage = 'Неверный логин или пароль';
-
-      if (error.response) {
-        // Ошибка от сервера
-        if (error.response.status === 422) {
-          // Ошибка валидации
-          errorMessage = error.response.data?.message || 'Неверные данные для входа';
-        } else if (error.response.status === 401) {
-          errorMessage = 'Неверный логин или пароль';
-        } else {
-          errorMessage = error.response.data?.message || 'Ошибка сервера';
-        }
-      } else if (error.request) {
-        // Запрос был отправлен, но ответа не было
-        errorMessage = 'Нет связи с сервером';
-      } else {
-        // Ошибка при настройке запроса
-        errorMessage = error.message || 'Неизвестная ошибка';
-      }
+      const errorMessage = error.response?.status === 401
+        ? 'Неверный логин или пароль'
+        : getUserFacingError(error, 'Не удалось войти. Попробуйте ещё раз.');
 
       Toast.show({
         type: 'error',
