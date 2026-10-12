@@ -28,6 +28,22 @@ interface UseCallReturn extends CallState {
   clearRingingTimeout: () => void;
 }
 
+/**
+ * Сервер должен узнать о завершении звонка, иначе у собеседника продолжит звонить, а звонок останется
+ * незавершённым. Экран сети не ждёт: при сбое (нет связи, 5xx, 429) запрос повторяется в фоне.
+ */
+const notifyServer = (label: string, request: () => Promise<unknown>, attempt = 1): void => {
+  request().catch((error: any) => {
+    const status = error?.response?.status;
+    const retryable = !status || status >= 500 || status === 429;
+    if (retryable && attempt < 3) {
+      setTimeout(() => notifyServer(label, request, attempt + 1), attempt * 2000);
+      return;
+    }
+    console.warn(`[Agora] ${label}: сервер не получил запрос`, status ?? error?.message);
+  });
+};
+
 export const useCall = (): UseCallReturn => {
   const [state, setState] = useState<CallState>({
     status: 'idle',
@@ -42,6 +58,23 @@ export const useCall = (): UseCallReturn => {
   const ringingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const engineRef = useRef<IRtcEngine | null>(null);
   const eventHandlerRef = useRef<IRtcEngineEventHandler | null>(null);
+  // Звонок, к каналу которого подключён движок: о его внезапном обрыве нужно сообщить серверу
+  const callIdRef = useRef<string | null>(null);
+
+  const stopRingingTimeout = () => {
+    if (ringingTimeoutRef.current) {
+      clearTimeout(ringingTimeoutRef.current);
+      ringingTimeoutRef.current = null;
+    }
+  };
+
+  const finishCallOnServer = () => {
+    const callId = callIdRef.current;
+    callIdRef.current = null;
+    if (callId) {
+      notifyServer('Завершение звонка', () => messengerAPI.endCall(callId));
+    }
+  };
 
   // Таймер длительности звонка
   useEffect(() => {
@@ -180,6 +213,10 @@ export const useCall = (): UseCallReturn => {
           }
           return prev;
         });
+        // Если собеседник пропал без запроса end (обрыв сети), звонок на сервере остался бы активным.
+        // Если он завершил штатно, повторный end сервер игнорирует.
+        stopRingingTimeout();
+        finishCallOnServer();
         destroyEngine();
       },
 
@@ -193,6 +230,8 @@ export const useCall = (): UseCallReturn => {
             }
             return prev;
           });
+          stopRingingTimeout();
+          finishCallOnServer();
           destroyEngine();
         }
       },
@@ -227,6 +266,7 @@ export const useCall = (): UseCallReturn => {
           return;
         }
 
+        callIdRef.current = null;
         setState((prev) => ({ ...prev, status: 'initiating' }));
 
         const response = await messengerAPI.initiateCall(calleeId);
@@ -236,6 +276,7 @@ export const useCall = (): UseCallReturn => {
         }
 
         const { call_id, channel_name, token, uid, agora_app_id } = response;
+        callIdRef.current = String(call_id);
 
         const callData: CallData = {
           callId: String(call_id),
@@ -254,8 +295,10 @@ export const useCall = (): UseCallReturn => {
 
         await joinChannel(agora_app_id, token, channel_name, uid);
 
-        // Таймаут: страховка если call_cancelled FCM не пришёл
+        // Таймаут: страховка если call_cancelled FCM не пришёл.
+        // Сбрасывается при любом завершении звонка, поэтому срабатывает только для этого звонка.
         ringingTimeoutRef.current = setTimeout(() => {
+          ringingTimeoutRef.current = null;
           setState((prev) => {
             if (prev.status === 'ringing') {
               scheduleIdleReset('no_answer');
@@ -263,10 +306,15 @@ export const useCall = (): UseCallReturn => {
             }
             return prev;
           });
+          // Никто не ответил: сервер отменит звонок, и у собеседника он перестанет звонить
+          finishCallOnServer();
           destroyEngine();
         }, 90000); // Увеличен с 45s до 90s — WebSocket обычно уведомит раньше
       } catch (error: any) {
         console.error('[Agora] Ошибка инициации звонка:', error);
+        stopRingingTimeout();
+        // Звонок мог успеть создаться на сервере — отменяем, чтобы у собеседника не звонило
+        finishCallOnServer();
         destroyEngine();
         setState((prev) => ({
           ...prev,
@@ -293,8 +341,10 @@ export const useCall = (): UseCallReturn => {
         return false;
       }
 
+      callIdRef.current = null;
       const response = await messengerAPI.acceptCall(callId);
       const { channel_name, token, uid, agora_app_id } = response;
+      callIdRef.current = String(callId);
 
       setState((prev) => ({
         ...prev,
@@ -318,6 +368,8 @@ export const useCall = (): UseCallReturn => {
       return true;
     } catch (error: any) {
       console.error('[Agora] Ошибка принятия звонка:', error, '| response data:', (error as any).response?.data, '| callId was:', callId);
+      // Сервер уже отметил звонок принятым, а подключиться не удалось — завершаем его на сервере
+      finishCallOnServer();
       destroyEngine();
       setState((prev) => ({
         ...prev,
@@ -333,45 +385,45 @@ export const useCall = (): UseCallReturn => {
    * Отклонение звонка
    */
   const rejectCall = useCallback(async (callId: string) => {
-    try {
-      await messengerAPI.rejectCall(callId);
-      destroyEngine();
-      setState({
-        status: 'idle',
-        callData: null,
-        duration: 0,
-        isMuted: false,
-        isSpeakerOn: false,
-        error: null,
-      });
-    } catch (error: any) {
-      console.error('[Agora] Ошибка отклонения звонка:', error);
-    }
+    // Раньше при ошибке запроса (например, 429) состояние не сбрасывалось, а сервер не узнавал об отказе
+    notifyServer('Отклонение звонка', () => messengerAPI.rejectCall(callId));
+    callIdRef.current = null;
+    stopRingingTimeout();
+    destroyEngine();
+    setState({
+      status: 'idle',
+      callData: null,
+      duration: 0,
+      isMuted: false,
+      isSpeakerOn: false,
+      error: null,
+    });
   }, []);
 
   /**
    * Завершение звонка
    */
   const endCall = useCallback(async () => {
-    try {
-      if (state.callData?.callId) {
-        await messengerAPI.endCall(state.callData.callId);
-      }
-      destroyEngine();
-      setState({
-        status: 'ended',
-        callData: null,
-        duration: 0,
-        isMuted: false,
-        isSpeakerOn: false,
-        error: null,
-      });
-      setTimeout(() => {
-        setState((prev) => (prev.status === 'ended' ? { ...prev, status: 'idle' } : prev));
-      }, 2000);
-    } catch (error: any) {
-      console.error('[Agora] Ошибка завершения звонка:', error);
+    // Раньше при ошибке запроса (например, 429) звонок у собеседника продолжал звонить, а движок
+    // оставался в канале: звонящий нажимал вызов снова, и собеседнику приходил второй входящий
+    const callId = state.callData?.callId ?? callIdRef.current;
+    callIdRef.current = null;
+    if (callId) {
+      notifyServer('Завершение звонка', () => messengerAPI.endCall(callId));
     }
+    stopRingingTimeout();
+    destroyEngine();
+    setState({
+      status: 'ended',
+      callData: null,
+      duration: 0,
+      isMuted: false,
+      isSpeakerOn: false,
+      error: null,
+    });
+    setTimeout(() => {
+      setState((prev) => (prev.status === 'ended' ? { ...prev, status: 'idle' } : prev));
+    }, 2000);
   }, [state.callData]);
 
   /**
@@ -399,10 +451,9 @@ export const useCall = (): UseCallReturn => {
    * Используется когда внешнее событие (WebSocket) уже обработано бэкендом.
    */
   const resetToIdle = useCallback(() => {
-    if (ringingTimeoutRef.current) {
-      clearTimeout(ringingTimeoutRef.current);
-      ringingTimeoutRef.current = null;
-    }
+    // Вызывается, когда звонок завершён другой стороной — сервер уже знает
+    callIdRef.current = null;
+    stopRingingTimeout();
     destroyEngine();
     setState({
       status: 'idle',

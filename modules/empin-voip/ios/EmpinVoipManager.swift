@@ -20,6 +20,7 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
   private var callsByUUID: [UUID: CallRecord] = [:]
   private var timeoutTasks: [UUID: DispatchWorkItem] = [:]
   private var hasStarted = false
+  private let callObserver = CXCallObserver()
 
   public var voipToken: String? {
     UserDefaults.standard.string(forKey: Self.tokenStorageKey)
@@ -198,9 +199,6 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
       answered: false
     )
 
-    callsById[callId] = record
-    callsByUUID[callUUID] = record
-
     let update = CXCallUpdate()
     update.remoteHandle = CXHandle(type: .generic, value: callerId ?? callId)
     update.localizedCallerName = callerName
@@ -211,10 +209,27 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     update.supportsUngrouping = false
 
     guard let provider else {
-      cleanupCall(record)
       completion()
       return
     }
+
+    if hasLiveCall() {
+      // Приложение ведёт один звонок за раз. Второй входящий всё равно нужно показать CallKit
+      // (требование PushKit) — показываем, сразу завершаем, а JS сообщает серверу, что абонент занят.
+      provider.reportNewIncomingCall(with: callUUID, update: update) { [weak self] error in
+        if error == nil {
+          provider.reportCall(with: callUUID, endedAt: Date(), reason: .unanswered)
+        }
+        if let self, self.isEnabled {
+          self.enqueueEvent(type: "busy", record: record)
+        }
+        completion()
+      }
+      return
+    }
+
+    callsById[callId] = record
+    callsByUUID[callUUID] = record
 
     provider.reportNewIncomingCall(with: callUUID, update: update) { [weak self] error in
       defer { completion() }
@@ -285,6 +300,18 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     timeoutTasks.removeAll()
     callsById.removeAll()
     callsByUUID.removeAll()
+  }
+
+  /// Есть ли звонок, который CallKit ещё показывает. Записи о звонках, которых в CallKit уже нет
+  /// (например, завершённых системой), удаляются, чтобы не блокировать новые вызовы.
+  private func hasLiveCall() -> Bool {
+    let liveUUIDs = Set(callObserver.calls.filter { !$0.hasEnded }.map { $0.uuid })
+    // Только что сообщённый звонок может ещё не появиться в CallKit — свежие записи не трогаем
+    for record in Array(callsById.values)
+    where !liveUUIDs.contains(record.uuid) && Date().timeIntervalSince(record.reportedAt) > 10 {
+      cleanupCall(record)
+    }
+    return !callsById.isEmpty
   }
 
   /// VoIP-push без данных звонка всё равно нужно показать CallKit (требование PushKit) — показываем и сразу закрываем.
@@ -440,4 +467,5 @@ private struct CallRecord {
   let callerName: String
   let callerAvatar: String?
   var answered: Bool
+  let reportedAt = Date()
 }

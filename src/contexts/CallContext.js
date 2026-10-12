@@ -345,6 +345,14 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       // Не обрабатываем повторно
       if (handledCallIdRef.current === callId) return;
 
+      // Уже идёт другой звонок: приложение ведёт один звонок за раз — отвечаем «занято»,
+      // иначе новый звонок затёр бы экран текущего
+      const currentStatus = callStateRef.current?.status;
+      if (currentStatus === 'initiating' || currentStatus === 'ringing' || currentStatus === 'active') {
+        messengerAPI.rejectCall(callId).catch(() => {});
+        return;
+      }
+
       handledCallIdRef.current = callId;
 
       const callData = {
@@ -444,6 +452,13 @@ export const CallProvider = ({ children, isLoggedIn }) => {
 
       const callData = getCallDataFromVoipEvent(event);
       const participant = getCallParticipant(callData);
+
+      if (event.type === 'busy') {
+        // Второй входящий во время другого звонка: CallKit его уже закрыл, сообщаем серверу отказ.
+        // Текущий звонок и экран не трогаем.
+        messengerAPI.rejectCall(callData.callId).catch(() => {});
+        return;
+      }
 
       if (event.type === 'incoming') {
         iosSystemCallIdRef.current = callData.callId;
