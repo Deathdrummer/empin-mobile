@@ -117,7 +117,8 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
       return false
     }
 
-    enqueueEvent(type: record.answered ? "end" : "reject", record: record)
+    // Сервер уже знает о завершении: JS только сбрасывает экран и выходит из канала
+    enqueueEvent(type: "remoteEnded", record: record)
     provider?.reportCall(with: record.uuid, endedAt: Date(), reason: .remoteEnded)
     cleanupCall(record)
     return true
@@ -167,12 +168,20 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
 
     let data = payload.dictionaryPayload
     guard let callId = stringValue(data["call_id"]), !callId.isEmpty else {
-      completion()
+      reportAndEndInvalidCall(completion: completion)
       return
     }
 
-    if callsById[callId] != nil {
-      completion()
+    if let existing = callsById[callId] {
+      // Повтор push того же звонка. PushKit требует сообщать в CallKit о каждом VoIP-push,
+      // иначе iOS завершит приложение; CallKit ответит callUUIDAlreadyExists, звонок не изменится.
+      guard let provider else {
+        completion()
+        return
+      }
+      provider.reportNewIncomingCall(with: existing.uuid, update: CXCallUpdate()) { _ in
+        completion()
+      }
       return
     }
 
@@ -256,7 +265,8 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
   }
 
   public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
-    var options: AVAudioSession.CategoryOptions = [.defaultToSpeaker]
+    // Голосовой звонок начинается в слуховом динамике, громкую связь включает пользователь
+    var options: AVAudioSession.CategoryOptions = []
     #if compiler(>=6.2)
     options.insert(.allowBluetoothHFP)
     #else
@@ -275,6 +285,24 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     timeoutTasks.removeAll()
     callsById.removeAll()
     callsByUUID.removeAll()
+  }
+
+  /// VoIP-push без данных звонка всё равно нужно показать CallKit (требование PushKit) — показываем и сразу закрываем.
+  private func reportAndEndInvalidCall(completion: @escaping () -> Void) {
+    guard let provider else {
+      completion()
+      return
+    }
+
+    let uuid = UUID()
+    let update = CXCallUpdate()
+    update.localizedCallerName = "ЭМПИН"
+    provider.reportNewIncomingCall(with: uuid, update: update) { error in
+      if error == nil {
+        provider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
+      }
+      completion()
+    }
   }
 
   private func scheduleTimeout(for record: CallRecord) {

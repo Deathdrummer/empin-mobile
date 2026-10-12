@@ -2,8 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, Platform } from 'react-native';
-import { useAudioPlayer } from 'expo-audio';
+import { requestRecordingPermissionsAsync, useAudioPlayer } from 'expo-audio';
 import { useCall } from '../services/agora/useCall';
+import { messengerAPI } from '../services/api';
 import { subscribeToCalls, unsubscribeFromCalls } from '../services/pusher';
 import {
   endIosSystemCall,
@@ -81,6 +82,8 @@ export const CallProvider = ({ children, isLoggedIn }) => {
   // Флаг: пользователь уже принял звонок — предотвращает race condition
   // между answer event и 30s native timeout → endCall event
   const isAnsweringRef = useRef(false);
+  // Звонок, показанный через CallKit: его нужно закрыть, если звонок оборвётся в приложении
+  const iosSystemCallIdRef = useRef(null);
 
   const [currentUserStaffId, setCurrentUserStaffId] = useState(null);
 
@@ -443,6 +446,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       const participant = getCallParticipant(callData);
 
       if (event.type === 'incoming') {
+        iosSystemCallIdRef.current = callData.callId;
         handledCallIdRef.current = callData.callId;
         incomingCallDataRef.current = callData;
         setIncomingCallData(callData);
@@ -452,15 +456,30 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       }
 
       if (event.type === 'answer') {
+        iosSystemCallIdRef.current = callData.callId;
         handledCallIdRef.current = callData.callId;
         incomingCallDataRef.current = callData;
         setIncomingCallData(callData);
         setCallModalVisible(true);
-        await callStateRef.current?.acceptCall(callData.callId, participant);
+        const accepted = await callStateRef.current?.acceptCall(callData.callId, participant);
+        if (!accepted) {
+          // Звонящий успел отменить, нет сети или доступа к микрофону — убираем «идущий» системный звонок
+          iosSystemCallIdRef.current = null;
+          await endIosSystemCall(callData.callId, 'failed');
+        }
         return;
       }
 
-      if (event.type === 'end' && callStateRef.current?.status === 'active') {
+      iosSystemCallIdRef.current = null;
+
+      if (event.type === 'remoteEnded') {
+        // Сервер уже знает о завершении — только сбрасываем экран
+        callStateRef.current?.resetToIdle?.();
+      } else if (event.type === 'timeout') {
+        // Не ответили: на сервере звонок станет пропущенным, а не отклонённым
+        await messengerAPI.endCall(callData.callId).catch(() => {});
+        callStateRef.current?.resetToIdle?.();
+      } else if (event.type === 'end' && callStateRef.current?.status === 'active') {
         await callStateRef.current?.endCall();
       } else {
         await callStateRef.current?.rejectCall(callData.callId);
@@ -473,6 +492,9 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       setCallEndReason(event.type === 'timeout' ? 'ended' : 'rejected');
       setTimeout(() => setCallEndReason(null), 2000);
     };
+
+    // Разрешение на микрофон спрашиваем заранее: при ответе с заблокированного экрана iOS не покажет запрос
+    requestRecordingPermissionsAsync().catch(() => {});
 
     startIosVoip(handleVoipCallEvent)
       .then((cleanup) => {
@@ -600,6 +622,19 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       if (callTimeoutId) clearTimeout(callTimeoutId);
     };
   }, [callTimeoutId]);
+
+  // Звонок оборвался в приложении (собеседник пропал из канала, ошибка соединения) —
+  // системный экран CallKit не должен оставаться «идущим»
+  useEffect(() => {
+    const isTerminal = callState.status === 'ended'
+      || callState.status === 'no_answer'
+      || callState.status === 'error';
+
+    if (isTerminal && iosSystemCallIdRef.current) {
+      endIosSystemCall(iosSystemCallIdRef.current, callState.status === 'error' ? 'failed' : 'remoteEnded');
+      iosSystemCallIdRef.current = null;
+    }
+  }, [callState.status]);
 
   // Закрытие модала при завершении звонка
   useEffect(() => {

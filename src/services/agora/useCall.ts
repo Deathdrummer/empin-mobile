@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { PermissionsAndroid, Platform, Alert } from 'react-native';
+import { AppState, PermissionsAndroid, Platform, Alert } from 'react-native';
+import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from 'expo-audio';
 import {
   createAgoraRtcEngine,
   IRtcEngine,
@@ -17,7 +18,8 @@ import { getUserFacingError } from '../../utils/userFacingError';
 
 interface UseCallReturn extends CallState {
   initiateCall: (calleeId: number, calleeName: string, calleeAvatar?: string) => Promise<void>;
-  acceptCall: (callId: string, participant?: CallData['participant']) => Promise<void>;
+  /** true — звонок принят и подключение к каналу запущено */
+  acceptCall: (callId: string, participant?: CallData['participant']) => Promise<boolean>;
   rejectCall: (callId: string) => Promise<void>;
   endCall: () => Promise<void>;
   resetToIdle: () => void;
@@ -106,6 +108,21 @@ export const useCall = (): UseCallReturn => {
         return false;
       }
     }
+
+    if (Platform.OS === 'ios') {
+      try {
+        const current = await getRecordingPermissionsAsync();
+        if (current.granted) return true;
+        if (!current.canAskAgain) return false;
+        // Из фона (ответ через CallKit на заблокированном экране) системный запрос не покажется.
+        // Разрешение запрашивается заранее после входа, здесь не блокируем звонок.
+        if (AppState.currentState !== 'active') return true;
+        return (await requestRecordingPermissionsAsync()).granted;
+      } catch {
+        return true;
+      }
+    }
+
     return true;
   };
 
@@ -273,7 +290,7 @@ export const useCall = (): UseCallReturn => {
           'Нет доступа к микрофону',
           'Разрешите доступ к микрофону в настройках устройства'
         );
-        return;
+        return false;
       }
 
       const response = await messengerAPI.acceptCall(callId);
@@ -298,6 +315,7 @@ export const useCall = (): UseCallReturn => {
       }));
 
       await joinChannel(agora_app_id, token, channel_name, uid);
+      return true;
     } catch (error: any) {
       console.error('[Agora] Ошибка принятия звонка:', error, '| response data:', (error as any).response?.data, '| callId was:', callId);
       destroyEngine();
@@ -307,6 +325,7 @@ export const useCall = (): UseCallReturn => {
         error: getUserFacingError(error, 'Не удалось принять звонок.'),
       }));
       scheduleIdleReset('error');
+      return false;
     }
   }, []);
 

@@ -6,7 +6,7 @@ export type VoipTokenEvent = {
 
 export type VoipCallEvent = {
   eventId: string;
-  type: 'incoming' | 'answer' | 'reject' | 'end' | 'timeout';
+  type: 'incoming' | 'answer' | 'reject' | 'end' | 'timeout' | 'remoteEnded';
   callId: string;
   callUUID: string;
   callerId?: string;

@@ -25,9 +25,12 @@ export default function LoginScreen({ onLoginSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
+    // Пробелы по краям адреса — частый след автоподстановки; пароль не трогаем: пробел может быть его частью
+    const trimmedEmail = email.trim();
+
     // Валидация полей
-    if (!email || !password) {
-      if (!email) setEmailError(true);
+    if (!trimmedEmail || !password) {
+      if (!trimmedEmail) setEmailError(true);
       if (!password) setPasswordError(true);
 
       Toast.show({
@@ -42,7 +45,7 @@ export default function LoginScreen({ onLoginSuccess }) {
 
     setLoading(true);
     try {
-      const data = await authAPI.login(email, password);
+      const data = await authAPI.login(trimmedEmail, password);
 
       // Проверяем, что токен действительно сохранен
       if (data.token) {
@@ -100,7 +103,10 @@ export default function LoginScreen({ onLoginSuccess }) {
               setEmailError(false);
             }}
             autoCapitalize="none"
+            autoCorrect={false}
+            spellCheck={false}
             keyboardType="email-address"
+            textContentType="username"
             editable={!loading}
           />
 
@@ -119,6 +125,10 @@ export default function LoginScreen({ onLoginSuccess }) {
                 setPasswordError(false);
               }}
               secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              textContentType="password"
               editable={!loading}
             />
             <TouchableOpacity

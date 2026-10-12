@@ -19,7 +19,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Разрешите доступ к камере для съемки фото и видео в комментариях",
         "NSPhotoLibraryUsageDescription": "Разрешите доступ к галерее для выбора фото и видео в комментариях",
-        "NSMicrophoneUsageDescription": "Разрешите доступ к микрофону для записи видео с камеры и голосового ввода комментариев",
+        "NSMicrophoneUsageDescription": "Разрешите доступ к микрофону для голосовых звонков, записи видео с камеры и голосового ввода комментариев",
         "NSSpeechRecognitionUsageDescription": "Разрешите доступ к распознаванию речи для голосового ввода комментариев",
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
