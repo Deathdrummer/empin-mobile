@@ -3,7 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import Slider from '@react-native-community/slider';
+import Toast from 'react-native-toast-message';
 import { useAudioPlayerContext } from '../../../contexts/AudioPlayerContext';
+import { isCallAudioActive } from '../../../services/callAudioState';
 
 // Форматирование времени в формат mm:ss
 const formatTime = (seconds) => {
@@ -42,11 +44,20 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
 
   // КРИТИЧНО: expo-audio выгружает файл сразу после загрузки
   // Поэтому запускаем воспроизведение сразу, чтобы файл не выгрузился
+  // Во время звонка не трогаем: pause() на iOS выключает аудиосессию вместе со звуком разговора,
+  // а play() при занятой CallKit сессии бросает исключение
   React.useEffect(() => {
-    player.play();
+    if (isCallAudioActive()) return undefined;
+    try {
+      player.play();
+    } catch {
+      return undefined;
+    }
     // Через 100ms ставим на паузу (файл останется загруженным)
     const timer = setTimeout(() => {
-      player.pause();
+      try {
+        player.pause();
+      } catch {}
     }, 100);
     return () => clearTimeout(timer);
   }, [player]);
@@ -70,9 +81,23 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
     if (status.playing) {
       player.pause();
     } else {
+      if (isCallAudioActive()) {
+        Toast.show({
+          type: 'info',
+          text1: 'Идёт звонок',
+          text2: 'Голосовое сообщение можно прослушать после звонка',
+          position: 'top',
+          visibilityTime: 2500,
+        });
+        return;
+      }
       // Перед началом воспроизведения регистрируем плеер (остановит остальные)
       registerPlayer(player, audioUri);
-      player.play();
+      try {
+        player.play();
+      } catch (error) {
+        console.warn('[AudioPlayer] Не удалось воспроизвести:', error?.message ?? error);
+      }
     }
   };
 

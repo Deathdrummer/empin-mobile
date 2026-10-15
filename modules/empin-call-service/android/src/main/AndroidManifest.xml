@@ -1,0 +1,13 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+
+  <application>
+    <!-- Держит доступ к микрофону, пока идёт звонок: с Android 11 без службы переднего плана
+         свёрнутое приложение теряет микрофон, и собеседник перестаёт слышать -->
+    <service
+      android:name="expo.modules.empincallservice.CallForegroundService"
+      android:exported="false"
+      android:foregroundServiceType="microphone" />
+  </application>
+</manifest>

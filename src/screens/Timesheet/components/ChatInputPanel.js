@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, StatusBar, ActivityIndicator } from 'react-native';
 import Toast from 'react-native-toast-message';
+import { isCallAudioActive } from '../../../services/callAudioState';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -330,6 +331,18 @@ export const ChatInputPanel = ({
     try {
       // Проверяем, что запись не идёт
       if (audioRecorder.isRecording) {
+        return;
+      }
+
+      // Запись перенастраивает аудиосессию и отняла бы микрофон у разговора
+      if (isCallAudioActive()) {
+        Toast.show({
+          type: 'info',
+          text1: 'Идёт звонок',
+          text2: 'Голосовое сообщение можно записать после звонка',
+          position: 'top',
+          visibilityTime: 2500,
+        });
         return;
       }
 

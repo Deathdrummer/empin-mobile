@@ -14,6 +14,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import Toast from 'react-native-toast-message';
+import { isCallAudioActive } from '../../../services/callAudioState';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Can } from '../../../components/Can';
@@ -541,6 +542,18 @@ export const ChatSection = ({
     try {
       // Проверяем, что запись не идёт
       if (audioRecorder.isRecording) {
+        return;
+      }
+
+      // Запись перенастраивает аудиосессию и отняла бы микрофон у разговора
+      if (isCallAudioActive()) {
+        Toast.show({
+          type: 'info',
+          text1: 'Идёт звонок',
+          text2: 'Голосовое сообщение можно записать после звонка',
+          position: 'top',
+          visibilityTime: 2500,
+        });
         return;
       }
 

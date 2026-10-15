@@ -5,6 +5,8 @@ import { AppState, Platform } from 'react-native';
 import { requestRecordingPermissionsAsync, useAudioPlayer } from 'expo-audio';
 import { useCall } from '../services/agora/useCall';
 import { messengerAPI } from '../services/api';
+import { setCallAudioActive } from '../services/callAudioState';
+import EmpinCallService from '../../modules/empin-call-service';
 import { subscribeToCalls, unsubscribeFromCalls } from '../services/pusher';
 import {
   endIosSystemCall,
@@ -203,10 +205,18 @@ export const CallProvider = ({ children, isLoggedIn }) => {
   }, [isLoggedIn]);
 
   // Рингтон (foreground)
-  const ringtonePlayer = useAudioPlayer(require('../../assets/ringtone.mp3'));
+  // keepAudioSessionActive: на iOS pause() в expo-audio иначе через 0.1 с делает
+  // AVAudioSession.setActive(false) — это общая сессия приложения, и вместе с ней пропадал
+  // звук разговора Agora (а в фоне iOS усыплял приложение, и звонок обрывался)
+  const ringtonePlayer = useAudioPlayer(require('../../assets/ringtone.mp3'), {
+    keepAudioSessionActive: true,
+  });
 
   const stopRingtone = useCallback(() => {
     try {
+      // Останавливаем только реально играющий рингтон: stopRingtone вызывается при каждой смене
+      // статуса звонка, в том числе во время разговора
+      if (!ringtonePlayer.playing) return;
       ringtonePlayer.loop = false;
       ringtonePlayer.pause();
       ringtonePlayer.seekTo(0);
@@ -240,6 +250,38 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       stopRingtone();
     }
   }, [callModalVisible, incomingCallData, callState.status]);
+
+  // Пока идёт звонок, другие звуки приложения не трогают аудиосессию (см. callAudioState)
+  useEffect(() => {
+    setCallAudioActive(
+      callState.status === 'initiating'
+        || callState.status === 'ringing'
+        || callState.status === 'active'
+        || incomingCallData !== null
+    );
+  }, [callState.status, incomingCallData]);
+
+  // Android: служба переднего плана на время звонка. С Android 11 без неё свёрнутое приложение
+  // или заблокированный экран теряют микрофон — собеседник перестаёт слышать.
+  const callServiceStartedRef = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !EmpinCallService) return;
+
+    const inCall = callState.status === 'initiating'
+      || callState.status === 'ringing'
+      || callState.status === 'active';
+
+    try {
+      if (inCall && !callServiceStartedRef.current) {
+        callServiceStartedRef.current = EmpinCallService.start('Звонок ЭМПИН');
+      } else if (!inCall && callServiceStartedRef.current) {
+        EmpinCallService.stop();
+        callServiceStartedRef.current = false;
+      }
+    } catch (error) {
+      console.warn('[Call] Служба звонка:', error?.message ?? error);
+    }
+  }, [callState.status]);
 
   // Cleanup рингтона при unmount
   useEffect(() => {
