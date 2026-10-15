@@ -217,7 +217,12 @@ export const CallProvider = ({ children, isLoggedIn }) => {
    * Воспроизведение рингтона при входящем звонке в foreground
    */
   useEffect(() => {
+    // Звонок через CallKit звонит системным рингтоном. Кроме того, после ответа CallKit забирает
+    // аудиосессию: play() в expo-audio тогда бросает исключение, и необработанная ошибка в эффекте
+    // роняла приложение на iPhone (журналы TestFlight 15.10, сборка 7).
+    const isSystemCall = Platform.OS === 'ios' && iosSystemCallIdRef.current !== null;
     const isIncomingRinging =
+      !isSystemCall &&
       callModalVisible &&
       incomingCallData !== null &&
       callState.status !== 'active' &&
@@ -225,8 +230,12 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       callState.status !== 'error';
 
     if (isIncomingRinging) {
-      ringtonePlayer.loop = true;
-      ringtonePlayer.play();
+      try {
+        ringtonePlayer.loop = true;
+        ringtonePlayer.play();
+      } catch (error) {
+        console.warn('[Call] Не удалось включить рингтон:', error?.message ?? error);
+      }
     } else {
       stopRingtone();
     }
