@@ -1,7 +1,6 @@
 /**
- * @deprecated для Messenger/ChatScreen
- * Для мессенджера используйте ChatMessageList + ChatInputPanel
- * Этот компонент используется только в Timesheet (ContractCard)
+ * Комментарии к объекту в табеле (ContractCard): пузыри, ответы и реакции в стиле мессенджера.
+ * Чаты мессенджера — в src/components/chat.
  */
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions, StatusBar } from 'react-native';
@@ -15,7 +14,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import Toast from 'react-native-toast-message';
 import { isCallAudioActive } from '../../../services/callAudioState';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Can } from '../../../components/Can';
 import { usePermissions } from '../../../hooks/usePermissions';
@@ -29,15 +28,7 @@ import { SwipeBlocker } from '../../../components/SwipeBlocker';
 import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } from 'expo-audio';
 import { isPermissionError, showPermissionSettingsAlert } from '../../../utils/permissionSettingsAlert';
 import { formatDateTime, formatEditTime } from '../../../utils/dateTime';
-
-// Маппинг эмоджи на иконки MaterialCommunityIcons
-const EMOJI_TO_ICON = {
-  '👍': { icon: 'thumb-up', color: '#757575' },
-  '👎': { icon: 'thumb-down', color: '#757575' },
-  '❤️': { icon: 'heart', color: '#757575' },
-  '🔥': { icon: 'fire', color: '#757575' },
-  '👀': { icon: 'eye', color: '#757575' },
-};
+import { useTheme, useThemedStyles } from '../../../theme';
 
 // Константы для расчета позиции меню
 const EMOJI_PICKER_HEIGHT = 60; // Высота блока реакций
@@ -161,6 +152,8 @@ export const ChatSection = ({
   onToggleReaction,
   onCancelReply,
 }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [lastTap, setLastTap] = React.useState(null);
   const [isFocused, setIsFocused] = React.useState(false);
   const [menuVisible, setMenuVisible] = React.useState(false);
@@ -749,34 +742,24 @@ export const ChatSection = ({
             <View key={comment.id} style={styles.commentWrapper}>
               {deletingComment === comment.id && (
                 <View style={styles.loadingOverlay}>
-                  <ActivityIndicator size="small" color="#999999" />
+                  <ActivityIndicator size="small" color={theme.accent} />
                 </View>
               )}
               <TouchableOpacity
                 style={[
                   styles.chatMessage,
                   comment.self && styles.chatMessageSelf,
+                  comment.media && comment.media.length > 0 && styles.chatMessageWide,
                 ]}
                 onPress={() => handleDoubleTap(comment)}
                 onLongPress={(event) => handleCommentLongPress(comment, event)}
                 activeOpacity={0.7}
               >
-                {/* Хвостик */}
-                <View style={[
-                  styles.chatTail,
-                  comment.self && styles.chatTailSelf
-                ]} />
-                <View style={styles.chatHeader}>
-                  <View style={styles.chatHeaderLeft}>
-                    <Text style={styles.chatAuthor}>
-                      {formatShortName(comment.from)}
-                    </Text>
-                    <Text style={styles.chatDateTime}>{formatDateTime(comment.created_at)}</Text>
-                  </View>
-                  {isCommentEdited(comment.created_at, comment.updated_at) && (
-                    <Text style={styles.chatEdited}>изменено {formatEditTime(comment.created_at, comment.updated_at)}</Text>
-                  )}
-                </View>
+                {!comment.self && (
+                  <Text style={styles.chatAuthor} numberOfLines={1}>
+                    {formatShortName(comment.from)}
+                  </Text>
+                )}
                 {comment.reply_to_id && (() => {
                   const parentComment = findParentComment(comment.reply_to_id);
                   if (!parentComment) return null;
@@ -791,9 +774,11 @@ export const ChatSection = ({
                       styles.replyQuote,
                       comment.self && styles.replyQuoteSelf
                     ]}>
-                      <Text style={styles.replyQuoteText} numberOfLines={2}>
-                        <Text style={styles.replyQuoteAuthor}>{formatShortName(parentComment.from)}</Text>
-                        {hasText ? `: ${parentComment.message}` : ': [медиа]'}
+                      <Text style={[styles.replyQuoteAuthor, comment.self && styles.replyQuoteAuthorSelf]} numberOfLines={1}>
+                        {formatShortName(parentComment.from)}
+                      </Text>
+                      <Text style={[styles.replyQuoteText, comment.self && styles.replyQuoteTextSelf]} numberOfLines={1}>
+                        {hasText ? parentComment.message : 'Вложение'}
                       </Text>
                     </View>
                   );
@@ -847,13 +832,10 @@ export const ChatSection = ({
                     </>
                   );
                 })()}
-                {comment.reactions && comment.reactions.length > 0 && (
-                  <View style={styles.reactionsContainer}>
-                    {groupReactions(comment.reactions, currentUserId).map((reaction) => {
-                      const iconData = EMOJI_TO_ICON[reaction.emoji];
-                      if (!iconData) return null;
-
-                      return (
+                <View style={styles.chatFooter}>
+                  {comment.reactions && comment.reactions.length > 0 && (
+                    <View style={styles.reactionsContainer}>
+                      {groupReactions(comment.reactions, currentUserId).map((reaction) => (
                         <TouchableOpacity
                           key={reaction.emoji}
                           style={[
@@ -863,20 +845,22 @@ export const ChatSection = ({
                           onPress={() => onToggleReaction(comment.id, reaction.emoji, reaction.hasCurrentUserReacted)}
                           activeOpacity={0.6}
                         >
-                          <MaterialCommunityIcons
-                            name={iconData.icon}
-                            size={14}
-                            color={reaction.hasCurrentUserReacted ? '#4A90E2' : iconData.color}
-                          />
+                          <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
                           <Text style={[
                             styles.reactionCount,
                             reaction.hasCurrentUserReacted && styles.reactionCountActive
                           ]}>{reaction.count}</Text>
                         </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
+                      ))}
+                    </View>
+                  )}
+                  <Text style={[styles.chatMeta, comment.self && styles.chatMetaSelf]}>
+                    {isCommentEdited(comment.created_at, comment.updated_at)
+                      ? `изм. ${formatEditTime(comment.created_at, comment.updated_at)} · `
+                      : ''}
+                    {formatDateTime(comment.created_at)}
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
         ))}
@@ -884,17 +868,24 @@ export const ChatSection = ({
       <Can permission="mobile-app-can-create-comment:site">
         {replyingToComment && (
           <View style={styles.replyBanner}>
+            <Ionicons name="arrow-undo" size={18} color={theme.accent} />
             <View style={styles.replyBannerContent}>
-              <Text style={styles.replyBannerTitle}>Ответ на комментарий:</Text>
+              <Text style={styles.replyBannerTitle} numberOfLines={1}>
+                Ответ: {formatShortName(replyingToComment.from)}
+              </Text>
               <Text style={styles.replyBannerText} numberOfLines={1}>
-                {formatShortName(replyingToComment.from)}
                 {replyingToComment.message && replyingToComment.message.trim()
-                  ? `: ${replyingToComment.message}`
-                  : ': [медиа]'}
+                  ? replyingToComment.message
+                  : 'Вложение'}
               </Text>
             </View>
-            <TouchableOpacity onPress={onCancelReply} style={styles.replyBannerClose}>
-              <Text style={styles.replyBannerCloseText}>✕</Text>
+            <TouchableOpacity
+              onPress={onCancelReply}
+              style={styles.replyBannerClose}
+              hitSlop={8}
+              accessibilityLabel="Отменить ответ"
+            >
+              <Ionicons name="close" size={20} color={theme.textMuted} />
             </TouchableOpacity>
           </View>
         )}
@@ -967,11 +958,12 @@ export const ChatSection = ({
               style={styles.chatAttachButton}
               onPress={showMediaOptions}
               activeOpacity={0.7}
+              accessibilityLabel="Прикрепить файл"
             >
-              <MaterialCommunityIcons
-                name="paperclip"
-                size={22}
-                color="#999999"
+              <Ionicons
+                name="attach"
+                size={26}
+                color={theme.textSecondary}
               />
             </TouchableOpacity>
           )}
@@ -986,7 +978,7 @@ export const ChatSection = ({
             placeholder={isRecording
               ? `Запись... ${Math.floor(recordingDuration / 60)}:${String(recordingDuration % 60).padStart(2, '0')}`
               : replyingToComment ? "Ваш ответ..." : "Ваш комментарий..."}
-            placeholderTextColor={isRecording ? "#f00" : "#999"}
+            placeholderTextColor={isRecording ? theme.danger : theme.textMuted}
             value={commentText}
             onChangeText={(text) => {
               onCommentChange(text);
@@ -1001,23 +993,25 @@ export const ChatSection = ({
           />
           {commentText.trim() || selectedMediaArray.length > 0 ? (
             <TouchableOpacity
-              style={styles.chatSendButton}
+              style={[styles.chatSendButton, styles.chatSendButtonActive]}
               onPress={handleSendComment}
               activeOpacity={0.7}
+              accessibilityLabel="Отправить"
             >
-              <Text style={styles.chatSendButtonIcon}>➤</Text>
+              <Ionicons name="arrow-up" size={22} color={theme.onAccent} />
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={styles.chatSendButton}
+              style={[styles.chatSendButton, isRecording && styles.chatSendButtonActive]}
               onPressIn={handleStartRecording}
               onPressOut={handleStopRecording}
               activeOpacity={0.7}
+              accessibilityLabel="Удерживайте, чтобы записать голосовое"
             >
-              <MaterialCommunityIcons
-                name={isRecording ? "microphone" : "microphone-outline"}
-                size={22}
-                color={isRecording ? "#E53935" : "#999999"}
+              <Ionicons
+                name={isRecording ? 'mic' : 'mic-outline'}
+                size={24}
+                color={isRecording ? theme.onAccent : theme.textSecondary}
               />
             </TouchableOpacity>
           )}
@@ -1056,9 +1050,12 @@ export const ChatSection = ({
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (theme) => StyleSheet.create({
   chatContainer: {
-    marginTop: 15,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.separator,
   },
   commentWrapper: {
     position: 'relative',
@@ -1071,227 +1068,205 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 4,
+    backgroundColor: theme.veil,
+    borderRadius: 16,
     zIndex: 10,
   },
   chatMessage: {
-    marginBottom: 8,
-    marginLeft: 8,
-	width: '90%',
-	alignSelf: 'flex-start',
-	backgroundColor: '#F0F3F7',
-	borderRadius: 8,
-	paddingVertical: 6,
+    marginBottom: 6,
+    maxWidth: '88%',
+    alignSelf: 'flex-start',
+    backgroundColor: theme.surfaceAlt,
+    borderRadius: 16,
+    borderBottomLeftRadius: 6,
+    paddingTop: 6,
+    paddingBottom: 5,
     paddingHorizontal: 10,
-	position: 'relative',
   },
   chatMessageSelf: {
-    alignItems: 'flex-start',
-	alignSelf: 'flex-end',
-	marginLeft: 0,
-	marginRight: 8,
-	backgroundColor: '#E5E9F0', // мой коммент
+    alignSelf: 'flex-end',
+    backgroundColor: theme.bubbleOut,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 6,
   },
-  chatTail: {
-    position: 'absolute',
-    left: -6,
-    bottom: 0,
-    width: 0,
-    height: 0,
-    borderTopWidth: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 12,
-    borderLeftWidth: 12,
-    borderTopColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: '#F0F3F7',
-    borderLeftColor: 'transparent',
-  },
-  chatTailSelf: {
-    left: 'auto',
-    right: -6,
-    borderRightWidth: 12,
-    borderLeftWidth: 0,
-	borderBottomColor: '#E5E9F0', // мой коммент
-  },
-  chatHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: 0,
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  chatHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 6,
+  // Сетка фото и плееры занимают ширину пузыря в процентах — ему нужна явная ширина
+  chatMessageWide: {
+    width: '88%',
   },
   chatAuthor: {
-    fontSize: 12,
-    fontWeight: '300',
-    color: '#888',
-  },
-  chatDateTime: {
-    fontSize: 10,
-	lineHeight: 10,
-    color: '#aaa',
-	position: 'relative',
-	top: -2
-  },
-  chatEdited: {
-    fontSize: 10,
-    lineHeight: 10,
-    color: '#999',
-    fontStyle: 'italic',
-    position: 'relative',
-    top: -4
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.accentText,
+    marginBottom: 2,
   },
   chatText: {
-    fontSize: 13,
-    color: '#555',
+    fontSize: 15,
+    lineHeight: 20,
+    color: theme.text,
   },
   chatTextSelf: {
     textAlign: 'left',
+    color: theme.bubbleOutText,
+  },
+  chatFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    marginTop: 3,
+  },
+  chatMeta: {
+    marginLeft: 'auto',
+    paddingLeft: 8,
+    fontSize: 11,
+    color: theme.textSecondary,
+    fontVariant: ['tabular-nums'],
+  },
+  chatMetaSelf: {
+    color: theme.bubbleOutMeta,
   },
   chatInputWrapper: {
-    position: 'relative',
-    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+    marginTop: 8,
   },
   chatTextInput: {
-    width: '100%',
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 10,
-    paddingLeft: 45,
-    paddingRight: 45,
-    fontSize: 14,
+    flex: 1,
     minHeight: 40,
-    backgroundColor: '#fff',
+    maxHeight: 120,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingTop: 9,
+    paddingBottom: 9,
+    fontSize: 15,
+    color: theme.text,
+    backgroundColor: theme.inputBackground,
   },
   chatTextInputFocused: {
-    borderColor: '#999999',
+    borderColor: theme.separator,
   },
   chatTextInputError: {
-    borderColor: '#FF4444',
+    borderColor: theme.danger,
   },
   chatTextInputRecording: {
-    backgroundColor: '#fcc',
-    borderColor: '#E53935',
-    paddingLeft: 10,
+    backgroundColor: theme.accentSoft,
+    borderColor: theme.accent,
   },
   chatSendButton: {
-    position: 'absolute',
-    right: 5,
-    bottom: 5,
-    width: 30,
-    height: 30,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  chatSendButtonIcon: {
-    color: '#999999',
-    fontSize: 20,
-    marginTop: -3
-  },
-  chatSendButtonIconDisabled: {
-    color: '#D0D0D0',
+  chatSendButtonActive: {
+    backgroundColor: theme.accent,
   },
   chatAttachButton: {
-    position: 'absolute',
-    left: 5,
-    bottom: 7,
-    width: 30,
-    height: 30,
+    width: 34,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: theme.overlay,
   },
   menuContainer: {
     flex: 1,
     position: 'relative',
   },
   replyBanner: {
-    backgroundColor: '#F5F5F5',
-    padding: 8,
-    paddingLeft: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#999999',
-    marginBottom: 8,
-    borderRadius: 4,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: theme.quoteBackground,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.accent,
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginTop: 6,
+    marginBottom: 2,
   },
   replyBannerContent: {
     flex: 1,
-    marginRight: 8,
   },
   replyBannerTitle: {
-    fontSize: 11,
-    color: '#888',
-    marginBottom: 2,
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.accentText,
   },
   replyBannerText: {
-    fontSize: 12,
-    color: '#333',
+    fontSize: 13,
+    color: theme.textSecondary,
+    marginTop: 1,
   },
   replyBannerClose: {
-    padding: 4,
-  },
-  replyBannerCloseText: {
-    fontSize: 18,
-    color: '#999',
+    padding: 2,
   },
   replyQuote: {
-    backgroundColor: '#F8F8F8',
-    borderLeftWidth: 2,
-    borderLeftColor: '#CDCDCD',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    marginTop: 4,
+    backgroundColor: theme.quoteBackground,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.accent,
+    borderRadius: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    marginTop: 2,
     marginBottom: 4,
-    borderRadius: 4,
   },
   replyQuoteSelf: {
-    alignSelf: 'flex-end',
-  },
-  replyQuoteText: {
-    fontSize: 11,
-    color: '#666',
-    fontStyle: 'italic',
-    lineHeight: 14,
+    borderLeftColor: theme.bubbleOutAccent,
   },
   replyQuoteAuthor: {
-    color: '#999',
-    fontSize: 10,
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.accentText,
+  },
+  replyQuoteAuthorSelf: {
+    color: theme.bubbleOutAccent,
+  },
+  replyQuoteText: {
+    fontSize: 13,
+    color: theme.textSecondary,
+  },
+  replyQuoteTextSelf: {
+    color: theme.bubbleOutMeta,
   },
   reactionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 2,
     gap: 4,
   },
   reactionBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 12,
+    backgroundColor: theme.reactionBackground,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.reactionBorder,
   },
   reactionBubbleActive: {
-    // Стиль для реакции, которую поставил текущий пользователь
+    backgroundColor: theme.reactionMine,
+    borderColor: theme.accent,
+  },
+  reactionEmoji: {
+    fontSize: 13,
   },
   reactionCount: {
-    fontSize: 11,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: 12,
+    color: theme.textSecondary,
+    fontWeight: '600',
   },
   reactionCountActive: {
-    color: '#4A90E2',
+    color: theme.accentText,
   },
   audioListContainer: {
     position: 'relative',

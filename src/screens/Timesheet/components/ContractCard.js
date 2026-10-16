@@ -6,6 +6,7 @@ import * as Clipboard from 'expo-clipboard';
 import { ChatSection } from './ChatSection';
 import { CommentsIcon } from './CommentsIcon';
 import { ContractContextMenu } from './ContractContextMenu';
+import { useTheme, useThemedStyles } from '../../../theme';
 
 export const ContractCard = ({
   contract,
@@ -26,6 +27,8 @@ export const ContractCard = ({
   onToggleReaction,
   onCancelReply,
 }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const isExpanded = expandedContract === contract.timesheet_contract_id;
   const isAddingComment = addingComment === contract.timesheet_contract_id;
   const isDeletingThisContract = deletingContract === contract.timesheet_contract_id;
@@ -86,9 +89,10 @@ export const ContractCard = ({
   return (
     <>
       <Shadow
-        distance={10}
-        startColor={'#a2a2a233'}
-        offset={[0, 0]}
+        distance={6}
+        startColor={theme.shadow}
+        disabled={theme.dark}
+        offset={[0, 1]}
         containerStyle={styles.shadowContainer}
         style={styles.shadowStyle}
       >
@@ -98,12 +102,13 @@ export const ContractCard = ({
           ref={contractRef}
           style={({ pressed }) => [
             styles.contractWrapper,
+            isExpanded && styles.contractExpanded,
             pressed && styles.contractPressed
           ]}
         >
           {(isAddingComment || isDeletingThisContract) && (
             <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#999999" />
+              <ActivityIndicator size="large" color={theme.accent} />
             </View>
           )}
           <View style={styles.contract}>
@@ -171,39 +176,43 @@ export const ContractCard = ({
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (theme) => StyleSheet.create({
   shadowContainer: {
-    marginTop: 16,
+    marginTop: 10,
   },
   shadowStyle: {
     width: '100%',
+    borderRadius: 14,
   },
   contractWrapper: {
-    padding: 15,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    borderWidth: 0.5,
-    borderColor: '#fff',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: theme.surface,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.dark ? theme.separator : theme.surface,
+  },
+  contractExpanded: {
+    borderColor: theme.accentSoft,
   },
   contractPressed: {
-    opacity: 0.7,
+    backgroundColor: theme.surfacePressed,
   },
   contract: {
-	//display: 'none'
   },
   contractRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
     alignItems: 'stretch',
     flexWrap: 'nowrap',
   },
   col1: {
-    width: 40,
+    width: 44,
     flexShrink: 0,
     position: 'relative',
   },
   col2: {
-    width: 80,
+    width: 84,
     flexShrink: 0,
   },
   col3: {
@@ -212,19 +221,19 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   contractNumber: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#4A4A4A',
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.text,
     flexShrink: 1,
   },
   contractTitle: {
-    fontSize: 11,
-    color: '#4A4A4A',
+    fontSize: 12,
+    color: theme.text,
     flexShrink: 1,
   },
   contractTitul: {
-    fontSize: 11,
-    color: '#4A4A4A',
+    fontSize: 12,
+    color: theme.textSecondary,
     flexShrink: 1,
   },
   loadingOverlay: {
@@ -235,13 +244,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 8,
+    backgroundColor: theme.veil,
+    borderRadius: 14,
     zIndex: 10,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: theme.overlay,
   },
   menuContainer: {
     flex: 1,

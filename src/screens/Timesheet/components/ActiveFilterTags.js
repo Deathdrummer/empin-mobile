@@ -1,76 +1,82 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme, useThemedStyles } from '../../../theme';
 
-export const ActiveFilterTags = ({ tags, onRemoveTag }) => {
+export const ActiveFilterTags = ({ tags, onRemoveTag, onClearAll }) => {
+  const theme = useTheme();
+  const s = useThemedStyles(makeStyles);
+
   if (!tags || tags.length === 0) {
     return null;
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {tags.map((tag) => (
-          <View key={tag.id} style={styles.tag}>
-            <Text style={styles.tagText} numberOfLines={1}>
-              {tag.label}
-            </Text>
-            <TouchableOpacity
-              style={styles.removeButton}
-              onPress={() => onRemoveTag(tag.type, tag.itemId)}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close-circle" size={18} color="#555555" />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </ScrollView>
-    </View>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={s.container}
+      contentContainerStyle={s.scrollContent}
+      keyboardShouldPersistTaps="handled"
+    >
+      {tags.map((tag) => (
+        <TouchableOpacity
+          key={tag.id}
+          style={s.tag}
+          onPress={() => onRemoveTag(tag.type, tag.itemId)}
+          activeOpacity={0.7}
+          accessibilityLabel={`Убрать фильтр: ${tag.label}`}
+        >
+          <Text style={s.tagText} numberOfLines={1}>
+            {tag.label}
+          </Text>
+          <Ionicons name="close" size={15} color={theme.accentText} />
+        </TouchableOpacity>
+      ))}
+      {onClearAll && tags.length > 1 ? (
+        <TouchableOpacity style={s.clearAll} onPress={onClearAll} activeOpacity={0.7}>
+          <Text style={s.clearAllText}>Сбросить</Text>
+        </TouchableOpacity>
+      ) : null}
+    </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (theme) => StyleSheet.create({
   container: {
-    backgroundColor: '#E9ECF1',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#d0d0d0',
+    flexGrow: 0,
   },
   scrollContent: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 2,
+    paddingBottom: 8,
   },
   tag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingLeft: 8,
-    paddingRight: 2,
-    paddingVertical: 4,
+    backgroundColor: theme.accentSoft,
+    borderRadius: 16,
+    paddingLeft: 12,
+    paddingRight: 8,
+    paddingVertical: 6,
     gap: 4,
-    borderWidth: 1,
-    borderColor: '#e2dde7',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   tagText: {
-    fontSize: 13,
-    color: '#555',
-    fontWeight: '500',
-    maxWidth: 150,
+    fontSize: 14,
+    color: theme.accentText,
+    fontWeight: '600',
+    maxWidth: 170,
   },
-  removeButton: {
-    padding: 1,
-    marginLeft: 1,
+  clearAll: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  clearAllText: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    fontWeight: '500',
   },
 });

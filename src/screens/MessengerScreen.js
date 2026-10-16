@@ -1,88 +1,24 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React from 'react';
+import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
-import { useNavigation } from '@react-navigation/native';
-import BottomMenu from '../components/BottomMenu';
-import { LogoutModal } from './Timesheet/components/modals/LogoutModal';
+import { TabBar } from '../components/TabBar';
 import ChatsTab from './Messenger/ChatsTab';
 import CallHistoryTab from './Messenger/CallHistoryTab';
 
-export default function MessengerScreen({ onLogout }) {
-  const navigation = useNavigation();
-  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState('chats');
+/** Вкладки «Чаты» и «Звонки»: какая открыта — задаёт параметр маршрута tab */
+export default function MessengerScreen({ route }) {
   const theme = useTheme();
-
-  const handleNavigateToTimesheet = () => {
-    navigation.replace('Timesheet');
-  };
-
-  const handleNavigateToChats = () => {
-    setActiveTab('chats');
-  };
-
-  const handleNavigateToCallHistory = () => {
-    setActiveTab('callHistory');
-  };
-
-  const handleLogout = () => {
-    setLogoutModalVisible(true);
-  };
-
-  const confirmLogout = async () => {
-    setLogoutModalVisible(false);
-    await onLogout();
-  };
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'chats':
-        return <ChatsTab />;
-      case 'callHistory':
-        return <CallHistoryTab />;
-      default:
-        return (
-          <View style={styles.content}>
-            <Text style={styles.title}>Мессенджер</Text>
-          </View>
-        );
-    }
-  };
+  const tab = route?.params?.tab === 'calls' ? 'calls' : 'chats';
 
   return (
-    <SafeAreaView style={[styles.container, activeTab === 'chats' && { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
-      {renderContent()}
-      <LogoutModal
-        visible={logoutModalVisible}
-        onClose={() => setLogoutModalVisible(false)}
-        onConfirm={confirmLogout}
-      />
-      <BottomMenu
-        section="messenger"
-        onLogout={handleLogout}
-        onNavigateToTimesheet={handleNavigateToTimesheet}
-        onNavigateToChats={handleNavigateToChats}
-        onNavigateToCallHistory={handleNavigateToCallHistory}
-        currentScreen={activeTab === 'chats' ? 'Chats' : activeTab === 'callHistory' ? 'CallHistory' : 'Messenger'}
-      />
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+      {tab === 'calls' ? <CallHistoryTab /> : <ChatsTab />}
+      <TabBar active={tab} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f3eff6',
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 24,
-    color: '#999999',
-    fontWeight: '500',
-  },
+  container: { flex: 1 },
 });

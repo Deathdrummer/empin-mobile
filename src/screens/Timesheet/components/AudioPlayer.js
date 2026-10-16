@@ -6,6 +6,7 @@ import Slider from '@react-native-community/slider';
 import Toast from 'react-native-toast-message';
 import { useAudioPlayerContext } from '../../../contexts/AudioPlayerContext';
 import { isCallAudioActive } from '../../../services/callAudioState';
+import { useTheme, useThemedStyles } from '../../../theme';
 
 // Форматирование времени в формат mm:ss
 const formatTime = (seconds) => {
@@ -23,6 +24,8 @@ const removeFileExtension = (fileName) => {
 };
 
 export const AudioPlayer = ({ audioUri, fileName }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const player = useAudioPlayer({ uri: audioUri });
   const status = useAudioPlayerStatus(player);
   const { registerPlayer, unregisterPlayer, audioPlaybackRate, setAudioPlaybackRate, isLoaded } = useAudioPlayerContext();
@@ -143,13 +146,13 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
         <MaterialCommunityIcons
           name={status.playing ? 'pause' : 'play'}
           size={24}
-          color="#4A90E2"
+          color={theme.onAccent}
         />
       </TouchableOpacity>
 
       <View style={styles.contentContainer}>
         <View style={styles.fileInfo}>
-          <MaterialCommunityIcons name="file-music" size={16} color="#666" />
+          <MaterialCommunityIcons name="microphone" size={14} color={theme.textSecondary} />
           <Text style={styles.fileName} numberOfLines={1}>
             {removeFileExtension(fileName) || 'Аудиофайл'}
           </Text>
@@ -163,9 +166,9 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
             value={currentTime}
             onSlidingStart={handleSliderStart}
             onSlidingComplete={handleSliderChange}
-            minimumTrackTintColor="#4A90E2"
-            maximumTrackTintColor="#E0E0E0"
-            thumbTintColor="#4A90E2"
+            minimumTrackTintColor={theme.accent}
+            maximumTrackTintColor={theme.separator}
+            thumbTintColor={theme.accent}
           />
           <View style={styles.timeContainer}>
             <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
@@ -185,25 +188,25 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (theme) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 8,
+    backgroundColor: theme.fill,
+    borderRadius: 14,
     padding: 8,
-    marginTop: 8,
-    gap: 12,
-	width: '100%',
+    marginTop: 6,
+    gap: 10,
+    width: '100%',
   },
   playButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E3F2FD',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.accent,
     justifyContent: 'center',
     alignItems: 'center',
-	zIndex: 10
+    zIndex: 10,
   },
   contentContainer: {
     flex: 1,
@@ -212,12 +215,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 4,
-	
+    marginBottom: 2,
   },
   fileName: {
-    fontSize: 12,
-    color: '#333',
+    fontSize: 13,
+    color: theme.text,
+    fontWeight: '500',
     flex: 1,
   },
   progressContainer: {
@@ -226,8 +229,8 @@ const styles = StyleSheet.create({
   slider: {
     width: '106%',
     height: 20,
-	marginLeft: -8,
-	zIndex: 9
+    marginLeft: -8,
+    zIndex: 9,
   },
   timeContainer: {
     flexDirection: 'row',
@@ -235,23 +238,24 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   timeText: {
-    fontSize: 10,
-	marginLeft: 4,
-	marginRight: 4,
-    color: '#999',
+    fontSize: 11,
+    marginLeft: 4,
+    marginRight: 4,
+    color: theme.textSecondary,
+    fontVariant: ['tabular-nums'],
   },
   speedButton: {
-    width: 40,
+    minWidth: 40,
     height: 24,
-    borderRadius: 10,
-    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    backgroundColor: theme.dark ? theme.surfaceAlt : theme.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 0,
   },
   speedButtonText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#4A90E2',
+    fontWeight: '700',
+    color: theme.accentText,
   },
 });

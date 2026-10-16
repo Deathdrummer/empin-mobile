@@ -1,8 +1,11 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme, useThemedStyles } from '../../../theme';
 
 export const CommentContextMenu = ({ position, onEdit, onDelete, onReply, onCopy, isSelf = true }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={[styles.container, { top: position.top + 10 }]}>
       <TouchableOpacity
@@ -10,7 +13,7 @@ export const CommentContextMenu = ({ position, onEdit, onDelete, onReply, onCopy
         onPress={onReply}
         activeOpacity={0.7}
       >
-        <MaterialCommunityIcons name="reply-outline" size={20} color="#666666" />
+        <MaterialCommunityIcons name="reply-outline" size={20} color={theme.textSecondary} />
         <Text style={styles.menuItemText}>Ответить</Text>
       </TouchableOpacity>
 
@@ -21,7 +24,7 @@ export const CommentContextMenu = ({ position, onEdit, onDelete, onReply, onCopy
         onPress={onCopy}
         activeOpacity={0.7}
       >
-        <MaterialCommunityIcons name="content-copy" size={20} color="#666666" />
+        <MaterialCommunityIcons name="content-copy" size={20} color={theme.textSecondary} />
         <Text style={styles.menuItemText}>Скопировать</Text>
       </TouchableOpacity>
 
@@ -34,7 +37,7 @@ export const CommentContextMenu = ({ position, onEdit, onDelete, onReply, onCopy
             onPress={onEdit}
             activeOpacity={0.7}
           >
-            <MaterialCommunityIcons name="pencil-outline" size={20} color="#666666" />
+            <MaterialCommunityIcons name="pencil-outline" size={20} color={theme.textSecondary} />
             <Text style={styles.menuItemText}>Редактировать</Text>
           </TouchableOpacity>
 
@@ -45,8 +48,8 @@ export const CommentContextMenu = ({ position, onEdit, onDelete, onReply, onCopy
             onPress={onDelete}
             activeOpacity={0.7}
           >
-            <MaterialCommunityIcons name="delete-outline" size={20} color="#666666" />
-            <Text style={styles.menuItemText}>Удалить</Text>
+            <MaterialCommunityIcons name="delete-outline" size={20} color={theme.danger} />
+            <Text style={[styles.menuItemText, styles.dangerText]}>Удалить</Text>
           </TouchableOpacity>
         </>
       )}
@@ -54,37 +57,40 @@ export const CommentContextMenu = ({ position, onEdit, onDelete, onReply, onCopy
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (theme) => StyleSheet.create({
   container: {
     position: 'absolute',
     alignSelf: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    minWidth: 240,
+    backgroundColor: theme.sheet,
+    borderRadius: 14,
     paddingVertical: 4,
-    paddingHorizontal: 8,
     elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: theme.dark ? 0.5 : 0.18,
+    shadowRadius: 16,
     zIndex: 1000,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
   },
   menuItemText: {
     fontSize: 16,
-    color: '#666666',
+    color: theme.text,
     textAlign: 'left',
     fontWeight: '400',
     marginLeft: 12,
   },
+  dangerText: {
+    color: theme.danger,
+  },
   separator: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#DCDCDC',
-    marginHorizontal: 12,
+    borderTopColor: theme.separator,
+    marginLeft: 48,
   },
 });

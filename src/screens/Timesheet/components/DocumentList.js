@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useTheme, useThemedStyles } from '../../../theme';
 
 // Функция для извлечения расширения файла из имени или mimeType
 const getFileExtension = (document) => {
@@ -116,6 +117,8 @@ const getFileName = (document) => {
 
 // Компонент для отображения одного документа
 const DocumentItem = ({ document, onRemove, onDownload, index, showControls = true, onPress }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const extension = getFileExtension(document);
   const fileSize = formatFileSize(document.size);
   const fileName = getFileName(document);
@@ -149,7 +152,7 @@ const DocumentItem = ({ document, onRemove, onDownload, index, showControls = tr
           onPress={() => onDownload(document, index)}
           activeOpacity={0.7}
         >
-          <MaterialCommunityIcons name="download" size={20} color="#4A90E2" />
+          <MaterialCommunityIcons name="download" size={22} color={theme.accent} />
         </TouchableOpacity>
       )}
 
@@ -160,7 +163,7 @@ const DocumentItem = ({ document, onRemove, onDownload, index, showControls = tr
           onPress={() => onRemove(index)}
           activeOpacity={0.7}
         >
-          <MaterialCommunityIcons name="close" size={20} color="#999999" />
+          <MaterialCommunityIcons name="close" size={20} color={theme.textMuted} />
         </TouchableOpacity>
       )}
     </View>
@@ -169,6 +172,7 @@ const DocumentItem = ({ document, onRemove, onDownload, index, showControls = tr
 
 // Основной компонент списка документов
 export const DocumentList = ({ documents, onRemove, onDownload, showControls = true }) => {
+  const styles = useThemedStyles(makeStyles);
   if (!documents || documents.length === 0) {
     return null;
   }
@@ -189,17 +193,17 @@ export const DocumentList = ({ documents, onRemove, onDownload, showControls = t
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (theme) => StyleSheet.create({
   documentList: {
-    marginTop: 8,
+    marginTop: 6,
     width: '100%',
   },
   documentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: theme.fill,
+    borderRadius: 14,
+    padding: 8,
     marginBottom: 6,
     width: '100%',
   },
@@ -209,19 +213,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   documentIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#4A90E2',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: theme.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   documentExtension: {
-    color: '#FFFFFF',
-    fontSize: 12,
+    color: theme.onAccent,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   documentInfo: {
     flex: 1,
@@ -230,20 +234,20 @@ const styles = StyleSheet.create({
   },
   documentName: {
     fontSize: 14,
-    color: '#333333',
+    color: theme.text,
     fontWeight: '500',
     marginBottom: 2,
   },
   documentSize: {
     fontSize: 12,
-    color: '#888888',
+    color: theme.textSecondary,
   },
   documentDownloadButton: {
-    padding: 4,
-    marginLeft: 8,
+    padding: 6,
+    marginLeft: 4,
   },
   documentRemoveButton: {
-    padding: 4,
-    marginLeft: 8,
+    padding: 6,
+    marginLeft: 4,
   },
 });

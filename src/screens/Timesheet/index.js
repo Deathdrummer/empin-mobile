@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, FlatList, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Dimensions, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import { DeviceMotion } from 'expo-sensors';
-import BottomMenu from '../../components/BottomMenu';
+import { Ionicons } from '@expo/vector-icons';
+import { TabBar } from '../../components/TabBar';
+import { useTheme, useThemedStyles } from '../../theme';
 import { DayCard } from './components/DayCard';
 import { StaffModal } from './components/modals/StaffModal';
 import { ContractModal } from './components/modals/ContractModal';
 import { CalendarModal } from './components/modals/CalendarModal';
-import { LogoutModal } from './components/modals/LogoutModal';
 import { FilterModal } from './components/modals/FilterModal';
 import { EditCommentModal } from './components/modals/EditCommentModal';
 import { DeleteConfirmModal } from './components/modals/DeleteConfirmModal';
@@ -24,7 +24,8 @@ import { SwipeControlProvider, useSwipeControl } from '../../contexts/SwipeContr
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 function TimesheetScreenContent({ onLogout }) {
-  const navigation = useNavigation();
+  const theme = useTheme();
+  const s = useThemedStyles(makeStyles);
   const isPrependingRef = useRef(false);
 
   const {
@@ -118,7 +119,6 @@ function TimesheetScreenContent({ onLogout }) {
     handleToggleReaction,
   } = useCommentActions(loadDays, minIndex, maxIndex);
 
-  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [calendarModalVisible, setCalendarModalVisible] = useState(false);
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const scrollStartX = useRef(0);
@@ -174,15 +174,6 @@ function TimesheetScreenContent({ onLogout }) {
     };
   }, [onRefresh, refreshing]);
 
-  const handleLogout = () => {
-    setLogoutModalVisible(true);
-  };
-
-  const confirmLogout = async () => {
-    setLogoutModalVisible(false);
-    await onLogout();
-  };
-
   const handleCalendarPress = () => {
     setCalendarModalVisible(true);
   };
@@ -201,10 +192,6 @@ function TimesheetScreenContent({ onLogout }) {
       teams: [],
       contracts: [],
     });
-  };
-
-  const handleNavigateToMessenger = () => {
-    navigation.replace('Messenger');
   };
 
   const hasActiveFilters = filters.teams.length > 0 || filters.contracts.length > 0;
@@ -282,28 +269,69 @@ function TimesheetScreenContent({ onLogout }) {
     />
   );
 
+  const header = (
+    <View style={s.topBar}>
+      <Text style={s.title}>Табель</Text>
+      <View style={s.actions}>
+        <TouchableOpacity
+          style={s.actionButton}
+          onPress={handleCalendarPress}
+          disabled={loading}
+          hitSlop={6}
+          accessibilityLabel="Выбрать дату"
+        >
+          <Ionicons name="calendar-outline" size={22} color={theme.text} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.actionButton, hasActiveFilters && { backgroundColor: theme.accentSoft }]}
+          onPress={handleFilterPress}
+          disabled={loading}
+          hitSlop={6}
+          accessibilityLabel={hasActiveFilters ? 'Фильтр, включён' : 'Фильтр'}
+        >
+          <Ionicons
+            name={hasActiveFilters ? 'funnel' : 'funnel-outline'}
+            size={20}
+            color={hasActiveFilters ? theme.accent : theme.text}
+          />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#999999" />
-      </View>
+      <SafeAreaView style={s.container} edges={['top']}>
+        {header}
+        <View style={s.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.accent} />
+        </View>
+        <TabBar active="timesheet" />
+      </SafeAreaView>
     );
   }
 
   return (
     <AudioPlayerProvider>
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+      <SafeAreaView style={s.container} edges={['top']}>
         {filterLoading && (
-          <View style={styles.filterLoadingOverlay}>
-            <ActivityIndicator size="large" color="#999999" />
+          <View style={s.filterLoadingOverlay}>
+            <ActivityIndicator size="large" color={theme.accent} />
           </View>
         )}
 
         {isPrepending && (
-          <View style={styles.prependingOverlay}>
-            <ActivityIndicator size="large" color="#999999" />
+          <View style={s.prependingOverlay}>
+            <ActivityIndicator size="large" color={theme.accent} />
           </View>
         )}
+
+        {header}
+        <ActiveFilterTags
+          tags={activeFilterTags}
+          onRemoveTag={handleRemoveFilterTag}
+          onClearAll={handleClearFilters}
+        />
 
       <CalendarModal
         visible={calendarModalVisible}
@@ -312,12 +340,6 @@ function TimesheetScreenContent({ onLogout }) {
         hasActiveFilters={hasActiveFilters}
         onClose={() => setCalendarModalVisible(false)}
         onDateSelect={onDateSelect}
-      />
-
-      <LogoutModal
-        visible={logoutModalVisible}
-        onClose={() => setLogoutModalVisible(false)}
-        onConfirm={confirmLogout}
       />
 
       <FilterModal
@@ -383,6 +405,7 @@ function TimesheetScreenContent({ onLogout }) {
       <FlatList
         key={`timesheet-${dataVersion}`}
         ref={localFlatListRef}
+        style={s.list}
         data={days}
         renderItem={renderDay}
         keyExtractor={(item) => item.index.toString()}
@@ -462,20 +485,7 @@ function TimesheetScreenContent({ onLogout }) {
           }, 100);
         }}
       />
-      <ActiveFilterTags
-        tags={activeFilterTags}
-        onRemoveTag={handleRemoveFilterTag}
-      />
-      <BottomMenu
-        section="timesheet"
-        onLogout={handleLogout}
-        onCalendarPress={handleCalendarPress}
-        onFilterPress={handleFilterPress}
-        hasActiveFilters={hasActiveFilters}
-        onClearFilters={handleClearFilters}
-        onNavigateToMessenger={handleNavigateToMessenger}
-        currentScreen="Timesheet"
-      />
+      <TabBar active="timesheet" />
       </SafeAreaView>
     </AudioPlayerProvider>
   );
@@ -489,16 +499,45 @@ export default function TimesheetScreen({ onLogout }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E9ECF1',
+    backgroundColor: theme.dark ? theme.background : theme.surfaceAlt,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 16,
+    paddingRight: 10,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: theme.text,
+    letterSpacing: 0.2,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.dark ? theme.surfaceAlt : theme.surface,
+  },
+  list: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f3eff6',
   },
   filterLoadingOverlay: {
     position: 'absolute',
@@ -506,7 +545,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: theme.veil,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
@@ -517,7 +556,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    backgroundColor: theme.veil,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 999,

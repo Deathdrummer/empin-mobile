@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TouchableHighlight, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme, useThemedStyles } from '../../../theme';
 import { Can } from '../../../components/Can';
 import { ContractCard } from './ContractCard';
 import { formatShortName } from '../../../utils/formatName';
@@ -28,6 +30,8 @@ export const TeamCard = ({
   onToggleReaction,
   onCancelReply,
 }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const masterName = formatShortName(team.master);
   const isDeletingThisTeam = deletingTeam === team.id;
 
@@ -35,7 +39,7 @@ export const TeamCard = ({
     <View style={styles.teamWrapper}>
       {isDeletingThisTeam && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#999999" />
+          <ActivityIndicator size="large" color={theme.accent} />
         </View>
       )}
       <TouchableOpacity
@@ -47,21 +51,21 @@ export const TeamCard = ({
         }}
       >
         <View style={styles.teamHeader}>
-        <Text style={styles.masterName}>
+        <Ionicons name="people" size={18} color={theme.textSecondary} />
+        <Text style={styles.masterName} numberOfLines={2}>
           {masterName}
         </Text>
         <Can permission="mobile-app-can-create-contract:site">
           <SwipeBlocker>
-            <TouchableHighlight
+            <TouchableOpacity
               style={styles.addButton}
               onPress={() => onAddContract(team.id)}
-              underlayColor="#7a7a7a"
+              activeOpacity={0.7}
+              accessibilityLabel={`Добавить объект: ${masterName}`}
             >
-              <View style={styles.addButtonContent}>
-                <Text style={styles.addButtonText}>Добавить объект</Text>
-                <Text style={styles.addButtonIcon}>+</Text>
-              </View>
-            </TouchableHighlight>
+              <Ionicons name="add" size={18} color={theme.accentText} />
+              <Text style={styles.addButtonText}>Объект</Text>
+            </TouchableOpacity>
           </SwipeBlocker>
         </Can>
       </View>
@@ -95,10 +99,10 @@ export const TeamCard = ({
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (theme) => StyleSheet.create({
   teamWrapper: {
     position: 'relative',
-    marginBottom: 32,
+    marginBottom: 22,
   },
   team: {
   },
@@ -110,67 +114,36 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 8,
+    backgroundColor: theme.veil,
+    borderRadius: 14,
     zIndex: 10,
   },
   teamHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 0,
+    gap: 8,
+    paddingHorizontal: 4,
+    paddingTop: 6,
   },
   masterName: {
-    fontSize: 22,
-	lineHeight: 20,
-    fontWeight: 'bold',
-    color: '#555',
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.text,
     flex: 1,
   },
   addButton: {
-    borderRadius: 8,
-    backgroundColor: '#999999',
-    marginLeft: 10,
-  },
-  addButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    gap: 2,
+    borderRadius: 16,
+    backgroundColor: theme.accentSoft,
+    paddingLeft: 8,
+    paddingRight: 12,
+    paddingVertical: 6,
   },
   addButtonText: {
-    color: '#fff',
-    fontSize: 16,
-	lineHeight: 16,
-    fontWeight: '700',
-    marginRight: 6,
-  },
-  addButtonIcon: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '800',
-    lineHeight: 20,
-  },
-  addButtonCompact: {
-    borderWidth: 2,
-    borderColor: '#b5bcc8',
-    borderRadius: 8,
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
-  },
-  addButtonCompactText: {
-    color: '#b5bcc8',
-    fontSize: 30,
-    fontWeight: '300',
-    lineHeight: 32,
-    marginTop: -2,
-  },
-  emptyText: {
+    color: theme.accentText,
     fontSize: 14,
-    color: '#ccc',
-    textAlign: 'center',
+    fontWeight: '600',
   },
 });

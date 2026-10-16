@@ -529,7 +529,8 @@ export const messengerAPI = {
   },
 
   getCallHistory: async () => {
-    const response = await api.get('/messenger/calls/history');
+    // Сервер по умолчанию отдаёт 20 звонков; 100 — его максимум за запрос
+    const response = await api.get('/messenger/calls/history', { params: { per_page: 100 } });
     return response.data;
   },
 

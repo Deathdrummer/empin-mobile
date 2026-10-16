@@ -11,6 +11,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import TimesheetScreen from './src/screens/TimesheetScreen';
 import MessengerScreen from './src/screens/MessengerScreen';
 import ChatScreen from './src/screens/Messenger/ChatScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 import { authAPI, setUnauthorizedCallback, checkApiAvailability } from './src/services/api';
 import { disconnectPusher } from './src/services/pusher';
 import { useAppStatePermissions } from './src/hooks/useAppStatePermissions';
@@ -128,11 +129,15 @@ export default function App() {
               {isLoggedIn ? (
                 <NavigationContainer ref={navigationRef}>
                   <Stack.Navigator screenOptions={{ headerShown: false }}>
-                    <Stack.Screen name="Timesheet">
+                    {/* Вкладки переключаются без анимации, как в мессенджерах */}
+                    <Stack.Screen name="Timesheet" options={{ animation: 'none' }}>
                       {props => <TimesheetScreen {...props} onLogout={handleLogout} />}
                     </Stack.Screen>
-                    <Stack.Screen name="Messenger">
+                    <Stack.Screen name="Messenger" options={{ animation: 'none' }}>
                       {props => <MessengerScreen {...props} onLogout={handleLogout} />}
+                    </Stack.Screen>
+                    <Stack.Screen name="Profile" options={{ animation: 'none' }}>
+                      {props => <ProfileScreen {...props} onLogout={handleLogout} />}
                     </Stack.Screen>
                     <Stack.Screen name="Chat">
                       {props => <ChatScreen {...props} onLogout={handleLogout} />}

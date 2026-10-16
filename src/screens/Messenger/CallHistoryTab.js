@@ -1,352 +1,209 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
   ActivityIndicator,
+  Pressable,
   RefreshControl,
+  SectionList,
+  StyleSheet,
+  Text,
   TouchableOpacity,
+  View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { messengerAPI } from '../../services/api';
-import { formatShortName } from '../../utils/formatName';
+import { useCallContext } from '../../contexts/CallContext';
+import { useTheme } from '../../theme';
+import { Avatar } from '../../components/chat/Avatar';
+import { formatDateSeparator, formatDuration, formatMessageTime, fullName, isSameDay } from '../../utils/chatFormat';
 
-/**
- * Форматирование длительности звонка
- */
-const formatDuration = (seconds) => {
-  if (!seconds || seconds === 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+// Входящий без ответа: звонящий отменил, не ответили по таймауту или звонок завис в вызове
+const MISSED_INCOMING = ['missed', 'cancelled', 'initiated', 'ringing'];
+
+const describeCall = (call, myStaffId) => {
+  const outgoing = myStaffId != null && Number(call.caller_id) === Number(myStaffId);
+  const peer = outgoing ? call.callee : call.caller;
+  const missed = !outgoing && MISSED_INCOMING.includes(call.status);
+
+  let detail;
+  if (call.status === 'completed' && call.duration) detail = formatDuration(call.duration);
+  else if (call.status === 'rejected') detail = outgoing ? 'отклонён' : 'вы отклонили';
+  else if (missed) detail = 'пропущенный';
+  else if (outgoing) detail = 'без ответа';
+  else detail = '';
+
+  return { outgoing, peer, missed, detail };
 };
-
-/**
- * Форматирование времени звонка
- */
-const formatTime = (timestamp) => {
-  const date = new Date(timestamp);
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
-};
-
-/**
- * Группировка по дате
- */
-const groupByDate = (calls) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  const groups = {
-    today: [],
-    yesterday: [],
-    earlier: [],
-  };
-
-  calls.forEach((call) => {
-    const callDate = new Date(call.created_at);
-    callDate.setHours(0, 0, 0, 0);
-
-    if (callDate.getTime() === today.getTime()) {
-      groups.today.push(call);
-    } else if (callDate.getTime() === yesterday.getTime()) {
-      groups.yesterday.push(call);
-    } else {
-      groups.earlier.push(call);
-    }
-  });
-
-  return groups;
-};
-
-/**
- * Элемент списка звонка
- */
-const CallHistoryItem = ({ call, currentUserId, onPress }) => {
-  const isOutgoing = call.caller_id === currentUserId;
-  const otherParticipant = isOutgoing ? call.callee : call.caller;
-  const participantName = otherParticipant
-    ? (formatShortName(otherParticipant) !== 'Без имени'
-        ? formatShortName(otherParticipant)
-        : otherParticipant.full_name || 'Неизвестный')
-    : 'Неизвестный';
-
-  const getCallIcon = () => {
-    if (call.status === 'missed') {
-      return { name: 'phone-missed', color: '#EF4444' };
-    } else if (call.status === 'rejected') {
-      return { name: 'phone-disabled', color: '#EF4444' };
-    } else if (isOutgoing) {
-      return { name: 'phone-forwarded', color: '#3B82F6' };
-    } else {
-      return { name: 'phone-callback', color: '#10B981' };
-    }
-  };
-
-  const getDurationText = () => {
-    if (call.status === 'missed') return 'пропущен';
-    if (call.status === 'rejected') return 'отклонён';
-    if (call.status === 'completed' && call.duration) {
-      return formatDuration(call.duration);
-    }
-    return 'не отвечен';
-  };
-
-  const icon = getCallIcon();
-
-  return (
-    <TouchableOpacity style={styles.item} onPress={onPress} activeOpacity={0.5}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
-          {participantName.charAt(0).toUpperCase()}
-        </Text>
-      </View>
-      <View style={styles.content}>
-        <View style={styles.row}>
-          <MaterialIcons name={icon.name} size={16} color={icon.color} />
-          <Text style={styles.name}>{participantName}</Text>
-        </View>
-        <Text style={styles.time}>{formatTime(call.created_at)}</Text>
-      </View>
-      <Text style={styles.duration}>{getDurationText()}</Text>
-      <View style={styles.separator} />
-    </TouchableOpacity>
-  );
-};
-
-/**
- * Заголовок секции
- */
-const SectionHeader = ({ title }) => (
-  <View style={styles.sectionHeader}>
-    <Text style={styles.sectionTitle}>{title}</Text>
-  </View>
-);
-
-/**
- * Пустое состояние
- */
-const EmptyState = () => (
-  <View style={styles.emptyState}>
-    <MaterialIcons name="phone" size={64} color="#D1D5DB" />
-    <Text style={styles.emptyTitle}>История звонков пуста</Text>
-    <Text style={styles.emptyText}>
-      Позвоните кому-нибудь,{'\n'}
-      чтобы увидеть историю здесь
-    </Text>
-  </View>
-);
 
 export default function CallHistoryTab() {
+  const theme = useTheme();
   const navigation = useNavigation();
+  const { initiateCall } = useCallContext();
   const [calls, setCalls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState(null);
+  const [myStaffId, setMyStaffId] = useState(null);
+  const [onlyMissed, setOnlyMissed] = useState(false);
 
-  useEffect(() => {
-    const loadCurrentUser = async () => {
-      try {
-        const userJson = await AsyncStorage.getItem('user');
-        if (userJson) {
-          const user = JSON.parse(userJson);
-          setCurrentUserId(user.staff_id);
-        }
-      } catch (error) {
-        console.error('Failed to load current user in CallHistoryTab', error);
-      }
-    };
-    loadCurrentUser();
-  }, []);
-
-  const loadCallHistory = useCallback(async () => {
+  const load = useCallback(async () => {
     try {
-      const data = await messengerAPI.getCallHistory();
+      const [data, userJson] = await Promise.all([messengerAPI.getCallHistory(), AsyncStorage.getItem('user')]);
+      setMyStaffId(userJson ? JSON.parse(userJson)?.staff_id ?? null : null);
       setCalls(data.calls || []);
     } catch (error) {
-      console.error('Failed to load call history:', error);
+      console.warn('[Calls] Не удалось загрузить историю:', error?.message ?? error);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadCallHistory();
-  }, [loadCallHistory]);
+  useFocusEffect(useCallback(() => {
+    load();
+  }, [load]));
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    loadCallHistory();
-  }, [loadCallHistory]);
+  const sections = useMemo(() => {
+    const list = calls
+      .map((call) => ({ call, ...describeCall(call, myStaffId) }))
+      .filter((item) => item.peer && (!onlyMissed || item.missed));
 
-  const handleItemPress = (call) => {
-    const isOutgoing = call.caller_id === currentUserId;
-    const otherParticipant = isOutgoing ? call.callee : call.caller;
-    if (otherParticipant?.id) {
-      const name = formatShortName(otherParticipant) !== 'Без имени'
-        ? formatShortName(otherParticipant)
-        : otherParticipant.full_name || 'Собеседник';
-      navigation.navigate('Chat', {
-        staffId: otherParticipant.id,
-        staffName: name,
-      });
-    }
-  };
+    const result = [];
+    list.forEach((item) => {
+      const last = result[result.length - 1];
+      if (last && isSameDay(last.data[0].call.created_at, item.call.created_at)) last.data.push(item);
+      else result.push({ title: formatDateSeparator(item.call.created_at), data: [item] });
+    });
+    return result;
+  }, [calls, myStaffId, onlyMissed]);
 
-  const renderItem = ({ item }) => (
-    <CallHistoryItem call={item} currentUserId={currentUserId} onPress={() => handleItemPress(item)} />
-  );
+  const s = styles(theme);
 
-  const renderSectionList = () => {
-    const groups = groupByDate(calls);
-    const sections = [];
-
-    if (groups.today.length > 0) {
-      sections.push({ title: 'Сегодня', data: groups.today });
-    }
-    if (groups.yesterday.length > 0) {
-      sections.push({ title: 'Вчера', data: groups.yesterday });
-    }
-    if (groups.earlier.length > 0) {
-      sections.push({ title: 'Ранее', data: groups.earlier });
-    }
-
-    return sections.map((section, sectionIndex) => (
-      <View key={sectionIndex}>
-        <SectionHeader title={section.title} />
-        {section.data.map((call, index) => (
-          <CallHistoryItem
-            key={call.id || index}
-            call={call}
-            currentUserId={currentUserId}
-            onPress={() => handleItemPress(call)}
-          />
-        ))}
-      </View>
-    ));
-  };
-
-  if (loading) {
+  const renderItem = ({ item }) => {
+    const name = fullName(item.peer);
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
+      <Pressable
+        style={({ pressed }) => [s.row, pressed && { backgroundColor: theme.surfacePressed }]}
+        onPress={() => navigation.navigate('Chat', { staffId: item.peer.id, staffName: name })}
+        accessibilityLabel={`${name}, ${item.outgoing ? 'исходящий' : 'входящий'}, ${item.detail}`}
+      >
+        <Avatar person={item.peer} id={item.peer.id} size={46} />
+        <View style={s.rowBody}>
+          <View style={s.rowText}>
+            <Text style={[s.name, item.missed && { color: theme.danger }]} numberOfLines={1}>{name}</Text>
+            <View style={s.meta}>
+              <Ionicons
+                name={item.outgoing ? 'arrow-up-outline' : 'arrow-down-outline'}
+                size={14}
+                color={item.missed ? theme.danger : theme.textSecondary}
+                style={{ transform: [{ rotate: '45deg' }] }}
+              />
+              <Text style={s.metaText} numberOfLines={1}>
+                {[formatMessageTime(item.call.created_at), item.detail].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            onPress={() => initiateCall(item.peer.id, name)}
+            hitSlop={8}
+            style={s.callButton}
+            accessibilityLabel={`Позвонить: ${name}`}
+          >
+            <Ionicons name="call-outline" size={22} color={theme.accent} />
+          </TouchableOpacity>
+        </View>
+      </Pressable>
     );
-  }
-
-  if (calls.length === 0) {
-    return <EmptyState />;
-  }
+  };
 
   return (
-    <FlatList
-      data={[{ key: 'sections' }]}
-      renderItem={() => renderSectionList()}
-      contentContainerStyle={styles.list}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    />
+    <View style={s.container}>
+      <View style={s.header}>
+        <Text style={s.title}>Звонки</Text>
+      </View>
+
+      <View style={s.filters}>
+        {[{ key: false, label: 'Все' }, { key: true, label: 'Пропущенные' }].map((filter) => {
+          const active = onlyMissed === filter.key;
+          return (
+            <TouchableOpacity
+              key={String(filter.key)}
+              onPress={() => setOnlyMissed(filter.key)}
+              style={[s.chip, active && { backgroundColor: theme.accentSoft }]}
+            >
+              <Text style={[s.chipText, active && { color: theme.accentText, fontWeight: '600' }]}>{filter.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {loading ? (
+        <ActivityIndicator style={s.loader} size="large" color={theme.accent} />
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={(item, index) => String(item.call.id ?? index)}
+          renderItem={renderItem}
+          renderSectionHeader={({ section }) => <Text style={s.sectionTitle}>{section.title}</Text>}
+          stickySectionHeadersEnabled={false}
+          contentContainerStyle={sections.length ? null : s.emptyContainer}
+          refreshControl={(
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                load();
+              }}
+              tintColor={theme.accent}
+              colors={[theme.accent]}
+            />
+          )}
+          ListEmptyComponent={(
+            <View style={s.empty}>
+              <Ionicons name="call-outline" size={56} color={theme.textMuted} />
+              <Text style={s.emptyTitle}>{onlyMissed ? 'Пропущенных нет' : 'Звонков пока не было'}</Text>
+              {!onlyMissed ? <Text style={s.emptyText}>Позвонить можно из чата или списка сотрудников</Text> : null}
+            </View>
+          )}
+        />
+      )}
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  list: {
-    flexGrow: 1,
-  },
-  item: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#fff',
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  name: {
-    fontSize: 16,
-    color: '#000',
-    fontWeight: '500',
-  },
-  time: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  duration: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  separator: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 0.5,
-    backgroundColor: '#E5E5EA',
-  },
-  sectionHeader: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#F3F4F6',
-  },
+const styles = (theme) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.background },
+  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  title: { fontSize: 30, fontWeight: '700', color: theme.text, letterSpacing: 0.2 },
+  filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
+  chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.surfaceAlt },
+  chipText: { fontSize: 14, color: theme.textSecondary, fontWeight: '500' },
+  loader: { marginTop: 48 },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#6B7280',
-    textTransform: 'uppercase',
+    color: theme.textSecondary,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 6,
   },
-  emptyState: {
+  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, gap: 12 },
+  rowBody: {
     flex: 1,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 32,
+    paddingVertical: 10,
+    paddingRight: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.separator,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
+  rowText: { flex: 1 },
+  name: { fontSize: 16, fontWeight: '600', color: theme.text },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  metaText: { fontSize: 14, color: theme.textSecondary, flexShrink: 1 },
+  callButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  emptyContainer: { flexGrow: 1 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingHorizontal: 32, gap: 10 },
+  emptyTitle: { fontSize: 17, fontWeight: '600', color: theme.text },
+  emptyText: { fontSize: 15, color: theme.textSecondary, textAlign: 'center' },
 });

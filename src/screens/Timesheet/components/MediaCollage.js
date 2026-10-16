@@ -4,6 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import ImageViewing from 'react-native-image-viewing';
 import { useAudioPlayerContext } from '../../../contexts/AudioPlayerContext';
+import { useTheme } from '../../../theme';
 
 const GAP = 2; // Промежуток между картинками
 const ITEMS_PER_ROW = 3;
@@ -21,6 +22,7 @@ const isVideo = (media) => {
 
 // Компонент превью видео
 const VideoPreview = ({ uri, style, showPlayIcon }) => {
+  const theme = useTheme();
   const [showSpinner, setShowSpinner] = React.useState(true);
 
   const player = useVideoPlayer(uri, (player) => {
@@ -50,8 +52,8 @@ const VideoPreview = ({ uri, style, showPlayIcon }) => {
         onFirstFrame={handleFirstFrame}
       />
       {showSpinner && (
-        <View style={styles.videoPreviewLoading}>
-          <ActivityIndicator size="large" color="#999999" animating={true} />
+        <View style={[styles.videoPreviewLoading, { backgroundColor: theme.surfaceAlt }]}>
+          <ActivityIndicator size="large" color={theme.textMuted} animating={true} />
         </View>
       )}
       {showPlayIcon && (
@@ -144,6 +146,7 @@ const FullscreenVideo = ({ uri }) => {
 
 // Основной компонент сетки 3x3
 export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
+  const theme = useTheme();
   const [imageViewerVisible, setImageViewerVisible] = React.useState(false);
   const [videoViewerVisible, setVideoViewerVisible] = React.useState(false);
   const [selectedMediaIndex, setSelectedMediaIndex] = React.useState(0);
@@ -216,7 +219,7 @@ export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
                   key={globalIndex}
                   style={[
                     styles.mediaItem,
-                    { width: itemWidth },
+                    { width: itemWidth, backgroundColor: theme.surfaceAlt },
                     !isLast && styles.mediaItemWithMargin
                   ]}
                 >
@@ -288,8 +291,10 @@ export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
 
 const styles = StyleSheet.create({
   collageContainer: {
-    marginTop: 8,
-	 width: '99%'
+    marginTop: 6,
+    width: '100%',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
@@ -298,9 +303,8 @@ const styles = StyleSheet.create({
   mediaItem: {
     position: 'relative',
     aspectRatio: 1,
-    borderRadius: 8,
+    borderRadius: 4,
     overflow: 'hidden',
-    backgroundColor: '#E5E9F0',
   },
   mediaItemWithMargin: {
     marginRight: GAP,
@@ -388,7 +392,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#C5C4C5',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,

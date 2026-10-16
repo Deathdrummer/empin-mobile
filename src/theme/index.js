@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useColorScheme } from 'react-native';
 
 /**
@@ -38,6 +39,9 @@ const light = {
   dateChipText: '#55585F',
   inputBackground: '#F1F1F4',
   overlay: 'rgba(10, 10, 12, 0.45)',
+  veil: 'rgba(255, 255, 255, 0.75)',
+  fill: 'rgba(20, 21, 26, 0.05)',
+  shadow: 'rgba(20, 21, 26, 0.08)',
   sheet: '#FFFFFF',
   reactionBackground: '#FFFFFF',
   reactionBorder: '#E6E6EA',
@@ -72,6 +76,9 @@ const dark = {
   dateChipText: '#A8AAB0',
   inputBackground: '#24242B',
   overlay: 'rgba(0, 0, 0, 0.6)',
+  veil: 'rgba(13, 13, 16, 0.7)',
+  fill: 'rgba(255, 255, 255, 0.07)',
+  shadow: 'rgba(0, 0, 0, 0)',
   sheet: '#1B1B20',
   reactionBackground: '#26262D',
   reactionBorder: '#34343C',
@@ -84,6 +91,15 @@ export const themes = { light, dark };
 export const useTheme = () => {
   const scheme = useColorScheme();
   return scheme === 'dark' ? dark : light;
+};
+
+/**
+ * Стили, зависящие от темы: factory(theme) => StyleSheet.create(...), объявленная вне компонента.
+ * Пересоздаются только при смене темы.
+ */
+export const useThemedStyles = (factory) => {
+  const theme = useTheme();
+  return useMemo(() => factory(theme), [factory, theme]);
 };
 
 // Цвет аватара стабилен для сотрудника: один и тот же человек всегда одного цвета

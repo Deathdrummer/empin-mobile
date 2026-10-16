@@ -1,16 +1,17 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useThemedStyles } from '../../../theme';
 
 const EMOJIS = [
-  { id: 'like', icon: 'thumb-up', color: '#757575', emoji: '👍' },
-  { id: 'dislike', icon: 'thumb-down', color: '#757575', emoji: '👎' },
-  { id: 'heart', icon: 'heart', color: '#757575', emoji: '❤️' },
-  { id: 'fire', icon: 'fire', color: '#757575', emoji: '🔥' },
-  { id: 'eyes', icon: 'eye', color: '#757575', emoji: '👀' },
+  { id: 'like', emoji: '👍' },
+  { id: 'dislike', emoji: '👎' },
+  { id: 'heart', emoji: '❤️' },
+  { id: 'fire', emoji: '🔥' },
+  { id: 'eyes', emoji: '👀' },
 ];
 
 export const EmojiPicker = ({ position, onEmojiSelect }) => {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={[styles.container, { top: position.top - 60 }]}>
       <ScrollView
@@ -18,7 +19,7 @@ export const EmojiPicker = ({ position, onEmojiSelect }) => {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         decelerationRate={0.92}
-        snapToInterval={52}
+        snapToInterval={48}
         snapToAlignment="start"
       >
         {EMOJIS.map((item) => (
@@ -26,9 +27,9 @@ export const EmojiPicker = ({ position, onEmojiSelect }) => {
             key={item.id}
             style={styles.emojiButton}
             onPress={() => onEmojiSelect(item.emoji)}
-            activeOpacity={0.7}
+            activeOpacity={0.6}
           >
-            <MaterialCommunityIcons name={item.icon} size={28} color={item.color} />
+            <Text style={styles.emoji}>{item.emoji}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -36,25 +37,24 @@ export const EmojiPicker = ({ position, onEmojiSelect }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (theme) => StyleSheet.create({
   container: {
     position: 'absolute',
     alignSelf: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 30,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    backgroundColor: theme.sheet,
+    borderRadius: 28,
+    paddingVertical: 6,
     elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: theme.dark ? 0.5 : 0.18,
+    shadowRadius: 16,
     zIndex: 1000,
     overflow: 'hidden',
-    maxWidth: 240,
+    maxWidth: 260,
   },
   scrollContent: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
   },
   emojiButton: {
     width: 44,
@@ -62,10 +62,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 22,
-    backgroundColor: '#f5f5f5',
-    marginHorizontal: 4,
+    marginHorizontal: 2,
   },
   emoji: {
-    fontSize: 26,
+    fontSize: 28,
   },
 });
