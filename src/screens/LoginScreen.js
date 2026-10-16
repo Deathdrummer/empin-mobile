@@ -92,7 +92,6 @@ export default function LoginScreen({ onLoginSuccess }) {
             accessibilityIgnoresInvertColors
           />
           <Text style={styles.title}>Эмпин PRO</Text>
-          <Text style={styles.subtitle}>План-график работ, чаты и звонки</Text>
         </View>
 
         <View style={styles.form}>
@@ -200,12 +199,6 @@ const makeStyles = (theme) => StyleSheet.create({
     fontWeight: '800',
     color: theme.text,
     letterSpacing: 0.3,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: theme.textSecondary,
-    marginTop: 6,
-    textAlign: 'center',
   },
   form: {
     width: '100%',
