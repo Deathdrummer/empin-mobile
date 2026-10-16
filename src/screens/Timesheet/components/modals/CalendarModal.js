@@ -1,9 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableHighlight, Modal, Dimensions, StatusBar, TouchableOpacity } from 'react-native';
+import { Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { MonthYearPicker } from './MonthYearPicker';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { Dialog, DialogButton } from '../../../../components/ui/Dialog';
+import { useTheme, useThemedStyles } from '../../../../theme';
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 
@@ -18,6 +19,8 @@ LocaleConfig.locales['ru'] = {
 LocaleConfig.defaultLocale = 'ru';
 
 export const CalendarModal = ({ visible, selectedDate, availableDates, hasActiveFilters, onClose, onDateSelect }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [pickerVisible, setPickerVisible] = useState(false);
   const [currentCalendarDate, setCurrentCalendarDate] = useState(selectedDate || new Date());
 
@@ -104,8 +107,8 @@ export const CalendarModal = ({ visible, selectedDate, availableDates, hasActive
         ...marked[today],
         customStyles: {
           container: {
-            borderColor: '#999999',
-            borderWidth: 2,
+            borderColor: theme.accent,
+            borderWidth: 1.5,
           },
         },
       };
@@ -116,12 +119,12 @@ export const CalendarModal = ({ visible, selectedDate, availableDates, hasActive
       marked[selectedDateString] = {
         ...marked[selectedDateString],
         selected: true,
-        selectedColor: '#999999',
+        selectedColor: theme.accent,
       };
     }
 
     return marked;
-  }, [selectedDateString, today, hasActiveFilters, availableDates, currentCalendarDate]);
+  }, [selectedDateString, today, hasActiveFilters, availableDates, currentCalendarDate, theme]);
 
   const handleDayPress = (day) => {
     // day.timestamp - это Unix timestamp в миллисекундах
@@ -145,77 +148,56 @@ export const CalendarModal = ({ visible, selectedDate, availableDates, hasActive
   };
 
   return (
-    <Modal
+    <Dialog
       visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-      statusBarTranslucent={true}
+      onClose={onClose}
+      title="Выберите дату"
+      buttons={(
+        <>
+          <DialogButton title="Закрыть" onPress={onClose} />
+          <DialogButton title="Сегодня" variant="primary" onPress={handleToday} disabled={isTodaySelected} />
+        </>
+      )}
     >
-      <StatusBar backgroundColor="rgba(0,0,0,0.5)" hidden={true} />
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalBlurLayer} />
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Выберите дату</Text>
-
-          <Calendar
-            key={currentCalendarDateString}
-            current={currentCalendarDateString}
-            onDayPress={handleDayPress}
-            markedDates={markedDates}
-            markingType={'custom'}
-            renderHeader={(date) => {
-              const monthYear = `${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
-              return (
-                <TouchableOpacity onPress={openPicker} style={styles.calendarHeader}>
-                  <Text style={styles.calendarHeaderText}>{monthYear}</Text>
-                </TouchableOpacity>
-              );
-            }}
-            theme={{
-              selectedDayBackgroundColor: '#999999',
-              selectedDayTextColor: '#ffffff',
-              todayTextColor: '#999999',
-              textDayFontSize: 16,
-              textMonthFontSize: 18,
-              textMonthFontWeight: 'bold',
-              textDayHeaderFontSize: 14,
-              monthTextColor: '#555555',
-              arrowColor: '#999999',
-              textSectionTitleColor: '#333333',
-              textDisabledColor: '#d9d9d9',
-            }}
-            style={{
-              borderRadius: 8,
-            }}
-            enableSwipeMonths={true}
-            onMonthChange={(month) => {
-              // Обновляем текущую дату календаря при свайпе
-              const newDate = new Date(month.year, month.month - 1, 1);
-              setCurrentCalendarDate(newDate);
-            }}
-          />
-
-          <View style={styles.buttonsContainer}>
-            <TouchableHighlight
-              style={[styles.button, styles.closeButton]}
-              onPress={onClose}
-              underlayColor="#e8e8e8"
-            >
-              <Text style={styles.closeButtonText}>Закрыть</Text>
-            </TouchableHighlight>
-
-            <TouchableHighlight
-              style={[styles.button, styles.todayButton, isTodaySelected && styles.todayButtonDisabled]}
-              onPress={handleToday}
-              underlayColor="#7a7a7a"
-              disabled={isTodaySelected}
-            >
-              <Text style={[styles.todayButtonText, isTodaySelected && styles.todayButtonTextDisabled]}>Сегодня</Text>
-            </TouchableHighlight>
-          </View>
-        </View>
-      </View>
+      <Calendar
+        // Календарь запоминает тему при создании: при смене светлой/тёмной создаём заново
+        key={`${currentCalendarDateString}-${theme.dark ? 'dark' : 'light'}`}
+        current={currentCalendarDateString}
+        onDayPress={handleDayPress}
+        markedDates={markedDates}
+        markingType={'custom'}
+        renderHeader={(date) => {
+          const monthYear = `${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+          return (
+            <TouchableOpacity onPress={openPicker} style={styles.calendarHeader} accessibilityLabel={`${monthYear}, выбрать месяц и год`}>
+              <Text style={styles.calendarHeaderText}>{monthYear}</Text>
+              <Ionicons name="chevron-down" size={16} color={theme.accent} />
+            </TouchableOpacity>
+          );
+        }}
+        theme={{
+          calendarBackground: theme.sheet,
+          dayTextColor: theme.text,
+          selectedDayBackgroundColor: theme.accent,
+          selectedDayTextColor: theme.onAccent,
+          todayTextColor: theme.accentText,
+          textDayFontSize: 16,
+          textMonthFontSize: 18,
+          textMonthFontWeight: 'bold',
+          textDayHeaderFontSize: 13,
+          monthTextColor: theme.text,
+          arrowColor: theme.accent,
+          textSectionTitleColor: theme.textSecondary,
+          textDisabledColor: theme.dark ? '#3D3D45' : '#C9CAD0',
+        }}
+        style={styles.calendar}
+        enableSwipeMonths={true}
+        onMonthChange={(month) => {
+          // Обновляем текущую дату календаря при свайпе
+          const newDate = new Date(month.year, month.month - 1, 1);
+          setCurrentCalendarDate(newDate);
+        }}
+      />
 
       <MonthYearPicker
         visible={pickerVisible}
@@ -223,87 +205,23 @@ export const CalendarModal = ({ visible, selectedDate, availableDates, hasActive
         onClose={() => setPickerVisible(false)}
         onSelect={handleMonthYearSelect}
       />
-    </Modal>
+    </Dialog>
   );
 };
 
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 15,
-  },
-  modalBlurLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 20,
-    width: SCREEN_WIDTH - 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#555',
-    marginBottom: 15,
-    textAlign: 'center',
+const makeStyles = (theme) => StyleSheet.create({
+  calendar: {
+    borderRadius: 12,
   },
   calendarHeader: {
-    paddingVertical: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    paddingVertical: 10,
   },
   calendarHeaderText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#555',
-  },
-  buttonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 25,
-  },
-  button: {
-    flex: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    alignItems: 'center',
-  },
-  todayButton: {
-    backgroundColor: '#999999',
-  },
-  todayButtonDisabled: {
-    backgroundColor: '#e0e0e0',
-    opacity: 0.6,
-  },
-  closeButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  todayButtonText: {
-    color: '#fff',
-    fontSize: 14,
     fontWeight: '700',
-  },
-  todayButtonTextDisabled: {
-    color: '#aaa',
-  },
-  closeButtonText: {
-    color: '#777',
-    fontSize: 14,
-    fontWeight: '700',
+    color: theme.text,
   },
 });

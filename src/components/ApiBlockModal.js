@@ -1,18 +1,14 @@
 import React, { useState } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TouchableHighlight,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Dialog, DialogButton } from './ui/Dialog';
+import { useTheme } from '../theme';
 
 /**
  * Модальное окно блокировки приложения при недоступности API
  */
 export const ApiBlockModal = ({ visible, onRetry }) => {
+  const theme = useTheme();
   const [retrying, setRetrying] = useState(false);
 
   const handleRetry = async () => {
@@ -22,90 +18,28 @@ export const ApiBlockModal = ({ visible, onRetry }) => {
   };
 
   return (
-    <Modal
+    <Dialog
       visible={visible}
-      transparent={true}
-      animationType="fade"
-      statusBarTranslucent={true}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.container}>
-          <View style={styles.iconContainer}>
-            <MaterialCommunityIcons name="alert-circle" size={64} color="#757575" />
-          </View>
-
-          <Text style={styles.title}>API сервер недоступен!</Text>
-
-          <Text style={styles.message}>
-            Не удалось установить соединение с сервером.{'\n'}
-            Проверьте подключение к интернету.
-          </Text>
-
-          <TouchableHighlight
-            style={[styles.button, retrying && styles.buttonDisabled]}
-            onPress={handleRetry}
-            disabled={retrying}
-            underlayColor="#7a7a7a"
-          >
-            {retrying ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Повторить попытку</Text>
-            )}
-          </TouchableHighlight>
+      // Окно не закрывается, пока сервер недоступен
+      onClose={() => {}}
+      title="Нет связи с сервером"
+      message="Проверьте подключение к интернету и попробуйте ещё раз."
+      icon={(
+        <View style={[styles.icon, { backgroundColor: theme.accentSoft }]}>
+          <Ionicons name="cloud-offline-outline" size={34} color={theme.accent} />
         </View>
-      </View>
-    </Modal>
+      )}
+      buttons={<DialogButton title="Повторить" variant="primary" onPress={handleRetry} loading={retrying} />}
+    />
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  icon: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  container: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
-  },
-  iconContainer: {
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#555',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  message: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 24,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  button: {
-    backgroundColor: '#999999',
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    borderRadius: 8,
-    minWidth: 200,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
   },
 });

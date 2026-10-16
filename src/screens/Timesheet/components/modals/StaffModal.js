@@ -1,103 +1,63 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TouchableHighlight, ScrollView, Modal, Dimensions, StatusBar } from 'react-native';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Sheet } from '../../../../components/ui/Sheet';
+import { Avatar } from '../../../../components/chat/Avatar';
+import { useTheme, useThemedStyles } from '../../../../theme';
 
 export const StaffModal = ({ visible, staffList, onClose, onSelectStaff }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-      statusBarTranslucent={true}
-    >
-      <StatusBar backgroundColor="rgba(0,0,0,0.5)" hidden={true} />
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalBlurLayer} />
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Выберите сотрудника</Text>
-          <ScrollView style={styles.modalList} keyboardShouldPersistTaps='handled'>
-            {staffList.map((staff) => (
-              <TouchableOpacity
-                key={staff.id}
-                style={styles.modalItem}
-                onPress={() => onSelectStaff(staff.id, `${staff.sname} ${staff.fname} ${staff.mname}`)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalItemText}>
-                  {staff.sname} {staff.fname} {staff.mname}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <TouchableHighlight style={styles.modalCloseButton} onPress={onClose} underlayColor="#b8b8b8">
-            <Text style={styles.modalCloseText}>Закрыть</Text>
-          </TouchableHighlight>
-        </View>
-      </View>
-    </Modal>
+    <Sheet visible={visible} onClose={onClose} title="Выберите сотрудника">
+      <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
+        {staffList.map((staff) => (
+          <Pressable
+            key={staff.id}
+            style={({ pressed }) => [styles.item, pressed && { backgroundColor: theme.surfacePressed }]}
+            onPress={() => onSelectStaff(staff.id, `${staff.sname} ${staff.fname} ${staff.mname}`)}
+          >
+            <Avatar person={staff} id={staff.id} size={40} />
+            <View style={styles.itemBody}>
+              <Text style={styles.itemText} numberOfLines={2}>
+                {staff.sname} {staff.fname} {staff.mname}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+        {staffList.length === 0 ? <Text style={styles.empty}>Список сотрудников пуст</Text> : null}
+      </ScrollView>
+    </Sheet>
   );
 };
 
-const styles = StyleSheet.create({
-  modalOverlay: {
+const makeStyles = (theme) => StyleSheet.create({
+  list: {
+    flexGrow: 0,
+    flexShrink: 1,
+  },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingLeft: 20,
+  },
+  itemBody: {
     flex: 1,
+    minHeight: 58,
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 15,
+    paddingRight: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.separator,
   },
-  modalBlurLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+  itemText: {
+    fontSize: 16,
+    color: theme.text,
   },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 20,
-    width: SCREEN_WIDTH - 30,
-    maxHeight: '70%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#555',
-    marginBottom: 15,
+  empty: {
+    fontSize: 15,
+    color: theme.textSecondary,
     textAlign: 'center',
-  },
-  modalList: {
-    maxHeight: 300,
-  },
-  modalItem: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2dde7',
-  },
-  modalItemText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  modalCloseButton: {
-    backgroundColor: '#d0d0d0',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginTop: 25,
-    alignItems: 'center',
-  },
-  modalCloseText: {
-    color: '#777',
-    fontSize: 16,
-    fontWeight: '700',
+    paddingVertical: 32,
   },
 });

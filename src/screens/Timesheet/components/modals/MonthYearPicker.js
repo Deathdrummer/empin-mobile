@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableHighlight, Modal, Dimensions, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { Dialog, DialogButton } from '../../../../components/ui/Dialog';
+import { useTheme, useThemedStyles } from '../../../../theme';
 
 const MONTHS = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -15,6 +15,11 @@ const YEARS = Array.from({ length: 21 }, (_, i) => 2020 + i);
 const ITEM_HEIGHT = 40;
 
 export const MonthYearPicker = ({ visible, currentDate, onClose, onSelect }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  // Затухание к краям колеса — цветом фона окна
+  const fadeIn = [`${theme.sheet}FF`, `${theme.sheet}00`];
+  const fadeOut = [`${theme.sheet}00`, `${theme.sheet}FF`];
   const monthScrollRef = useRef(null);
   const yearScrollRef = useRef(null);
 
@@ -93,187 +98,126 @@ export const MonthYearPicker = ({ visible, currentDate, onClose, onSelect }) => 
   };
 
   return (
-    <Modal
+    <Dialog
       visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
+      onClose={onClose}
+      title="Месяц и год"
+      buttons={(
+        <>
+          <DialogButton title="Отмена" onPress={onClose} />
+          <DialogButton title="Сегодня" onPress={handleToday} />
+          <DialogButton title="Выбрать" variant="primary" onPress={handleConfirm} />
+        </>
+      )}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalBlurLayer} />
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Выберите месяц и год</Text>
+      <View style={styles.pickersContainer}>
+        {/* Месяцы */}
+        <View style={styles.pickerWrapper}>
+          <Text style={styles.pickerLabel}>Месяц</Text>
+          <View style={styles.wheelContainer}>
+            {/* Индикатор выбранного элемента */}
+            <View style={styles.selectedIndicator} />
 
-          <View style={styles.pickersContainer}>
-            {/* Месяцы */}
-            <View style={styles.pickerWrapper}>
-              <Text style={styles.pickerLabel}>Месяц</Text>
-              <View style={styles.wheelContainer}>
-                {/* Индикатор выбранного элемента */}
-                <View style={styles.selectedIndicator} />
+            <ScrollView
+              ref={monthScrollRef}
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              snapToInterval={ITEM_HEIGHT}
+              decelerationRate="fast"
+              onMomentumScrollEnd={handleMonthScroll}
+            >
+              {MONTHS.map((month, index) => (
+                <View key={index} style={styles.item}>
+                  <Text
+                    style={[
+                      styles.itemText,
+                      selectedMonthIndex === index && styles.selectedItemText
+                    ]}
+                  >
+                    {month}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
 
-                <ScrollView
-                  ref={monthScrollRef}
-                  style={styles.scrollView}
-                  contentContainerStyle={styles.scrollContent}
-                  showsVerticalScrollIndicator={false}
-                  snapToInterval={ITEM_HEIGHT}
-                  decelerationRate="fast"
-                  onMomentumScrollEnd={handleMonthScroll}
-                >
-                  {MONTHS.map((month, index) => (
-                    <View key={index} style={styles.item}>
-                      <Text
-                        style={[
-                          styles.itemText,
-                          selectedMonthIndex === index && styles.selectedItemText
-                        ]}
-                      >
-                        {month}
-                      </Text>
-                    </View>
-                  ))}
-                </ScrollView>
-
-                {/* Градиенты затухания */}
-                <LinearGradient
-                  colors={['rgba(255, 255, 255, 1)', 'rgba(255, 255, 255, 0)']}
-                  style={styles.fadeTop}
-                  pointerEvents="none"
-                />
-                <LinearGradient
-                  colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 1)']}
-                  style={styles.fadeBottom}
-                  pointerEvents="none"
-                />
-              </View>
-            </View>
-
-            {/* Годы */}
-            <View style={styles.pickerWrapper}>
-              <Text style={styles.pickerLabel}>Год</Text>
-              <View style={styles.wheelContainer}>
-                {/* Индикатор выбранного элемента */}
-                <View style={styles.selectedIndicator} />
-
-                <ScrollView
-                  ref={yearScrollRef}
-                  style={styles.scrollView}
-                  contentContainerStyle={styles.scrollContent}
-                  showsVerticalScrollIndicator={false}
-                  snapToInterval={ITEM_HEIGHT}
-                  decelerationRate="fast"
-                  onMomentumScrollEnd={handleYearScroll}
-                >
-                  {YEARS.map((year, index) => (
-                    <View key={year} style={styles.item}>
-                      <Text
-                        style={[
-                          styles.itemText,
-                          selectedYearIndex === index && styles.selectedItemText
-                        ]}
-                      >
-                        {year}
-                      </Text>
-                    </View>
-                  ))}
-                </ScrollView>
-
-                {/* Градиенты затухания */}
-                <LinearGradient
-                  colors={['rgba(255, 255, 255, 1)', 'rgba(255, 255, 255, 0)']}
-                  style={styles.fadeTop}
-                  pointerEvents="none"
-                />
-                <LinearGradient
-                  colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 1)']}
-                  style={styles.fadeBottom}
-                  pointerEvents="none"
-                />
-              </View>
-            </View>
+            {/* Градиенты затухания */}
+            <LinearGradient
+              colors={fadeIn}
+              style={styles.fadeTop}
+              pointerEvents="none"
+            />
+            <LinearGradient
+              colors={fadeOut}
+              style={styles.fadeBottom}
+              pointerEvents="none"
+            />
           </View>
+        </View>
 
-          <View style={styles.buttonsContainer}>
-            <TouchableHighlight
-              style={[styles.button, styles.cancelButton]}
-              onPress={onClose}
-              underlayColor="#e8e8e8"
-            >
-              <Text style={styles.cancelButtonText}>Отмена</Text>
-            </TouchableHighlight>
+        {/* Годы */}
+        <View style={styles.pickerWrapper}>
+          <Text style={styles.pickerLabel}>Год</Text>
+          <View style={styles.wheelContainer}>
+            {/* Индикатор выбранного элемента */}
+            <View style={styles.selectedIndicator} />
 
-            <TouchableHighlight
-              style={[styles.button, styles.todayButton]}
-              onPress={handleToday}
-              underlayColor="#b8b8b8"
+            <ScrollView
+              ref={yearScrollRef}
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              snapToInterval={ITEM_HEIGHT}
+              decelerationRate="fast"
+              onMomentumScrollEnd={handleYearScroll}
             >
-              <Text style={styles.todayButtonText}>Сегодня</Text>
-            </TouchableHighlight>
+              {YEARS.map((year, index) => (
+                <View key={year} style={styles.item}>
+                  <Text
+                    style={[
+                      styles.itemText,
+                      selectedYearIndex === index && styles.selectedItemText
+                    ]}
+                  >
+                    {year}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
 
-            <TouchableHighlight
-              style={[styles.button, styles.confirmButton]}
-              onPress={handleConfirm}
-              underlayColor="#7a7a7a"
-            >
-              <Text style={styles.confirmButtonText}>Применить</Text>
-            </TouchableHighlight>
+            {/* Градиенты затухания */}
+            <LinearGradient
+              colors={fadeIn}
+              style={styles.fadeTop}
+              pointerEvents="none"
+            />
+            <LinearGradient
+              colors={fadeOut}
+              style={styles.fadeBottom}
+              pointerEvents="none"
+            />
           </View>
         </View>
       </View>
-    </Modal>
+    </Dialog>
   );
 };
 
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 15,
-  },
-  modalBlurLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 20,
-    width: SCREEN_WIDTH - 30,
-    maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#555',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
+const makeStyles = (theme) => StyleSheet.create({
   pickersContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 40,
-    height: 200,
+    marginTop: 8,
+    height: 228,
   },
   pickerWrapper: {
     flex: 1,
-    marginHorizontal: 5,
+    marginHorizontal: 4,
   },
   pickerLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#555',
+    color: theme.textSecondary,
     marginBottom: 8,
     textAlign: 'center',
   },
@@ -288,10 +232,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: ITEM_HEIGHT,
-    backgroundColor: 'rgba(153, 153, 153, 0.15)',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#999',
+    backgroundColor: theme.fill,
+    borderRadius: 10,
     zIndex: 1,
     pointerEvents: 'none',
   },
@@ -308,13 +250,13 @@ const styles = StyleSheet.create({
   },
   itemText: {
     fontSize: 18,
-    color: '#999',
+    color: theme.textMuted,
     textAlign: 'center',
   },
   selectedItemText: {
     fontSize: 20,
-    color: '#333',
-    fontWeight: 'bold',
+    color: theme.text,
+    fontWeight: '700',
   },
   fadeTop: {
     position: 'absolute',
@@ -333,41 +275,5 @@ const styles = StyleSheet.create({
     height: 80,
     zIndex: 2,
     pointerEvents: 'none',
-  },
-  buttonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  button: {
-    flex: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  todayButton: {
-    backgroundColor: '#d0d0d0',
-  },
-  confirmButton: {
-    backgroundColor: '#999999',
-  },
-  cancelButtonText: {
-    color: '#777',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  todayButtonText: {
-    color: '#777',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableHighlight, TouchableOpacity, Modal, ActivityIndicator, Dimensions, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions, TextInput } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import { timesheetAPI } from '../../../../services/api';
 import Toast from 'react-native-toast-message';
+import { Dialog, DialogButton } from '../../../../components/ui/Dialog';
+import { useTheme, useThemedStyles } from '../../../../theme';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export const FilterModal = ({
   visible,
@@ -16,6 +19,8 @@ export const FilterModal = ({
   loading,
   onRefresh,
 }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [activeTab, setActiveTab] = useState('teams'); // 'teams' или 'contracts'
   const [selectedTeams, setSelectedTeams] = useState([]);
   const [selectedContracts, setSelectedContracts] = useState([]);
@@ -189,7 +194,7 @@ export const FilterModal = ({
         activeOpacity={0.7}
       >
         <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-          {isSelected && <Text style={styles.checkmark}>✓</Text>}
+          {isSelected && <Ionicons name="checkmark" size={16} color={theme.onAccent} />}
         </View>
         <Text
           style={[styles.listItemText, isSelected && styles.listItemTextSelected]}
@@ -221,7 +226,7 @@ export const FilterModal = ({
           isSelected && styles.checkboxSelected,
           isDisabled && styles.checkboxDisabled,
         ]}>
-          {isSelected && <Text style={styles.checkmark}>✓</Text>}
+          {isSelected && <Ionicons name="checkmark" size={16} color={theme.onAccent} />}
         </View>
         <View style={styles.contractInfo}>
           <Text
@@ -252,250 +257,207 @@ export const FilterModal = ({
   };
 
   return (
-    <Modal
+    <Dialog
       visible={visible}
-      animationType="fade"
-      transparent={true}
-      onRequestClose={onClose}
+      onClose={onClose}
+      title="Фильтры"
+      wide
+      buttons={(
+        <>
+          <DialogButton title="Отмена" onPress={onClose} />
+          <DialogButton title="Сбросить" onPress={handleReset} />
+          <DialogButton title="Применить" variant="primary" onPress={handleApply} />
+        </>
+      )}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Фильтры</Text>
+      {/* Вкладки */}
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'teams' && styles.tabActive]}
+          onPress={() => setActiveTab('teams')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>
+            Бригады
+          </Text>
+          {selectedTeams.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{selectedTeams.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'contracts' && styles.tabActive]}
+          onPress={() => setActiveTab('contracts')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.tabText, activeTab === 'contracts' && styles.tabTextActive]}>
+            Объекты
+          </Text>
+          {selectedContracts.length > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{selectedContracts.length}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
 
-          {/* Вкладки */}
-          <View style={styles.tabs}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'teams' && styles.tabActive]}
-              onPress={() => setActiveTab('teams')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>
-                Бригады
-              </Text>
-              {selectedTeams.length > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{selectedTeams.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'contracts' && styles.tabActive]}
-              onPress={() => setActiveTab('contracts')}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.tabText, activeTab === 'contracts' && styles.tabTextActive]}>
-                Объекты
-              </Text>
-              {selectedContracts.length > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{selectedContracts.length}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+      {/* Контент вкладок */}
+      <View style={styles.filterContainer}>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.accent} />
           </View>
-
-          {/* Контент вкладок */}
-          <View style={styles.filterContainer}>
-            {loading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#999999" />
-              </View>
-            ) : (
+        ) : (
+          <>
+            {activeTab === 'teams' && (
               <>
-                {activeTab === 'teams' && (
-                  <>
-                    <View style={styles.searchContainer}>
-                      <TextInput
-                        style={styles.searchInput}
-                        placeholder="Поиск бригады (мин. 2 символа)"
-                        placeholderTextColor="#aaa"
-                        value={searchTeam}
-                        onChangeText={setSearchTeam}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                      />
-                      {searchTeam.length > 0 && (
-                        <TouchableOpacity
-                          style={styles.clearButton}
-                          onPress={handleClearTeamSearch}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.clearButtonText}>✕</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    {searchLoadingTeams ? (
-                      <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#999999" />
+                <View style={styles.searchContainer}>
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Поиск бригады (мин. 2 символа)"
+                    placeholderTextColor={theme.textMuted}
+                    value={searchTeam}
+                    onChangeText={setSearchTeam}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {searchTeam.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.clearButton}
+                      onPress={handleClearTeamSearch}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="close-circle" size={20} color={theme.textMuted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {searchLoadingTeams ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={theme.accent} />
+                  </View>
+                ) : (
+                  <FlashList
+                    data={filteredTeams}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={renderTeamItem}
+                    estimatedItemSize={56}
+                    ListEmptyComponent={
+                      <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>
+                          {searchTeam.trim().length >= 2
+                            ? 'Ничего не найдено'
+                            : 'Нет доступных бригад'
+                          }
+                        </Text>
+                        {searchTeam.trim().length < 2 && (
+                          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+                            <Text style={styles.refreshButtonText}>Обновить</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
-                    ) : (
-                      <FlashList
-                        data={filteredTeams}
-                        keyExtractor={(item) => item.id.toString()}
-                        renderItem={renderTeamItem}
-                        estimatedItemSize={56}
-                        ListEmptyComponent={
-                          <View style={styles.emptyContainer}>
-                            <Text style={styles.emptyText}>
-                              {searchTeam.trim().length >= 2
-                                ? 'Ничего не найдено'
-                                : 'Нет доступных бригад'
-                              }
-                            </Text>
-                            {searchTeam.trim().length < 2 && (
-                              <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-                                <Text style={styles.refreshButtonText}>Обновить</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        }
-                        showsVerticalScrollIndicator={true}
-                      />
-                    )}
-                  </>
-                )}
-                {activeTab === 'contracts' && (
-                  <>
-                    <View style={styles.searchContainer}>
-                      <TextInput
-                        style={styles.searchInput}
-                        placeholder="Поиск объекта (мин. 2 символа)"
-                        placeholderTextColor="#aaa"
-                        value={searchContract}
-                        onChangeText={setSearchContract}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                      />
-                      {searchContract.length > 0 && (
-                        <TouchableOpacity
-                          style={styles.clearButton}
-                          onPress={handleClearContractSearch}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={styles.clearButtonText}>✕</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    {searchLoadingContracts ? (
-                      <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#999999" />
-                      </View>
-                    ) : (
-                      <FlashList
-                        data={filteredContracts}
-                        keyExtractor={(item) => item.id.toString()}
-                        renderItem={renderContractItem}
-                        estimatedItemSize={56}
-                        ListEmptyComponent={
-                          <View style={styles.emptyContainer}>
-                            <Text style={styles.emptyText}>
-                              {searchContract.trim().length >= 2
-                                ? 'Ничего не найдено'
-                                : 'Нет доступных объектов'
-                              }
-                            </Text>
-                            {searchContract.trim().length < 2 && (
-                              <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-                                <Text style={styles.refreshButtonText}>Обновить</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        }
-                        showsVerticalScrollIndicator={true}
-                      />
-                    )}
-                  </>
+                    }
+                    showsVerticalScrollIndicator={true}
+                  />
                 )}
               </>
             )}
-          </View>
-
-          <View style={styles.modalButtons}>
-            <TouchableHighlight
-              style={[styles.modalButton, styles.modalButtonReset]}
-              onPress={onClose}
-              underlayColor="#e8e8e8"
-            >
-              <Text style={styles.modalButtonTextReset}>Отмена</Text>
-            </TouchableHighlight>
-            <TouchableHighlight
-              style={[styles.modalButton, styles.modalButtonCancel]}
-              onPress={handleReset}
-              underlayColor="#b8b8b8"
-            >
-              <Text style={styles.modalButtonTextCancel}>Сбросить</Text>
-            </TouchableHighlight>
-            <TouchableHighlight
-              style={[styles.modalButton, styles.modalButtonApply]}
-              onPress={handleApply}
-              underlayColor="#7a7a7a"
-            >
-              <Text style={styles.modalButtonTextApply}>Применить</Text>
-            </TouchableHighlight>
-          </View>
-        </View>
+            {activeTab === 'contracts' && (
+              <>
+                <View style={styles.searchContainer}>
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Поиск объекта (мин. 2 символа)"
+                    placeholderTextColor={theme.textMuted}
+                    value={searchContract}
+                    onChangeText={setSearchContract}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {searchContract.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.clearButton}
+                      onPress={handleClearContractSearch}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="close-circle" size={20} color={theme.textMuted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {searchLoadingContracts ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={theme.accent} />
+                  </View>
+                ) : (
+                  <FlashList
+                    data={filteredContracts}
+                    keyExtractor={(item) => item.id.toString()}
+                    renderItem={renderContractItem}
+                    estimatedItemSize={56}
+                    ListEmptyComponent={
+                      <View style={styles.emptyContainer}>
+                        <Text style={styles.emptyText}>
+                          {searchContract.trim().length >= 2
+                            ? 'Ничего не найдено'
+                            : 'Нет доступных объектов'
+                          }
+                        </Text>
+                        {searchContract.trim().length < 2 && (
+                          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+                            <Text style={styles.refreshButtonText}>Обновить</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    }
+                    showsVerticalScrollIndicator={true}
+                  />
+                )}
+              </>
+            )}
+          </>
+        )}
       </View>
-    </Modal>
+
+    </Dialog>
   );
 };
 
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    paddingHorizontal: 20,
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    width: SCREEN_WIDTH - 30,
-    maxHeight: '90%',
-    elevation: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 11 },
-    shadowOpacity: 0.23,
-    shadowRadius: 11.78,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#555',
-    textAlign: 'center',
-    paddingTop: 20,
-    paddingBottom: 15,
-  },
+const makeStyles = (theme) => StyleSheet.create({
   tabs: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-    paddingHorizontal: 24,
+    padding: 3,
+    borderRadius: 12,
+    backgroundColor: theme.inputBackground,
+    marginTop: 8,
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   tabActive: {
-    borderBottomColor: '#999999',
+    backgroundColor: theme.dark ? theme.surfaceAlt : theme.surface,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: theme.dark ? 0 : 0.08,
+    shadowRadius: 3,
   },
   tabText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
-    color: '#aaa',
+    color: theme.textSecondary,
   },
   tabTextActive: {
-    color: '#555',
+    color: theme.text,
     fontWeight: '700',
   },
   badge: {
-    backgroundColor: '#999999',
+    backgroundColor: theme.accent,
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -504,97 +466,81 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   badgeText: {
-    color: '#fff',
+    color: theme.onAccent,
     fontSize: 12,
     fontWeight: '700',
   },
   filterContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    height: SCREEN_HEIGHT * 0.6,
+    paddingTop: 12,
+    height: SCREEN_HEIGHT * 0.55,
   },
   searchContainer: {
     position: 'relative',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   searchInput: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingRight: 48,
-    fontSize: 14,
-    color: '#333',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
+    backgroundColor: theme.inputBackground,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    paddingRight: 44,
+    fontSize: 15,
+    color: theme.text,
   },
   clearButton: {
     position: 'absolute',
-    right: 12,
-    top: 10,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#ccc',
+    right: 8,
+    top: 0,
+    bottom: 0,
+    width: 32,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  clearButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    lineHeight: 16,
   },
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 11,
     paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: theme.fill,
   },
   listItemSelected: {
-    backgroundColor: '#e8e8e8',
+    backgroundColor: theme.accentSoft,
   },
   checkbox: {
     width: 24,
     height: 24,
-    borderRadius: 4,
+    borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#ccc',
+    borderColor: theme.textMuted,
     marginRight: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxSelected: {
-    backgroundColor: '#999999',
-    borderColor: '#999999',
-  },
-  checkmark: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
   },
   listItemText: {
-    fontSize: 14,
-    color: '#555',
+    fontSize: 15,
+    color: theme.text,
     flex: 1,
   },
   listItemTextSelected: {
     fontWeight: '600',
-    color: '#333',
+    color: theme.text,
   },
   contractInfo: {
     flex: 1,
   },
   objectNumber: {
-    fontSize: 14,
-    color: '#aaa',
+    fontSize: 13,
+    color: theme.textSecondary,
     marginTop: 2,
   },
   objectNumberSelected: {
-    color: '#777',
+    color: theme.accentText,
   },
   emptyContainer: {
     flex: 1,
@@ -602,20 +548,20 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   emptyText: {
-    fontSize: 14,
-    color: '#ccc',
+    fontSize: 15,
+    color: theme.textSecondary,
     textAlign: 'center',
     marginBottom: 16,
   },
   refreshButton: {
-    backgroundColor: '#999999',
+    backgroundColor: theme.accentSoft,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 6,
+    borderRadius: 18,
   },
   refreshButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    color: theme.accentText,
+    fontSize: 15,
     fontWeight: '600',
   },
   loadingContainer: {
@@ -623,56 +569,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 24,
-    paddingBottom: 20,
-    paddingTop: 8,
-  },
-  modalButton: {
-    flex: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    alignItems: 'center',
-  },
-  modalButtonReset: {
-    backgroundColor: '#f0f0f0',
-  },
-  modalButtonCancel: {
-    backgroundColor: '#d0d0d0',
-  },
-  modalButtonApply: {
-    backgroundColor: '#999999',
-  },
-  modalButtonTextReset: {
-    color: '#777',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  modalButtonTextCancel: {
-    color: '#777',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  modalButtonTextApply: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  // Стили для disabled объектов (не присутствующих в бригадах)
+  // Объекты, которых нет в бригадах: видны в поиске, но выбрать нельзя
   listItemDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   checkboxDisabled: {
-    borderColor: '#e0e0e0',
-    backgroundColor: '#f5f5f5',
+    borderColor: theme.separator,
   },
   listItemTextDisabled: {
-    color: '#bbb',
+    color: theme.textMuted,
   },
   objectNumberDisabled: {
-    color: '#d0d0d0',
+    color: theme.textMuted,
   },
 });

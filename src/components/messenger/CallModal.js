@@ -8,8 +8,38 @@ import {
   Image,
   Animated,
 } from 'react-native';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Avatar } from '../chat/Avatar';
+
+// Экран звонка всегда тёмный, как в мессенджерах: фон в цветах иконки приложения
+const CALL_BACKGROUND = ['#3A0B11', '#140709', '#0B0B0E'];
+const DECLINE_COLOR = '#FF3B30';
+const ACCEPT_COLOR = '#34C759';
+
+/** Круглая кнопка экрана звонка с подписью */
+const CallButton = ({ icon, iconSet = 'ion', label, color, active, onPress, accessibilityLabel }) => {
+  const Icon = iconSet === 'material' ? MaterialIcons : Ionicons;
+  return (
+    <View style={styles.callButtonWrap}>
+      <TouchableOpacity
+        style={[
+          styles.callButton,
+          color ? { backgroundColor: color } : active && styles.callButtonActive,
+        ]}
+        onPress={onPress}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel || label}
+        accessibilityState={active !== undefined ? { selected: !!active } : undefined}
+      >
+        <Icon name={icon} size={30} color={active && !color ? '#14151A' : '#FFFFFF'} />
+      </TouchableOpacity>
+      {label ? <Text style={styles.callButtonLabel} numberOfLines={1}>{label}</Text> : null}
+    </View>
+  );
+};
 
 /**
  * Форматирование времени звонка
@@ -104,21 +134,8 @@ export const CallModal = ({
       // Входящий звонок
       return (
         <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.rejectButton]}
-            onPress={onReject}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="call-end" size={32} color="#fff" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.acceptButton]}
-            onPress={onAccept}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="call" size={32} color="#fff" />
-          </TouchableOpacity>
+          <CallButton icon="call-end" iconSet="material" label="Отклонить" color={DECLINE_COLOR} onPress={onReject} />
+          <CallButton icon="call" iconSet="material" label="Принять" color={ACCEPT_COLOR} onPress={onAccept} />
         </View>
       );
     }
@@ -126,50 +143,22 @@ export const CallModal = ({
     if (callState.status === 'active') {
       // Активный звонок
       return (
-        <View style={styles.actionsGrid}>
-          <TouchableOpacity
-            style={[
-              styles.controlButton,
-              callState.isMuted && styles.controlButtonActive,
-            ]}
+        <View style={styles.actionsRow}>
+          <CallButton
+            icon={callState.isMuted ? 'mic-off' : 'mic'}
+            label={callState.isMuted ? 'Без звука' : 'Микрофон'}
+            accessibilityLabel={callState.isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+            active={callState.isMuted}
             onPress={onToggleMute}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons
-              name={callState.isMuted ? 'mic-off' : 'mic'}
-              size={28}
-              color={callState.isMuted ? '#3B82F6' : '#6B7280'}
-            />
-            <Text style={styles.controlButtonText}>
-              {callState.isMuted ? 'Вкл. микрофон' : 'Выкл. микрофон'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.controlButton,
-              callState.isSpeakerOn && styles.controlButtonActive,
-            ]}
+          />
+          <CallButton
+            icon="volume-high"
+            label="Динамик"
+            accessibilityLabel={callState.isSpeakerOn ? 'Переключить на наушник' : 'Включить громкую связь'}
+            active={callState.isSpeakerOn}
             onPress={onToggleSpeaker}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons
-              name={callState.isSpeakerOn ? 'volume-up' : 'volume-down'}
-              size={28}
-              color={callState.isSpeakerOn ? '#3B82F6' : '#6B7280'}
-            />
-            <Text style={styles.controlButtonText}>
-              {callState.isSpeakerOn ? 'Динамик' : 'Наушники'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.endButton]}
-            onPress={onEnd}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="call-end" size={32} color="#fff" />
-          </TouchableOpacity>
+          />
+          <CallButton icon="call-end" iconSet="material" label="Завершить" color={DECLINE_COLOR} onPress={onEnd} />
         </View>
       );
     }
@@ -178,13 +167,7 @@ export const CallModal = ({
       // Исходящий звонок
       return (
         <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.endButton]}
-            onPress={onEnd}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="call-end" size={32} color="#fff" />
-          </TouchableOpacity>
+          <CallButton icon="call-end" iconSet="material" label="Отменить" color={DECLINE_COLOR} onPress={onEnd} />
         </View>
       );
     }
@@ -198,6 +181,9 @@ export const CallModal = ({
 
   if (!visible) return null;
 
+  const nameParts = (participant?.name || '').trim().split(/\s+/);
+  const person = { sname: nameParts[0], fname: nameParts[1] };
+
   return (
     <Modal
       visible={visible}
@@ -205,64 +191,53 @@ export const CallModal = ({
       animationType="none"
       statusBarTranslucent={true}
     >
-      <BlurView intensity={50} style={styles.overlay}>
-        <Animated.View
-          style={[
-            styles.container,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
+      <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+        <LinearGradient colors={CALL_BACKGROUND} style={StyleSheet.absoluteFill} />
+        <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerSpacer} />
-            <Text style={styles.headerTitle}>Звонок</Text>
+            <Text style={styles.headerTitle}>Аудиозвонок</Text>
             <TouchableOpacity
               style={styles.closeButton}
               onPress={onEnd || onReject}
               activeOpacity={0.6}
+              accessibilityLabel="Закрыть"
             >
-              <MaterialIcons name="close" size={24} color="#6B7280" />
+              <Ionicons name="close" size={22} color="rgba(255, 255, 255, 0.85)" />
             </TouchableOpacity>
           </View>
 
-          {/* Avatar */}
-          <View style={styles.avatarContainer}>
-            {participant?.avatar ? (
-              <Image
-                source={{ uri: participant.avatar }}
-                style={styles.avatar}
-              />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <MaterialCommunityIcons
-                  name="account"
-                  size={64}
-                  color="#9CA3AF"
+          <Animated.View style={[styles.center, { transform: [{ translateY: slideAnim }] }]}>
+            {/* Avatar */}
+            <View style={styles.avatarRing}>
+              {participant?.avatar ? (
+                <Image
+                  source={{ uri: participant.avatar }}
+                  style={styles.avatar}
                 />
-              </View>
+              ) : (
+                <Avatar person={person} id={participant?.id} size={128} />
+              )}
+            </View>
+
+            {/* Name */}
+            <Text style={styles.participantName} numberOfLines={2}>{participant?.name || 'Неизвестный'}</Text>
+
+            {/* Status / Duration */}
+            {callState.status === 'active' ? (
+              <Text style={styles.durationText}>
+                {formatDuration(callState.duration)}
+              </Text>
+            ) : (
+              <Text style={styles.statusText}>{getStatusText()}</Text>
             )}
-          </View>
-
-          {/* Name */}
-          <Text style={styles.participantName}>{participant?.name || 'Неизвестный'}</Text>
-
-          {/* Status */}
-          <Text style={styles.statusText}>{getStatusText()}</Text>
-
-          {/* Duration Timer */}
-          {callState.status === 'active' && (
-            <Text style={styles.durationText}>
-              {formatDuration(callState.duration)}
-            </Text>
-          )}
+          </Animated.View>
 
           {/* Action Buttons */}
           <View style={styles.actionsContainer}>{renderActionButtons()}</View>
-        </Animated.View>
-      </BlurView>
+        </SafeAreaView>
+      </Animated.View>
     </Modal>
   );
 };
@@ -270,118 +245,99 @@ export const CallModal = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: '#0B0B0E',
   },
-  container: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 24,
-    width: '90%',
-    maxWidth: 400,
-    alignItems: 'center',
+  safe: {
+    flex: 1,
   },
   header: {
-    width: '100%',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   headerSpacer: {
-    width: 24,
+    width: 40,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1F2937',
+    color: 'rgba(255, 255, 255, 0.7)',
   },
   closeButton: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
-  avatarContainer: {
-    marginBottom: 16,
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  avatarRing: {
+    padding: 6,
+    borderRadius: 76,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 59, 66, 0.45)',
+    marginBottom: 24,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  avatarPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 128,
+    height: 128,
+    borderRadius: 64,
   },
   participantName: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
     marginBottom: 8,
   },
   statusText: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 8,
+    fontSize: 17,
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
   },
   durationText: {
     fontSize: 20,
     fontWeight: '500',
-    color: '#3B82F6',
-    marginBottom: 16,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontVariant: ['tabular-nums'],
   },
   actionsContainer: {
-    width: '100%',
-    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+    minHeight: 140,
+    justifyContent: 'flex-end',
   },
   actionsRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 24,
+    justifyContent: 'space-evenly',
+    alignItems: 'flex-start',
   },
-  actionsGrid: {
-    width: '100%',
-    gap: 16,
+  callButtonWrap: {
+    alignItems: 'center',
+    width: 96,
   },
-  actionButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  callButton: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
   },
-  acceptButton: {
-    backgroundColor: '#10B981',
+  callButtonActive: {
+    backgroundColor: '#FFFFFF',
   },
-  rejectButton: {
-    backgroundColor: '#EF4444',
-  },
-  endButton: {
-    backgroundColor: '#EF4444',
-    alignSelf: 'center',
-  },
-  controlButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: '#F3F4F6',
-    gap: 8,
-  },
-  controlButtonActive: {
-    backgroundColor: '#DBEAFE',
-  },
-  controlButtonText: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
+  callButtonLabel: {
+    marginTop: 8,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
   },
 });

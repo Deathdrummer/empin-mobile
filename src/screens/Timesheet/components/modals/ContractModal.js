@@ -1,9 +1,12 @@
 import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TouchableHighlight, ScrollView, Modal, TextInput, Dimensions, StatusBar, ActivityIndicator } from 'react-native';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Sheet } from '../../../../components/ui/Sheet';
+import { useTheme, useThemedStyles } from '../../../../theme';
 
 export const ContractModal = ({ visible, contractSearch, contractsList, loading, onClose, onSearchChange, onSelectContract }) => {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const searchInputRef = useRef(null);
 
   useEffect(() => {
@@ -17,131 +20,88 @@ export const ContractModal = ({ visible, contractSearch, contractsList, loading,
   }, [visible]);
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-      statusBarTranslucent={true}
-    >
-      <StatusBar backgroundColor="rgba(0,0,0,0.5)" hidden={true} />
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalBlurLayer} />
-        <View style={styles.modalContent}>
-          {loading && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#999999" />
-            </View>
-          )}
-          <Text style={styles.modalTitle}>Поиск договора</Text>
-          <TextInput
-            ref={searchInputRef}
-            style={styles.searchInput}
-            placeholder="Введите номер или название..."
-            value={contractSearch}
-            onChangeText={onSearchChange}
-          />
-          <ScrollView style={styles.modalList} keyboardShouldPersistTaps='handled'>
-            {contractsList.map((contract) => (
-              <TouchableOpacity
-                key={contract.id}
-                style={styles.modalItem}
-                onPress={() => onSelectContract(contract.id)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalItemText}>
-                  {contract.object_number} - {contract.title}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <TouchableHighlight style={styles.modalCloseButton} onPress={onClose} underlayColor="#b8b8b8">
-            <Text style={styles.modalCloseText}>Закрыть</Text>
-          </TouchableHighlight>
-        </View>
+    <Sheet visible={visible} onClose={onClose} title="Добавить объект" keyboard>
+      <View style={styles.search}>
+        <Ionicons name="search" size={18} color={theme.textMuted} />
+        <TextInput
+          ref={searchInputRef}
+          style={styles.searchInput}
+          placeholder="Номер или название договора"
+          placeholderTextColor={theme.textMuted}
+          value={contractSearch}
+          onChangeText={onSearchChange}
+          returnKeyType="search"
+        />
       </View>
-    </Modal>
+      <View style={styles.listWrapper}>
+        <ScrollView style={styles.list} keyboardShouldPersistTaps="handled">
+          {contractsList.map((contract) => (
+            <Pressable
+              key={contract.id}
+              style={({ pressed }) => [styles.item, pressed && { backgroundColor: theme.surfacePressed }]}
+              onPress={() => onSelectContract(contract.id)}
+            >
+              <Text style={styles.itemNumber}>{contract.object_number}</Text>
+              <Text style={styles.itemTitle} numberOfLines={2}>{contract.title}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        {loading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={theme.accent} />
+          </View>
+        )}
+      </View>
+    </Sheet>
   );
 };
 
-const styles = StyleSheet.create({
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
+const makeStyles = (theme) => StyleSheet.create({
+  search: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 15,
-  },
-  modalBlurLayer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  modalContent: {
-    position: 'relative',
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 20,
-    width: SCREEN_WIDTH - 30,
-    maxHeight: '70%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#555',
-    marginBottom: 15,
-    textAlign: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: theme.inputBackground,
   },
   searchInput: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 15,
+    flex: 1,
+    paddingVertical: 10,
     fontSize: 16,
+    color: theme.text,
   },
-  modalList: {
-    maxHeight: 300,
+  listWrapper: {
+    flexShrink: 1,
+    minHeight: 120,
   },
-  modalItem: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2dde7',
+  list: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
-  modalItemText: {
-    fontSize: 16,
-    color: '#333',
+  item: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.separator,
   },
-  modalCloseButton: {
-    backgroundColor: '#d0d0d0',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginTop: 25,
-    alignItems: 'center',
-  },
-  modalCloseText: {
-    color: '#777',
-    fontSize: 16,
+  itemNumber: {
+    fontSize: 13,
     fontWeight: '700',
+    color: theme.accentText,
+    marginBottom: 2,
+  },
+  itemTitle: {
+    fontSize: 16,
+    color: theme.text,
   },
   loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderRadius: 8,
-    zIndex: 10,
+    backgroundColor: theme.veil,
   },
 });

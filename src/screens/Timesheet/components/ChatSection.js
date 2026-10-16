@@ -396,6 +396,10 @@ export const ChatSection = ({
         options,
         cancelButtonIndex,
         title: 'Добавить вложение',
+        userInterfaceStyle: theme.dark ? 'dark' : 'light',
+        containerStyle: { backgroundColor: theme.sheet },
+        textStyle: { color: theme.text },
+        titleTextStyle: { color: theme.textSecondary },
       },
       (buttonIndex) => {
         if (buttonIndex === 0) {

@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableHighlight,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -15,8 +14,11 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { authAPI } from '../services/api';
 import { getUserFacingError } from '../utils/userFacingError';
+import { useTheme, useThemedStyles } from '../theme';
 
 export default function LoginScreen({ onLoginSuccess }) {
+  const theme = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -82,43 +84,46 @@ export default function LoginScreen({ onLoginSuccess }) {
       style={styles.container}
     >
       <View style={styles.content}>
-        <Image
-          source={require('../../assets/logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <Text style={styles.subtitle}>план-график работ</Text>
+        <View style={styles.brand}>
+          <Image
+            source={require('../../assets/logo-mark.png')}
+            style={styles.logo}
+            resizeMode="cover"
+            accessibilityIgnoresInvertColors
+          />
+          <Text style={styles.title}>Эмпин PRO</Text>
+          <Text style={styles.subtitle}>План-график работ, чаты и звонки</Text>
+        </View>
 
         <View style={styles.form}>
-          <TextInput
-            style={[
-              styles.input,
-              { borderColor: emailError ? '#ff4444' : '#e2dde7' },
-            ]}
-            placeholder="Email"
-            placeholderTextColor="#999"
-            value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              setEmailError(false);
-            }}
-            autoCapitalize="none"
-            autoCorrect={false}
-            spellCheck={false}
-            keyboardType="email-address"
-            textContentType="username"
-            editable={!loading}
-          />
-
-          <View style={styles.passwordContainer}>
+          <View style={[styles.field, emailError && styles.fieldError]}>
+            <Ionicons name="mail-outline" size={20} color={theme.textMuted} />
             <TextInput
-              style={[
-                styles.input,
-                styles.passwordInput,
-                { borderColor: passwordError ? '#ff4444' : '#e2dde7' },
-              ]}
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={theme.textMuted}
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                setEmailError(false);
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
+              keyboardType="email-address"
+              textContentType="username"
+              autoComplete="email"
+              returnKeyType="next"
+              editable={!loading}
+            />
+          </View>
+
+          <View style={[styles.field, passwordError && styles.fieldError]}>
+            <Ionicons name="lock-closed-outline" size={20} color={theme.textMuted} />
+            <TextInput
+              style={styles.input}
               placeholder="Пароль"
-              placeholderTextColor="#999"
+              placeholderTextColor={theme.textMuted}
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
@@ -129,113 +134,120 @@ export default function LoginScreen({ onLoginSuccess }) {
               autoCorrect={false}
               spellCheck={false}
               textContentType="password"
+              autoComplete="password"
+              returnKeyType="go"
+              onSubmitEditing={handleLogin}
               editable={!loading}
             />
             <TouchableOpacity
               style={styles.eyeIcon}
               onPress={() => setShowPassword(!showPassword)}
               disabled={loading}
+              hitSlop={8}
+              accessibilityLabel={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
             >
               <Ionicons
-                name={showPassword ? 'eye-off' : 'eye'}
-                size={24}
-                color="#999"
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={22}
+                color={theme.textSecondary}
               />
             </TouchableOpacity>
           </View>
 
-          <TouchableHighlight
+          <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={handleLogin}
             disabled={loading}
-            underlayColor="#7a7a7a"
+            activeOpacity={0.8}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={theme.onAccent} />
             ) : (
-              <View style={styles.buttonContent}>
-                <Ionicons name="log-in-outline" size={20} color="#fff" style={styles.buttonIcon} />
-                <Text style={styles.buttonText}>Войти</Text>
-              </View>
+              <Text style={styles.buttonText}>Войти</Text>
             )}
-          </TouchableHighlight>
+          </TouchableOpacity>
         </View>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.background,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 30,
+    paddingHorizontal: 24,
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
+  },
+  brand: {
+    alignItems: 'center',
+    marginBottom: 40,
   },
   logo: {
-    width: '100%',
-    height: 80,
-    marginBottom: 25,
+    width: 96,
+    height: 96,
+    borderRadius: 24,
+    marginBottom: 18,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: theme.text,
+    letterSpacing: 0.3,
   },
   subtitle: {
-    fontSize: 24,
-    color: '#555',
+    fontSize: 16,
+    color: theme.textSecondary,
+    marginTop: 6,
     textAlign: 'center',
-    marginBottom: 50,
   },
   form: {
     width: '100%',
+    gap: 12,
   },
-  input: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    fontSize: 16,
-    marginBottom: 15,
-    borderWidth: 2,
-    color: '#000',
-  },
-  passwordContainer: {
-    position: 'relative',
-    marginBottom: 15,
-  },
-  passwordInput: {
-    marginBottom: 0,
-    paddingRight: 50,
-  },
-  eyeIcon: {
-    position: 'absolute',
-    right: 15,
-    top: 0,
-    marginTop: 12,
-    padding: 5,
-  },
-  button: {
-    backgroundColor: '#999999',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonContent: {
+  field: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    minHeight: 54,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    backgroundColor: theme.inputBackground,
   },
-  buttonIcon: {
-    marginTop: 1,
+  fieldError: {
+    borderColor: theme.danger,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: theme.text,
+  },
+  eyeIcon: {
+    padding: 4,
+  },
+  button: {
+    minHeight: 54,
+    borderRadius: 14,
+    backgroundColor: theme.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: theme.onAccent,
+    fontSize: 17,
     fontWeight: '700',
   },
 });
