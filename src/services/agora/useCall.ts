@@ -60,6 +60,9 @@ export const useCall = (): UseCallReturn => {
   const eventHandlerRef = useRef<IRtcEngineEventHandler | null>(null);
   // Звонок, к каналу которого подключён движок: о его внезапном обрыве нужно сообщить серверу
   const callIdRef = useRef<string | null>(null);
+  // Номер попытки звонка. Отмена, отказ или сброс увеличивают его: ответ сервера на устаревшую
+  // попытку (нажали «Отменить», пока шёл запрос) не должен «воскрешать» звонок
+  const attemptRef = useRef(0);
 
   const stopRingingTimeout = () => {
     if (ringingTimeoutRef.current) {
@@ -256,8 +259,10 @@ export const useCall = (): UseCallReturn => {
    */
   const initiateCall = useCallback(
     async (calleeId: number, calleeName: string, calleeAvatar?: string) => {
+      const attempt = ++attemptRef.current;
       try {
         const hasPermission = await requestMicrophonePermission();
+        if (attempt !== attemptRef.current) return;
         if (!hasPermission) {
           Alert.alert(
             'Нет доступа к микрофону',
@@ -270,6 +275,14 @@ export const useCall = (): UseCallReturn => {
         setState((prev) => ({ ...prev, status: 'initiating' }));
 
         const response = await messengerAPI.initiateCall(calleeId);
+
+        if (attempt !== attemptRef.current) {
+          // Пока создавался звонок, его уже отменили: у собеседника он не должен звонить
+          if (response?.call_id) {
+            notifyServer('Отмена звонка', () => messengerAPI.endCall(String(response.call_id)));
+          }
+          return;
+        }
 
         if (!response.call_id || !response.token || !response.channel_name || !response.agora_app_id) {
           throw new Error(response.message || 'Некорректный ответ сервера');
@@ -312,6 +325,7 @@ export const useCall = (): UseCallReturn => {
         }, 90000); // Увеличен с 45s до 90s — WebSocket обычно уведомит раньше
       } catch (error: any) {
         console.error('[Agora] Ошибка инициации звонка:', error);
+        if (attempt !== attemptRef.current) return;
         stopRingingTimeout();
         // Звонок мог успеть создаться на сервере — отменяем, чтобы у собеседника не звонило
         finishCallOnServer();
@@ -331,8 +345,10 @@ export const useCall = (): UseCallReturn => {
    * Принятие входящего звонка
    */
   const acceptCall = useCallback(async (callId: string, participant?: CallData['participant']) => {
+    const attempt = ++attemptRef.current;
     try {
       const hasPermission = await requestMicrophonePermission();
+      if (attempt !== attemptRef.current) return false;
       if (!hasPermission) {
         Alert.alert(
           'Нет доступа к микрофону',
@@ -343,6 +359,11 @@ export const useCall = (): UseCallReturn => {
 
       callIdRef.current = null;
       const response = await messengerAPI.acceptCall(callId);
+      if (attempt !== attemptRef.current) {
+        // Пока принимали, звонок отклонили или он завершился — сервер уже считает его принятым
+        notifyServer('Завершение звонка', () => messengerAPI.endCall(String(callId)));
+        return false;
+      }
       const { channel_name, token, uid, agora_app_id } = response;
       callIdRef.current = String(callId);
 
@@ -368,6 +389,7 @@ export const useCall = (): UseCallReturn => {
       return true;
     } catch (error: any) {
       console.error('[Agora] Ошибка принятия звонка:', error, '| response data:', (error as any).response?.data, '| callId was:', callId);
+      if (attempt !== attemptRef.current) return false;
       // Сервер уже отметил звонок принятым, а подключиться не удалось — завершаем его на сервере
       finishCallOnServer();
       destroyEngine();
@@ -387,6 +409,7 @@ export const useCall = (): UseCallReturn => {
   const rejectCall = useCallback(async (callId: string) => {
     // Раньше при ошибке запроса (например, 429) состояние не сбрасывалось, а сервер не узнавал об отказе
     notifyServer('Отклонение звонка', () => messengerAPI.rejectCall(callId));
+    attemptRef.current += 1;
     callIdRef.current = null;
     stopRingingTimeout();
     destroyEngine();
@@ -407,6 +430,7 @@ export const useCall = (): UseCallReturn => {
     // Раньше при ошибке запроса (например, 429) звонок у собеседника продолжал звонить, а движок
     // оставался в канале: звонящий нажимал вызов снова, и собеседнику приходил второй входящий
     const callId = state.callData?.callId ?? callIdRef.current;
+    attemptRef.current += 1;
     callIdRef.current = null;
     if (callId) {
       notifyServer('Завершение звонка', () => messengerAPI.endCall(callId));
@@ -452,6 +476,7 @@ export const useCall = (): UseCallReturn => {
    */
   const resetToIdle = useCallback(() => {
     // Вызывается, когда звонок завершён другой стороной — сервер уже знает
+    attemptRef.current += 1;
     callIdRef.current = null;
     stopRingingTimeout();
     destroyEngine();

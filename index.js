@@ -57,6 +57,14 @@ if (Platform.OS === 'android') {
       );
     }
 
+    if (data.type === 'message') {
+      // Уведомление о сообщении показываем сами (см. messagePush); после выхода — не показываем
+      const authToken = await AsyncStorage.getItem('token');
+      if (!authToken) return;
+      const { presentMessagePush } = require('./src/services/messagePush');
+      await presentMessagePush(raw, data).catch(() => {});
+    }
+
     if (data.type === 'call_cancelled' || data.type === 'call_ended') {
       // FCM fallback: скрываем нативное окно звонка если app в killed/background
       // (WebSocket не работает в killed state — foreground обрабатывает через CallContext)

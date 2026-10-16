@@ -181,6 +181,10 @@ export const CallModal = ({
 
   if (!visible) return null;
 
+  // Крестик у входящего — это «Отклонить»: иначе сервер не узнал бы об отказе и у звонящего звонило бы дальше
+  const isIncomingRinging = callState.status === 'ringing' && callState.callData?.isIncoming;
+  const handleClose = isIncomingRinging ? onReject : onEnd;
+
   const nameParts = (participant?.name || '').trim().split(/\s+/);
   const person = { sname: nameParts[0], fname: nameParts[1] };
 
@@ -200,7 +204,7 @@ export const CallModal = ({
             <Text style={styles.headerTitle}>Аудиозвонок</Text>
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={onEnd || onReject}
+              onPress={handleClose}
               activeOpacity={0.6}
               accessibilityLabel="Закрыть"
             >

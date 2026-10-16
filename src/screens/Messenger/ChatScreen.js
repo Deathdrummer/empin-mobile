@@ -96,6 +96,7 @@ export default function ChatScreen({ navigation, route }) {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const listRef = useRef(null);
+  const messagesRef = useRef([]);
   const focusedRef = useRef(false);
   const scrolledAwayRef = useRef(false);
   const markReadTimerRef = useRef(null);
@@ -103,6 +104,10 @@ export default function ChatScreen({ navigation, route }) {
   const syncingRef = useRef(false);
 
   const peerTyping = peerTypingUntil > Date.now();
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   // --- Загрузка ---
 
@@ -119,10 +124,17 @@ export default function ChatScreen({ navigation, route }) {
     try {
       const data = await messengerAPI.getMessagesPage(targetChatId, { limit: PAGE_SIZE });
       const page = data.messages || [];
+      // Телефон долго был без связи, и новых больше страницы: между известными и свежими сообщениями
+      // была бы дыра. Показываем свежую страницу заново, а более старые догрузит прокрутка вверх
+      const newestKnown = messagesRef.current.reduce(
+        (max, message) => (isServerId(message.id) && message.id > max ? message.id : max),
+        0
+      );
+      const reset = replace || (data.has_more && newestKnown > 0 && page.length > 0 && page[0].id > newestKnown);
       setPeerLastReadId(data.peer_last_read_id ?? null);
-      if (replace) setHasMore(Boolean(data.has_more));
+      if (reset) setHasMore(Boolean(data.has_more));
       setMessages((current) => {
-        if (replace) {
+        if (reset) {
           return mergeMessages(current.filter((message) => !isServerId(message.id)), page);
         }
         // Удалённые собеседником: серверные сообщения внутри диапазона страницы, которых в ней больше нет
@@ -195,7 +207,8 @@ export default function ChatScreen({ navigation, route }) {
 
   const markRead = useCallback((list) => {
     if (!chatId || !focusedRef.current || AppState.currentState !== 'active') return;
-    const lastFromPeer = [...list].reverse().find((message) => isServerId(message.id) && message.from_id !== me.staffId && !message.self);
+    const lastFromPeer = [...list].reverse().find((message) => isServerId(message.id)
+      && (me.staffId ? Number(message.from_id) !== Number(me.staffId) : !message.self));
     if (!lastFromPeer || lastFromPeer.id <= lastMarkedRef.current) return;
 
     clearTimeout(markReadTimerRef.current);
@@ -291,7 +304,10 @@ export default function ChatScreen({ navigation, route }) {
 
   // --- Отправка ---
 
-  const isMine = useCallback((message) => (me.staffId ? message.from_id === me.staffId : Boolean(message.self)), [me.staffId]);
+  const isMine = useCallback(
+    (message) => (me.staffId ? Number(message.from_id) === Number(me.staffId) : Boolean(message.self)),
+    [me.staffId]
+  );
 
   const sendPayload = useCallback(async (localId, payload) => {
     try {

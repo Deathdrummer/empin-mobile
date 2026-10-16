@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { messengerAPI } from './api';
 import { getActiveChatId } from './messengerStore';
+import { ensureMessagesChannel } from './messagePush';
 
 const EXPO_PUSH_TOKEN_STORAGE_KEY = '@expoPushToken';
 
@@ -47,6 +48,7 @@ const setupAndroidChannel = async (): Promise<void> => {
 export const registerPushNotifications = async (): Promise<string | null> => {
   try {
     await setupAndroidChannel();
+    await ensureMessagesChannel();
 
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
