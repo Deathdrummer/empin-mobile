@@ -33,7 +33,7 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#160204"
       },
       "edgeToEdgeEnabled": true,
       "package": "ru.deathdrumer.empinmobile",
@@ -87,7 +87,13 @@
         }
       ],
       "./plugins/withAndroidReleaseManifest",
-      "expo-asset"
+      "expo-asset",
+      [
+        "./plugins/withAppDisplayName",
+        {
+          "displayName": "Эмпин PRO"
+        }
+      ]
     ],
     "extra": {
       "eas": {
