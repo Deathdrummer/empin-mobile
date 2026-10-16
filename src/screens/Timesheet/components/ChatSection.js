@@ -26,7 +26,7 @@ import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
-import { useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
+import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } from 'expo-audio';
 import { isPermissionError, showPermissionSettingsAlert } from '../../../utils/permissionSettingsAlert';
 import { formatDateTime, formatEditTime } from '../../../utils/dateTime';
 
@@ -569,6 +569,8 @@ export const ChatSection = ({
       }
 
       // Подготавливаем и запускаем запись
+      // На iOS без этого режима expo-audio отказывается записывать (RecordingDisabledException)
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
       setIsRecording(true);
@@ -623,6 +625,8 @@ export const ChatSection = ({
           throw stopError;
         }
       }
+      // Обратно в режим воспроизведения: иначе голосовые играли бы в слуховой динамик
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
 
       setIsRecording(false);
       setRecordingDuration(0);

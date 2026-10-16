@@ -364,6 +364,35 @@ export const messengerAPI = {
     return response.data;
   },
 
+  // Список чатов: собеседник, последнее сообщение, непрочитанные
+  getChats: async () => {
+    const response = await api.get('/messenger/chats', { timeout: MESSAGE_REFRESH_TIMEOUT_MS });
+    return response.data;
+  },
+
+  // История порциями: последние limit сообщений до beforeId или новые после afterId
+  getMessagesPage: async (chatId, { limit = 40, beforeId = null, afterId = null } = {}) => {
+    const response = await api.post('/messenger/chat/messages', {
+      chat_id: chatId,
+      limit,
+      before_id: beforeId,
+      after_id: afterId,
+    }, { timeout: MESSAGE_REFRESH_TIMEOUT_MS });
+    return response.data;
+  },
+
+  markRead: async (chatId, messageId) => {
+    const response = await api.post('/messenger/chat/read', {
+      chat_id: chatId,
+      message_id: messageId,
+    });
+    return response.data;
+  },
+
+  typing: async (chatId) => {
+    await api.post('/messenger/chat/typing', { chat_id: chatId });
+  },
+
   addMessage: async (chatId, message, replyToId = null, mediaArray = []) => {
     // Если есть медиа, используем FormData
     if (mediaArray && mediaArray.length > 0) {

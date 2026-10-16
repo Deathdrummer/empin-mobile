@@ -3,17 +3,23 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { messengerAPI } from './api';
+import { getActiveChatId } from './messengerStore';
 
 const EXPO_PUSH_TOKEN_STORAGE_KEY = '@expoPushToken';
 
 // Настройка поведения уведомлений в foreground
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const data: any = notification.request.content.data;
+    // Сообщение из открытого сейчас чата пользователь и так видит на экране
+    const fromOpenChat = data?.type === 'message' && Number(data.chat_id) === getActiveChatId();
+    return {
+      shouldShowBanner: !fromOpenChat,
+      shouldShowList: !fromOpenChat,
+      shouldPlaySound: !fromOpenChat,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 /**

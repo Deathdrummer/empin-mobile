@@ -8,7 +8,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { useActionSheet } from '@expo/react-native-action-sheet';
-import { useAudioRecorder, RecordingPresets, AudioModule } from 'expo-audio';
+import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } from 'expo-audio';
 import { MediaCollage } from './MediaCollage';
 import { DocumentList } from './DocumentList';
 import { AudioPlayer } from './AudioPlayer';
@@ -358,6 +358,8 @@ export const ChatInputPanel = ({
       }
 
       // Подготавливаем и запускаем запись
+      // На iOS без этого режима expo-audio отказывается записывать (RecordingDisabledException)
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
       setIsRecording(true);
@@ -412,6 +414,8 @@ export const ChatInputPanel = ({
           throw stopError;
         }
       }
+      // Обратно в режим воспроизведения: иначе голосовые играли бы в слуховой динамик
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
 
       setIsRecording(false);
       setRecordingDuration(0);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../theme';
 import { useNavigation } from '@react-navigation/native';
 import BottomMenu from '../components/BottomMenu';
 import { LogoutModal } from './Timesheet/components/modals/LogoutModal';
@@ -11,6 +12,7 @@ export default function MessengerScreen({ onLogout }) {
   const navigation = useNavigation();
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('chats');
+  const theme = useTheme();
 
   const handleNavigateToTimesheet = () => {
     navigation.replace('Timesheet');
@@ -49,7 +51,7 @@ export default function MessengerScreen({ onLogout }) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={[styles.container, activeTab === 'chats' && { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       {renderContent()}
       <LogoutModal
         visible={logoutModalVisible}

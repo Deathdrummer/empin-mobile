@@ -1,5 +1,6 @@
 import Pusher from '@pusher/pusher-websocket-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { emitMessengerEvent } from './messengerStore';
 
 const PUSHER_APP_KEY = '88f644943a85b36b115e';
 const PUSHER_CLUSTER = 'eu';
@@ -90,6 +91,14 @@ export const subscribeToCalls = async (staffId, handlers) => {
           break;
         case 'call.ended':
           handlers.onCallEnded?.(data);
+          break;
+        // Мессенджер приходит в тот же личный канал, что и звонки
+        case 'message.created':
+        case 'message.updated':
+        case 'message.deleted':
+        case 'chat.read':
+        case 'chat.typing':
+          emitMessengerEvent(event.eventName, data);
           break;
       }
     },

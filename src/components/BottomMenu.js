@@ -1,8 +1,16 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTotalUnread } from '../services/messengerStore';
+
+// Красный счётчик непрочитанных сообщений поверх значка чатов
+const UnreadBadge = ({ count }) => (count > 0 ? (
+  <View style={styles.unreadBadge} pointerEvents="none">
+    <Text style={styles.unreadBadgeText}>{count > 99 ? '99+' : count}</Text>
+  </View>
+) : null);
 
 export default function BottomMenu({
   section, // 'timesheet' | 'messenger'
@@ -19,6 +27,7 @@ export default function BottomMenu({
 }) {
   const { showActionSheetWithOptions } = useActionSheet();
   const insets = useSafeAreaInsets();
+  const totalUnread = useTotalUnread();
 
   // Обработчик нажатия на кнопку "три точки"
   const handleDotsMenuPress = () => {
@@ -83,6 +92,7 @@ export default function BottomMenu({
       <TouchableOpacity style={styles.menuItem} onPress={handleSectionSwitch} activeOpacity={0.7}>
         <View style={styles.rightButtonWrapper}>
           <Ionicons name={icon} size={24} color="#fff" />
+          {section === 'timesheet' ? <UnreadBadge count={totalUnread} /> : null}
         </View>
       </TouchableOpacity>
     );
@@ -128,6 +138,7 @@ export default function BottomMenu({
                 size={24}
                 color={currentScreen === 'Chats' ? "#2c2c2c" : "#999999"}
               />
+              <UnreadBadge count={totalUnread} />
             </View>
           </TouchableOpacity>
 
@@ -213,5 +224,24 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 10,
     backgroundColor: '#666',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#E3262F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });

@@ -18,6 +18,8 @@ import { requestCallPermissions } from './src/utils/requestCallPermissions';
 import apiBlockEmitter from './src/utils/apiBlockEmitter';
 import { ApiBlockModal } from './src/components/ApiBlockModal';
 import { CallProvider } from './src/contexts/CallContext';
+import { useMessengerSync } from './src/hooks/useMessengerSync';
+import { navigationRef } from './src/services/navigationRef';
 import { GlobalCallModal } from './src/components/messenger/GlobalCallModal';
 import {
   registerPushNotifications,
@@ -34,6 +36,8 @@ export default function App() {
 
   // Автоматическое обновление прав при возврате в приложение
   useAppStatePermissions();
+  // Непрочитанные сообщения и открытие чата по уведомлению
+  useMessengerSync(isLoggedIn);
 
   const clearSession = useCallback(async ({ notifyServer = false } = {}) => {
     try {
@@ -122,7 +126,7 @@ export default function App() {
             <StatusBar hidden={true} />
             <View style={styles.appContainer}>
               {isLoggedIn ? (
-                <NavigationContainer>
+                <NavigationContainer ref={navigationRef}>
                   <Stack.Navigator screenOptions={{ headerShown: false }}>
                     <Stack.Screen name="Timesheet">
                       {props => <TimesheetScreen {...props} onLogout={handleLogout} />}
