@@ -13,6 +13,8 @@ import TimesheetScreen from './src/screens/TimesheetScreen';
 import MessengerScreen from './src/screens/MessengerScreen';
 import ChatScreen from './src/screens/Messenger/ChatScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import ChatInfoScreen from './src/screens/Messenger/ChatInfoScreen';
+import { clearDrafts, DRAFTS_STORAGE_KEY } from './src/services/drafts';
 import { authAPI, setUnauthorizedCallback, checkApiAvailability } from './src/services/api';
 import { disconnectPusher } from './src/services/pusher';
 import { useAppStatePermissions } from './src/hooks/useAppStatePermissions';
@@ -73,8 +75,9 @@ export default function App() {
       await Promise.allSettled([
         disconnectPusher(),
         disableIosVoip(),
-        AsyncStorage.multiRemove(['token', 'user', 'permissions', '@pendingCall']),
+        AsyncStorage.multiRemove(['token', 'user', 'permissions', '@pendingCall', DRAFTS_STORAGE_KEY]),
       ]);
+      clearDrafts();
       setIsLoggedIn(false);
     }
   }, []);
@@ -163,6 +166,7 @@ export default function App() {
                       <Stack.Screen name="Chat">
                         {props => <ChatScreen {...props} onLogout={handleLogout} />}
                       </Stack.Screen>
+                      <Stack.Screen name="ChatInfo" component={ChatInfoScreen} />
                     </Stack.Navigator>
                   </NavigationContainer>
                 ) : (

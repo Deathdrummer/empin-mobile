@@ -17,19 +17,25 @@ import * as Haptics from 'expo-haptics';
 import Toast from 'react-native-toast-message';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { isCallAudioActive } from '../../services/callAudioState';
-import { formatDuration } from '../../utils/chatFormat';
-import { AttachmentSheet } from './AttachmentSheet';
+import { formatDuration, fullName, shortName } from '../../utils/chatFormat';
+import { AttachmentSheet, takePhoto } from './AttachmentSheet';
+import { Avatar } from './Avatar';
 
 const TYPING_THROTTLE_MS = 3000;
 const CANCEL_DISTANCE = 90;
 const MIN_VOICE_SECONDS = 0.8;
+const MAX_SUGGESTIONS = 5;
+
+// Набирается упоминание: «… @Сам» в конце текста
+const MENTION_QUERY = /(^|\s)@([^\s@]*)$/;
 
 const isVideoAsset = (asset) => asset.type === 'video' || asset.mimeType?.startsWith('video/');
 const isImageAsset = (asset) => asset.type === 'image' || asset.mimeType?.startsWith('image/');
 
 /**
- * Панель ввода как в мессенджерах: скрепка, поле, микрофон/отправка.
+ * Панель ввода как в мессенджерах: скрепка, поле с камерой, микрофон/отправка.
  * Микрофон: удерживать — запись, отпустить — отправить, сдвинуть влево — отмена.
+ * В группе «@» показывает участников для упоминания; onCreatePoll добавляет «Опрос» во вложения.
  */
 export const Composer = ({
   theme,
@@ -41,8 +47,12 @@ export const Composer = ({
   onCancelContext,
   onTyping,
   allowAttachments = true,
+  mentionCandidates = null,
+  onCreatePoll = null,
+  transparent = false,
 }) => {
   const [attachments, setAttachments] = useState([]);
+  const mentionIdsRef = useRef(new Map());
   const [sheetVisible, setSheetVisible] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -83,9 +93,36 @@ export const Composer = ({
     if (!canSend) return;
     const text = value;
     const files = attachments;
+    // Упомянутые, чьи «@Фамилия И.» остались в тексте
+    const mentionIds = [...mentionIdsRef.current.entries()]
+      .filter(([label]) => text.includes(label))
+      .map(([, id]) => id);
+    mentionIdsRef.current = new Map();
     setAttachments([]);
     lastTypingRef.current = 0;
-    await onSend(text, files);
+    await onSend(text, files, { mentionIds });
+  };
+
+  // --- Упоминания ---
+
+  const mentionMatch = mentionCandidates?.length ? value.match(MENTION_QUERY) : null;
+  const mentionQuery = mentionMatch ? mentionMatch[2].toLowerCase() : null;
+  const suggestions = mentionQuery === null ? [] : mentionCandidates
+    .filter((person) => !mentionQuery
+      || (person.sname || '').toLowerCase().startsWith(mentionQuery)
+      || (person.fname || '').toLowerCase().startsWith(mentionQuery))
+    .slice(0, MAX_SUGGESTIONS);
+
+  const insertMention = (person) => {
+    const label = `@${shortName(person)}`;
+    mentionIdsRef.current.set(label, person.id);
+    onChangeText(value.replace(MENTION_QUERY, (match, space) => `${space}${label} `));
+    Haptics.selectionAsync().catch(() => {});
+  };
+
+  const openCamera = async () => {
+    const assets = await takePhoto();
+    if (assets?.length) setAttachments((prev) => [...prev, ...assets].slice(0, 10));
   };
 
   // --- Голосовые ---
@@ -198,7 +235,27 @@ export const Composer = ({
   const s = styles(theme);
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, transparent && s.containerTransparent]}>
+      {suggestions.length ? (
+        <View style={s.suggestions}>
+          {suggestions.map((person, index) => (
+            <Pressable
+              key={person.id}
+              onPress={() => insertMention(person)}
+              style={({ pressed }) => [
+                s.suggestion,
+                index > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.separator },
+                pressed && { backgroundColor: theme.surfacePressed },
+              ]}
+            >
+              <Avatar person={person} id={person.id} size={30} />
+              <Text style={s.suggestionName} numberOfLines={1}>{fullName(person)}</Text>
+              <Text style={s.suggestionTag}>{`@${shortName(person)}`}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
       {context ? (
         <View style={s.context}>
           <Ionicons name={context.type === 'edit' ? 'create-outline' : 'arrow-undo'} size={20} color={theme.accent} />
@@ -261,6 +318,11 @@ export const Composer = ({
                 maxLength={4000}
                 textAlignVertical="center"
               />
+              {allowAttachments && context?.type !== 'edit' && !value ? (
+                <Pressable onPress={openCamera} hitSlop={8} style={s.cameraButton} accessibilityLabel="Сфотографировать">
+                  <Ionicons name="camera-outline" size={23} color={theme.textSecondary} />
+                </Pressable>
+              ) : null}
             </View>
           </>
         )}
@@ -290,6 +352,7 @@ export const Composer = ({
         theme={theme}
         onClose={() => setSheetVisible(false)}
         onPicked={(assets) => setAttachments((prev) => [...prev, ...assets].slice(0, 10))}
+        extraOptions={onCreatePoll ? [{ key: 'poll', label: 'Опрос', icon: 'stats-chart', color: '#E0A100', onPress: onCreatePoll }] : []}
       />
     </View>
   );
@@ -302,6 +365,21 @@ const styles = (theme) => StyleSheet.create({
     borderTopColor: theme.separator,
     paddingBottom: 6,
   },
+  // Поверх полупрозрачной панели: свой фон и граница не нужны
+  containerTransparent: { backgroundColor: 'transparent', borderTopWidth: 0 },
+  suggestions: {
+    marginHorizontal: 8,
+    marginTop: 8,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: theme.sheet,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.separator,
+  },
+  suggestion: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  suggestionName: { flex: 1, fontSize: 15, color: theme.text },
+  suggestionTag: { fontSize: 13, color: theme.textMuted },
+  cameraButton: { position: 'absolute', right: 8, bottom: 8 },
   context: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingTop: 8 },
   contextBody: { flex: 1, borderLeftWidth: 3, paddingLeft: 8 },
   contextTitle: { fontSize: 14, fontWeight: '600', color: theme.accentText },

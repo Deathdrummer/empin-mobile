@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { Shadow } from 'react-native-shadow-2';
 import * as Haptics from 'expo-haptics';
@@ -7,6 +7,8 @@ import { ChatSection } from './ChatSection';
 import { CommentsIcon } from './CommentsIcon';
 import { ContractContextMenu } from './ContractContextMenu';
 import { useTheme, useThemedStyles } from '../../../theme';
+import { messengerAPI } from '../../../services/api';
+import { setTotalUnread } from '../../../services/messengerStore';
 
 export const ContractCard = ({
   contract,
@@ -32,6 +34,14 @@ export const ContractCard = ({
   const isExpanded = expandedContract === contract.timesheet_contract_id;
   const isAddingComment = addingComment === contract.timesheet_contract_id;
   const isDeletingThisContract = deletingContract === contract.timesheet_contract_id;
+
+  // Комментарии объекта открыли в табеле — в «Чатах» они больше не непрочитанные
+  useEffect(() => {
+    if (!isExpanded || !contract.contract_id) return;
+    messengerAPI.markObjectRead(contract.contract_id)
+      .then((data) => setTotalUnread(data.total_unread))
+      .catch(() => {});
+  }, [isExpanded, contract.contract_id, contract.chat?.length]);
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });

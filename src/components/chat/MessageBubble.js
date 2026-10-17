@@ -4,9 +4,20 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { SERVER_URL } from '../../services/api';
-import { formatMessageTime, fullName, mediaLabel } from '../../utils/chatFormat';
+import { avatarColor } from '../../theme';
+import { formatMessageTime, formatShortDay, fullName, mediaLabel, shortName } from '../../utils/chatFormat';
+import { Avatar } from './Avatar';
+import { PollCard } from './PollCard';
 import { VoiceMessage } from './VoiceMessage';
 import { DocumentCard, MediaGrid } from './MessageAttachments';
+
+const AVATAR_SLOT = 34;
+
+// «@Самсонов А.» — упоминание в тексте
+const MENTION_PATTERN = /(@[A-Za-zА-Яа-яЁё-]+(?:\s[A-ZА-ЯЁ]\.)?)/g;
+
+/** Текст с подсвеченными упоминаниями */
+const textParts = (text) => text.split(MENTION_PATTERN).filter((part) => part !== '');
 
 /** Вложения сообщения в одном формате: старый формат — один объект, новый — массив */
 export const normalizeMedia = (media) => {
@@ -50,6 +61,9 @@ const MessageBubbleComponent = ({
   isLastInGroup,
   isFirstInGroup,
   myUserId,
+  myStaffId,
+  chatType = 'direct',
+  highlighted = false,
   theme,
   onLongPress,
   onReply,
@@ -58,7 +72,13 @@ const MessageBubbleComponent = ({
   onOpenDocument,
   onQuotePress,
   onRetry,
+  onVote,
 }) => {
+  // В группе и чате объекта у чужих сообщений — автор и аватар, как в Telegram
+  const multiAuthor = chatType !== 'direct';
+  const showAuthor = multiAuthor && !isMine && isFirstInGroup;
+  const showAvatarSlot = multiAuthor && !isMine;
+  const isPoll = message.type === 'poll' && message.poll;
   const swipeableRef = useRef(null);
   const media = useMemo(() => normalizeMedia(message.media), [message.media]);
   const visual = media.filter((item) => item.type === 'image' || item.type === 'video');
@@ -78,6 +98,7 @@ const MessageBubbleComponent = ({
 
   const meta = (
     <View style={[styles.meta, mediaOnly && styles.metaOnMedia]}>
+      {message.pinned ? <Ionicons name="pin" size={11} color={mediaOnly ? '#FFFFFF' : colors.meta} style={styles.metaPin} /> : null}
       <Text style={[styles.metaText, { color: mediaOnly ? '#FFFFFF' : colors.meta }]}>{metaText}</Text>
       {isMine ? (
         <StatusIcon
@@ -111,10 +132,32 @@ const MessageBubbleComponent = ({
         corner,
         { backgroundColor: colors.bg },
         mediaOnly && styles.bubbleMedia,
-        // Голосовое или файл без текста: время ниже содержимого, а не поверх него
+        // Голосовое, файл или опрос без текста: время ниже содержимого, а не поверх него
         !text && !mediaOnly && styles.bubbleMetaBelow,
+        highlighted && { borderWidth: 2, borderColor: theme.accent },
       ]}
     >
+      {showAuthor ? (
+        <Text style={[styles.author, mediaOnly && styles.authorOnMedia]} numberOfLines={1}>
+          <Text style={{ color: avatarColor(message.from_id) }}>{shortName(message.from)}</Text>
+          {message.context?.day ? (
+            <Text style={[styles.authorContext, { color: colors.meta }]}>
+              {`  ${formatShortDay(message.context.day)}${message.context.team ? ` · бригада ${message.context.team}` : ''}`}
+            </Text>
+          ) : null}
+        </Text>
+      ) : null}
+
+      {isPoll ? (
+        <PollCard
+          message={message}
+          myStaffId={myStaffId}
+          theme={theme}
+          colors={{ ...colors, track: isMine ? 'rgba(160, 65, 74, 0.25)' : theme.separator }}
+          onVote={onVote}
+        />
+      ) : null}
+
       {message.reply_to ? (
         <Pressable
           onPress={() => onQuotePress(message.reply_to.id)}
@@ -160,7 +203,11 @@ const MessageBubbleComponent = ({
 
       {text ? (
         <Text style={[styles.text, { color: colors.text }]} selectable={false}>
-          {text}
+          {text.includes('@')
+            ? textParts(text).map((part, index) => (part.startsWith('@')
+              ? <Text key={index} style={[styles.mention, { color: colors.accent }]}>{part}</Text>
+              : part))
+            : text}
           {/* Невидимый хвост резервирует место под время и галочки на последней строке */}
           <Text style={styles.metaSpacer}>{`  ${metaText}${isMine ? '    ' : ''}`}</Text>
         </Text>
@@ -170,9 +217,8 @@ const MessageBubbleComponent = ({
     </Pressable>
   );
 
-  return (
-    <View style={[styles.row, isMine ? styles.rowMine : styles.rowTheirs, isFirstInGroup && styles.rowGroupStart]}>
-      <ReanimatedSwipeable
+  const swipeable = (
+    <ReanimatedSwipeable
         ref={swipeableRef}
         friction={2}
         leftThreshold={56}
@@ -193,27 +239,47 @@ const MessageBubbleComponent = ({
       >
         {bubble}
       </ReanimatedSwipeable>
+  );
 
-      {reactions.length ? (
-        <View style={[styles.reactions, isMine ? styles.reactionsMine : styles.reactionsTheirs]}>
-          {reactions.map((reaction) => (
-            <Pressable
-              key={reaction.emoji}
-              onPress={() => onReactionPress(message, reaction.emoji, reaction.mine)}
-              style={[
-                styles.reaction,
-                {
-                  backgroundColor: reaction.mine ? theme.reactionMine : theme.reactionBackground,
-                  borderColor: reaction.mine ? theme.accent : theme.reactionBorder,
-                },
-              ]}
-            >
-              <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
-              {reaction.count > 1 ? <Text style={[styles.reactionCount, { color: theme.text }]}>{reaction.count}</Text> : null}
-            </Pressable>
-          ))}
+  const reactionsRow = reactions.length ? (
+    <View style={[styles.reactions, isMine ? styles.reactionsMine : styles.reactionsTheirs]}>
+      {reactions.map((reaction) => (
+        <Pressable
+          key={reaction.emoji}
+          onPress={() => onReactionPress(message, reaction.emoji, reaction.mine)}
+          style={[
+            styles.reaction,
+            {
+              backgroundColor: reaction.mine ? theme.reactionMine : theme.reactionBackground,
+              borderColor: reaction.mine ? theme.accent : theme.reactionBorder,
+            },
+          ]}
+        >
+          <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
+          {reaction.count > 1 ? <Text style={[styles.reactionCount, { color: theme.text }]}>{reaction.count}</Text> : null}
+        </Pressable>
+      ))}
+    </View>
+  ) : null;
+
+  if (showAvatarSlot) {
+    return (
+      <View style={[styles.row, styles.rowWithAvatar, isFirstInGroup && styles.rowGroupStart]}>
+        <View style={styles.avatarSlot}>
+          {isLastInGroup ? <Avatar person={message.from} id={message.from_id} size={30} /> : null}
         </View>
-      ) : null}
+        <View style={styles.rowColumn}>
+          {swipeable}
+          {reactionsRow}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.row, isMine ? styles.rowMine : styles.rowTheirs, isFirstInGroup && styles.rowGroupStart]}>
+      {swipeable}
+      {reactionsRow}
     </View>
   );
 };
@@ -225,6 +291,14 @@ const styles = StyleSheet.create({
   rowGroupStart: { marginTop: 8 },
   rowMine: { alignItems: 'flex-end' },
   rowTheirs: { alignItems: 'flex-start' },
+  rowWithAvatar: { flexDirection: 'row', alignItems: 'flex-end', paddingLeft: 6 },
+  avatarSlot: { width: AVATAR_SLOT, alignItems: 'flex-start', justifyContent: 'flex-end', marginBottom: 1 },
+  rowColumn: { flex: 1, alignItems: 'flex-start' },
+  author: { fontSize: 13, fontWeight: '600', marginBottom: 2 },
+  authorOnMedia: { paddingHorizontal: 7, paddingTop: 3 },
+  authorContext: { fontSize: 11, fontWeight: '400' },
+  mention: { fontWeight: '600' },
+  metaPin: { transform: [{ rotate: '45deg' }] },
   swipeContainer: { maxWidth: '82%', overflow: 'visible' },
   bubble: { paddingHorizontal: 10, paddingTop: 6, paddingBottom: 6, minWidth: 64 },
   bubbleMedia: { padding: 3 },

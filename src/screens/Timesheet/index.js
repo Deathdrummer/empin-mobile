@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, Dimensions, ActivityIndicator, Toucha
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DeviceMotion } from 'expo-sensors';
 import { Ionicons } from '@expo/vector-icons';
-import { TabBar } from '../../components/TabBar';
+import { TabBar, useTabBarHeight } from '../../components/TabBar';
 import { useTheme, useThemedStyles } from '../../theme';
 import { DayCard } from './components/DayCard';
 import { StaffModal } from './components/modals/StaffModal';
@@ -26,6 +26,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 function TimesheetScreenContent({ onLogout }) {
   const theme = useTheme();
   const s = useThemedStyles(makeStyles);
+  const tabBarHeight = useTabBarHeight();
   const isPrependingRef = useRef(false);
 
   const {
@@ -301,7 +302,7 @@ function TimesheetScreenContent({ onLogout }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={s.container} edges={['top']}>
+      <SafeAreaView style={[s.container, { paddingBottom: tabBarHeight }]} edges={['top']}>
         {header}
         <View style={s.loadingContainer}>
           <ActivityIndicator size="large" color={theme.accent} />
@@ -313,7 +314,7 @@ function TimesheetScreenContent({ onLogout }) {
 
   return (
     <AudioPlayerProvider>
-      <SafeAreaView style={s.container} edges={['top']}>
+      <SafeAreaView style={[s.container, { paddingBottom: tabBarHeight }]} edges={['top']}>
         {filterLoading && (
           <View style={s.filterLoadingOverlay}>
             <ActivityIndicator size="large" color={theme.accent} />

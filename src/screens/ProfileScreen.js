@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useTheme } from '../theme';
 import { Avatar } from '../components/chat/Avatar';
-import { TabBar } from '../components/TabBar';
+import { TabBar, useTabBarHeight } from '../components/TabBar';
 
 const Row = ({ theme, icon, iconColor, title, subtitle, destructive, onPress, last }) => (
   <Pressable
@@ -29,6 +29,7 @@ const Row = ({ theme, icon, iconColor, title, subtitle, destructive, onPress, la
 
 export default function ProfileScreen({ onLogout }) {
   const theme = useTheme();
+  const tabBarHeight = useTabBarHeight();
   const [user, setUser] = useState(null);
 
   useEffect(() => {
@@ -49,7 +50,7 @@ export default function ProfileScreen({ onLogout }) {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.dark ? theme.background : theme.surfaceAlt }]} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 16 }]}>
         <Text style={[styles.title, { color: theme.text }]}>Профиль</Text>
 
         <View style={[styles.card, styles.profileCard, { backgroundColor: theme.surface }]}>

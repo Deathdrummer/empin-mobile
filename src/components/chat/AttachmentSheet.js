@@ -14,8 +14,30 @@ const openSettingsAlert = (title, message) => {
 
 const isPermissionError = (error) => /permission|denied|разреш/i.test(error?.message ?? '');
 
-/** Выбор вложений: галерея, камера (фото и видео), файл. onPicked(assets) — в формате expo-image/document-picker. */
-export const AttachmentSheet = ({ visible, theme, onClose, onPicked }) => {
+/** Снимок камерой сразу из поля ввода; null — отменили или нет доступа */
+export const takePhoto = async () => {
+  try {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      openSettingsAlert('Доступ к камере', 'Разрешите доступ к камере в настройках телефона.');
+      return null;
+    }
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
+    StatusBar.setHidden(true);
+    return result.canceled ? null : result.assets;
+  } catch (error) {
+    StatusBar.setHidden(true);
+    console.warn('[Attach] Камера:', error?.message ?? error);
+    Toast.show({ type: 'error', text1: 'Не удалось открыть камеру', position: 'top' });
+    return null;
+  }
+};
+
+/**
+ * Выбор вложений: галерея, камера (фото и видео), файл. onPicked(assets) — в формате expo-image/document-picker.
+ * extraOptions — дополнительные пункты (например, «Опрос» в группе): [{ key, label, icon, color, onPress }].
+ */
+export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOptions = [] }) => {
   const run = async (picker) => {
     onClose();
     // iOS не показывает системное окно, пока закрывается наше
@@ -76,14 +98,23 @@ export const AttachmentSheet = ({ visible, theme, onClose, onPicked }) => {
     },
   ];
 
+  const extra = extraOptions.map((option) => ({
+    ...option,
+    action: null,
+    onSelect: () => {
+      onClose();
+      option.onPress();
+    },
+  }));
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={[styles.backdrop, { backgroundColor: theme.overlay }]} onPress={onClose}>
         <Pressable style={[styles.sheet, { backgroundColor: theme.sheet }]}>
           <View style={[styles.handle, { backgroundColor: theme.separator }]} />
           <View style={styles.grid}>
-            {options.map((option) => (
-              <Pressable key={option.key} style={styles.option} onPress={() => run(option.action)}>
+            {[...options, ...extra].map((option) => (
+              <Pressable key={option.key} style={styles.option} onPress={() => (option.onSelect ? option.onSelect() : run(option.action))}>
                 <View style={[styles.icon, { backgroundColor: option.color }]}>
                   <Ionicons name={option.icon} size={26} color="#FFFFFF" />
                 </View>
@@ -101,7 +132,7 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
   sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 8, paddingBottom: 34, paddingHorizontal: 16 },
   handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: 18 },
-  grid: { flexDirection: 'row', justifyContent: 'space-around' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', rowGap: 16 },
   option: { alignItems: 'center', gap: 8, width: 76 },
   icon: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 13, fontWeight: '500' },

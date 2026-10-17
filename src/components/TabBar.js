@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme';
 import { useTotalUnread } from '../services/messengerStore';
+import { GlassView } from './ui/GlassView';
 
 const TABS = [
   { key: 'timesheet', label: 'Табель', icon: 'calendar', route: 'Timesheet' },
@@ -14,8 +15,17 @@ const TABS = [
   { key: 'profile', label: 'Профиль', icon: 'person-circle', route: 'Profile' },
 ];
 
+const BAR_HEIGHT = 56;
+
+/** Высота панели вкладок: контент экрана прокручивается под ней, отступ снизу — на эту высоту */
+export const useTabBarHeight = () => {
+  const insets = useSafeAreaInsets();
+  return BAR_HEIGHT + Math.max(insets.bottom, 6);
+};
+
 /**
- * Нижние вкладки приложения. Переключение заменяет экран (как вкладки мессенджеров):
+ * Нижние вкладки приложения — полупрозрачная панель поверх контента.
+ * Переключение заменяет экран (как вкладки мессенджеров):
  * «назад» на Android с главного экрана закрывает приложение, а не листает историю вкладок.
  */
 export const TabBar = ({ active }) => {
@@ -36,7 +46,7 @@ export const TabBar = ({ active }) => {
   };
 
   return (
-    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 6), backgroundColor: theme.surface, borderTopColor: theme.separator }]}>
+    <GlassView edge="top" style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 6) }]}>
       {TABS.map((tab) => {
         const selected = tab.key === active;
         const color = selected ? theme.accent : theme.textMuted;
@@ -61,17 +71,20 @@ export const TabBar = ({ active }) => {
           </Pressable>
         );
       })}
-    </View>
+    </GlassView>
   );
 };
 
 const styles = StyleSheet.create({
   bar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 6,
   },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, minHeight: 48 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, height: BAR_HEIGHT - 6 },
   label: { fontSize: 11, fontWeight: '500' },
   labelSelected: { fontWeight: '600' },
   badge: {

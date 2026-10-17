@@ -16,6 +16,7 @@ import { messengerAPI } from '../../services/api';
 import { useCallContext } from '../../contexts/CallContext';
 import { useTheme } from '../../theme';
 import { Avatar } from '../../components/chat/Avatar';
+import { useTabBarHeight } from '../../components/TabBar';
 import { formatDateSeparator, formatDuration, formatMessageTime, fullName, isSameDay } from '../../utils/chatFormat';
 
 // Входящий без ответа: звонящий отменил, не ответили по таймауту или звонок завис в вызове
@@ -40,6 +41,7 @@ export default function CallHistoryTab() {
   const theme = useTheme();
   const navigation = useNavigation();
   const { initiateCall } = useCallContext();
+  const tabBarHeight = useTabBarHeight();
   const [calls, setCalls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -146,7 +148,7 @@ export default function CallHistoryTab() {
           renderItem={renderItem}
           renderSectionHeader={({ section }) => <Text style={s.sectionTitle}>{section.title}</Text>}
           stickySectionHeadersEnabled={false}
-          contentContainerStyle={sections.length ? null : s.emptyContainer}
+          contentContainerStyle={[sections.length ? null : s.emptyContainer, { paddingBottom: tabBarHeight + 12 }]}
           refreshControl={(
             <RefreshControl
               refreshing={refreshing}

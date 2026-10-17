@@ -370,14 +370,99 @@ export const messengerAPI = {
     return response.data;
   },
 
-  // История порциями: последние limit сообщений до beforeId или новые после afterId
-  getMessagesPage: async (chatId, { limit = 40, beforeId = null, afterId = null } = {}) => {
+  // История порциями: последние limit сообщений до beforeId, новые после afterId или окно вокруг aroundId
+  getMessagesPage: async (chatId, { limit = 40, beforeId = null, afterId = null, aroundId = null } = {}) => {
     const response = await api.post('/messenger/chat/messages', {
       chat_id: chatId,
       limit,
       before_id: beforeId,
       after_id: afterId,
+      around_id: aroundId,
     }, { timeout: MESSAGE_REFRESH_TIMEOUT_MS });
+    return response.data;
+  },
+
+  // Заголовок чата: «в сети», участники группы, закреплённые сообщения
+  getChatInfo: async (chatId) => {
+    const response = await api.get('/messenger/chat/info', { params: { chat_id: chatId }, timeout: MESSAGE_REFRESH_TIMEOUT_MS });
+    return response.data;
+  },
+
+  // Чат объекта (договора) — из поиска или табеля
+  openObjectChat: async (contractId) => {
+    const response = await api.post('/messenger/object/open', { contract_id: contractId });
+    return response.data;
+  },
+
+  // Комментарии объекта просмотрены в табеле
+  markObjectRead: async (contractId) => {
+    const response = await api.post('/messenger/object/read', { contract_id: contractId });
+    return response.data;
+  },
+
+  pinChat: async (chatId, pinned) => {
+    const response = await api.post('/messenger/chat/pin', { chat_id: chatId, pinned });
+    return response.data;
+  },
+
+  muteChat: async (chatId, muted) => {
+    const response = await api.post('/messenger/chat/mute', { chat_id: chatId, muted });
+    return response.data;
+  },
+
+  pinMessage: async (chatId, messageId, pinned) => {
+    const response = await api.post('/messenger/message/pin', { chat_id: chatId, message_id: messageId, pinned });
+    return response.data;
+  },
+
+  // Опрос в группе: poll = { question, options: [..], multiple }
+  addPoll: async (chatId, poll) => {
+    const response = await api.post('/messenger/message', { chat_id: chatId, type: 'poll', poll }, { timeout: MESSAGE_SEND_TIMEOUT_MS });
+    return response.data;
+  },
+
+  // Голос в опросе; пустой массив — отозвать голос
+  votePoll: async (messageId, options) => {
+    const response = await api.post('/messenger/poll/vote', { message_id: messageId, options });
+    return response.data;
+  },
+
+  // Поиск по сообщениям во всех чатах (или в одном chatId), группам и объектам
+  search: async (query, chatId = null) => {
+    const response = await api.get('/messenger/search', {
+      params: { q: query, chat_id: chatId || undefined },
+      timeout: MESSAGE_REFRESH_TIMEOUT_MS,
+    });
+    return response.data;
+  },
+
+  // Приложение открыто — «в сети»
+  presence: async () => {
+    await api.post('/messenger/presence');
+  },
+
+  createGroup: async (title, memberIds) => {
+    const response = await api.post('/messenger/group', { title, member_ids: memberIds });
+    return response.data;
+  },
+
+  renameGroup: async (chatId, title) => {
+    const response = await api.post('/messenger/group/rename', { chat_id: chatId, title });
+    return response.data;
+  },
+
+  addGroupMembers: async (chatId, memberIds) => {
+    const response = await api.post('/messenger/group/members/add', { chat_id: chatId, member_ids: memberIds });
+    return response.data;
+  },
+
+  removeGroupMember: async (chatId, staffId) => {
+    const response = await api.post('/messenger/group/members/remove', { chat_id: chatId, staff_id: staffId });
+    return response.data;
+  },
+
+  leaveGroup: async (chatId) => {
+    const response = await api.post('/messenger/group/leave', { chat_id: chatId });
     return response.data;
   },
 
@@ -393,7 +478,7 @@ export const messengerAPI = {
     await api.post('/messenger/chat/typing', { chat_id: chatId });
   },
 
-  addMessage: async (chatId, message, replyToId = null, mediaArray = []) => {
+  addMessage: async (chatId, message, replyToId = null, mediaArray = [], { mentionIds = [] } = {}) => {
     // Если есть медиа, используем FormData
     if (mediaArray && mediaArray.length > 0) {
       const formData = new FormData();
@@ -402,6 +487,7 @@ export const messengerAPI = {
       if (replyToId) {
         formData.append('reply_to_id', replyToId);
       }
+      mentionIds.forEach((id) => formData.append('mention_ids[]', id));
 
       // Добавляем все медиа файлы в FormData
       mediaArray.forEach((media, index) => {
@@ -475,24 +561,27 @@ export const messengerAPI = {
       chat_id: chatId,
       message,
       reply_to_id: replyToId,
+      mention_ids: mentionIds.length ? mentionIds : undefined,
     }, { timeout: MESSAGE_SEND_TIMEOUT_MS });
     return response.data;
   },
 
-  updateMessage: async (id, message) => {
-    const response = await api.put(`/messenger/message/${id}`, { message });
+  // chatId нужен для чата объекта: там сообщения — комментарии табеля
+  updateMessage: async (id, message, chatId = null) => {
+    const response = await api.put(`/messenger/message/${id}`, { message, chat_id: chatId || undefined });
     return response.data;
   },
 
-  removeMessage: async (id) => {
-    const response = await api.delete(`/messenger/message/${id}`);
+  removeMessage: async (id, chatId = null) => {
+    const response = await api.delete(`/messenger/message/${id}`, { params: { chat_id: chatId || undefined } });
     return response.data;
   },
 
-  addReaction: async (messageId, emoji) => {
+  addReaction: async (messageId, emoji, chatId = null) => {
     const response = await api.post('/messenger/message/reaction', {
       message_id: messageId,
       emoji,
+      chat_id: chatId || undefined,
     });
     return response.data;
   },

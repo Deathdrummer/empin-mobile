@@ -6,9 +6,12 @@ import { messengerAPI } from '../services/api';
 import { getActiveChatId, setTotalUnread, subscribeMessengerEvents } from '../services/messengerStore';
 import { navigationRef } from '../services/navigationRef';
 
+const PRESENCE_INTERVAL_MS = 60000;
+
 /**
  * Мессенджер вне экранов чата:
  * - число непрочитанных (значок на вкладке и иконке) — после входа, при возврате в приложение и при новых сообщениях;
+ * - «в сети»: пока приложение открыто, раз в минуту отмечаемся на сервере;
  * - нажатие на уведомление о сообщении открывает нужный чат (в том числе при запуске приложения из уведомления).
  */
 export const useMessengerSync = (isLoggedIn) => {
@@ -32,18 +35,28 @@ export const useMessengerSync = (isLoggedIn) => {
       timer = setTimeout(refresh, 500);
     };
 
+    const ping = () => {
+      if (AppState.currentState === 'active') messengerAPI.presence().catch(() => {});
+    };
+
     refresh();
+    ping();
+    const presenceTimer = setInterval(ping, PRESENCE_INTERVAL_MS);
     const appState = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh();
+      if (state === 'active') {
+        refresh();
+        ping();
+      }
     });
     const unsubscribe = subscribeMessengerEvents((name, data) => {
       // Открытый чат сам отмечает прочитанное и обновляет счётчик
       if (name === 'message.created' && Number(data?.chat_id) !== getActiveChatId()) refreshSoon();
-      if (name === 'message.deleted') refreshSoon();
+      if (name === 'message.deleted' || name === 'chat.updated') refreshSoon();
     });
 
     return () => {
       clearTimeout(timer);
+      clearInterval(presenceTimer);
       appState.remove();
       unsubscribe();
     };
@@ -55,7 +68,7 @@ export const useMessengerSync = (isLoggedIn) => {
     const openFromResponse = (response) => {
       const content = response?.notification?.request?.content;
       const data = content?.data;
-      if (data?.type !== 'message' || !data.sender_id) return;
+      if (data?.type !== 'message' || (!data.sender_id && !data.chat_id)) return;
 
       // Один и тот же ответ (например, из getLastNotificationResponseAsync) не открываем дважды
       const responseId = response.notification.request.identifier;
@@ -64,14 +77,25 @@ export const useMessengerSync = (isLoggedIn) => {
       // Иначе после выхода и повторного входа чат открылся бы снова
       Notifications.clearLastNotificationResponseAsync().catch(() => {});
 
-      const params = {
-        staffId: Number(data.sender_id),
-        staffName: content.title || 'Собеседник',
-        chatId: data.chat_id ? Number(data.chat_id) : null,
-      };
+      const chatType = data.chat_type || 'direct';
+      const params = chatType === 'direct'
+        ? {
+          chatType,
+          staffId: Number(data.sender_id),
+          staffName: data.chat_title || content.title || 'Собеседник',
+          chatId: data.chat_id ? Number(data.chat_id) : null,
+        }
+        : {
+          chatType,
+          chatId: Number(data.chat_id),
+          title: data.chat_title || content.title || 'Чат',
+        };
       const open = () => {
         const current = navigationRef.getCurrentRoute();
-        if (current?.name === 'Chat' && Number(current.params?.staffId) === params.staffId) return;
+        if (current?.name === 'Chat' && (
+          (params.chatId && Number(current.params?.chatId) === params.chatId)
+          || (chatType === 'direct' && Number(current.params?.staffId) === params.staffId)
+        )) return;
         navigationRef.dispatch(StackActions.push('Chat', params));
       };
 

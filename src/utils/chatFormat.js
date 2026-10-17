@@ -98,3 +98,43 @@ export const mediaLabel = (type) => ({
   archive: 'Архив',
   file: 'Файл',
 }[type] || '');
+
+/** «Самсонов А.» — подпись автора в группе и в упоминании */
+export const shortName = (person) => {
+  if (!person) return 'Без имени';
+  const initial = person.fname ? ` ${person.fname.trim().charAt(0)}.` : '';
+  return `${person.sname || ''}${initial}`.trim() || 'Без имени';
+};
+
+/** «1 участник», «3 участника», «5 участников» */
+export const plural = (count, one, few, many) => {
+  const n = Math.abs(Number(count) || 0) % 100;
+  const last = n % 10;
+  if (n > 10 && n < 20) return many;
+  if (last === 1) return one;
+  if (last >= 2 && last <= 4) return few;
+  return many;
+};
+
+/** «в сети», «был(а) 5 мин назад», «был(а) в 12:40», «был(а) вчера в 18:02», «был(а) 12 октября» */
+export const formatLastSeen = (online, lastSeenAt, now = new Date()) => {
+  if (online) return 'в сети';
+  const date = toDate(lastSeenAt);
+  if (!date) return 'был(а) давно';
+  const minutes = Math.floor((now - date) / 60000);
+  if (minutes < 1) return 'был(а) только что';
+  if (minutes < 60) return `был(а) ${minutes} мин назад`;
+  const ago = daysAgo(date, now);
+  if (ago === 0) return `был(а) в ${formatMessageTime(date)}`;
+  if (ago === 1) return `был(а) вчера в ${formatMessageTime(date)}`;
+  return `был(а) ${formatDateSeparator(date, now)}`;
+};
+
+/** Короткая дата табеля для чата объекта: «16 окт» */
+export const formatShortDay = (value) => {
+  // «2026-10-16» — календарный день табеля, без сдвига по часовому поясу
+  const match = typeof value === 'string' ? value.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
+  const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : toDate(value);
+  if (!date) return '';
+  return `${date.getDate()} ${MONTHS_GENITIVE[date.getMonth()].slice(0, 3)}`;
+};

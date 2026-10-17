@@ -98,6 +98,8 @@ export const subscribeToCalls = async (staffId, handlers) => {
         case 'message.deleted':
         case 'chat.read':
         case 'chat.typing':
+        case 'chat.pinned':
+        case 'chat.updated':
           emitMessengerEvent(event.eventName, data);
           break;
       }
