@@ -30,7 +30,7 @@ import {
   unregisterPushNotifications,
 } from './src/services/pushNotifications';
 import { disableIosVoip, unregisterIosVoipToken } from './src/services/iosVoip';
-import { useTheme } from './src/theme';
+import { restoreThemePreference, useTheme } from './src/theme';
 
 const Stack = createNativeStackNavigator();
 
@@ -108,7 +108,8 @@ export default function App() {
 
   const checkAuth = async () => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      // Тему восстанавливаем, пока виден экран загрузки, чтобы интерфейс не мигнул другой темой
+      const [token] = await Promise.all([AsyncStorage.getItem('token'), restoreThemePreference()]);
       const loggedIn = !!token;
       setIsLoggedIn(loggedIn);
       if (loggedIn) {

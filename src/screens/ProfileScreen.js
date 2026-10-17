@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import { useTheme } from '../theme';
+import { setThemePreference, useTheme } from '../theme';
 import { Avatar } from '../components/chat/Avatar';
 import { TabBar, useTabBarHeight } from '../components/TabBar';
 
-const Row = ({ theme, icon, iconColor, title, subtitle, destructive, onPress, last }) => (
+const Row = ({ theme, icon, iconColor, title, subtitle, destructive, onPress, last, accessory }) => (
   <Pressable
     onPress={onPress}
     style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.surfacePressed }]}
@@ -22,7 +22,7 @@ const Row = ({ theme, icon, iconColor, title, subtitle, destructive, onPress, la
         <Text style={[styles.rowTitle, { color: destructive ? theme.danger : theme.text }]}>{title}</Text>
         {subtitle ? <Text style={[styles.rowSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text> : null}
       </View>
-      {!destructive ? <Ionicons name="chevron-forward" size={18} color={theme.textMuted} /> : null}
+      {accessory ?? (!destructive ? <Ionicons name="chevron-forward" size={18} color={theme.textMuted} /> : null)}
     </View>
   </Pressable>
 );
@@ -40,6 +40,8 @@ export default function ProfileScreen({ onLogout }) {
 
   const nameParts = (user?.full_name || '').trim().split(/\s+/);
   const person = { sname: nameParts[0], fname: nameParts[1] };
+
+  const toggleTheme = () => setThemePreference(theme.dark ? 'light' : 'dark');
 
   const confirmLogout = () => {
     Alert.alert('Выйти из аккаунта?', 'Звонки и сообщения перестанут приходить на этот телефон.', [
@@ -62,6 +64,22 @@ export default function ProfileScreen({ onLogout }) {
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
+          <Row
+            theme={theme}
+            icon={theme.dark ? 'moon' : 'sunny'}
+            iconColor={theme.dark ? '#5B6B8C' : '#F2A20C'}
+            title="Тёмная тема"
+            onPress={toggleTheme}
+            accessory={(
+              <Switch
+                value={theme.dark}
+                onValueChange={toggleTheme}
+                trackColor={{ true: theme.accent, false: theme.separator }}
+                thumbColor="#FFFFFF"
+                accessibilityLabel="Тёмная тема"
+              />
+            )}
+          />
           <Row
             theme={theme}
             icon="notifications"

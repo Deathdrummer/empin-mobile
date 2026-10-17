@@ -1,9 +1,11 @@
 import { useMemo } from 'react';
-import { useColorScheme } from 'react-native';
+import { Appearance, useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Фирменная палитра «Эмпин PRO»: красный акцент из иконки, светлая и тёмная темы.
- * Тема переключается по системной настройке телефона (app.json: userInterfaceStyle = automatic).
+ * По умолчанию тема следует настройке телефона (app.json: userInterfaceStyle = automatic),
+ * переключатель в профиле закрепляет светлую или тёмную.
  */
 const brand = {
   accent: '#E3262F',
@@ -100,6 +102,27 @@ export const themes = { light, dark };
 export const useTheme = () => {
   const scheme = useColorScheme();
   return scheme === 'dark' ? dark : light;
+};
+
+const THEME_STORAGE_KEY = '@themePreference';
+
+/**
+ * Выбранная вручную тема. Appearance.setColorScheme переключает и системные элементы
+ * (диалоги, клавиатуру), а useColorScheme во всём приложении сразу отдаёт новую тему.
+ */
+export const setThemePreference = (scheme) => {
+  Appearance.setColorScheme(scheme);
+  AsyncStorage.setItem(THEME_STORAGE_KEY, scheme).catch(() => {});
+};
+
+/** Восстанавливает выбранную тему при запуске, пока показывается экран загрузки */
+export const restoreThemePreference = async () => {
+  try {
+    const saved = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+    if (saved === 'light' || saved === 'dark') Appearance.setColorScheme(saved);
+  } catch {
+    // Нет сохранённого выбора — тема как в системе
+  }
 };
 
 /**
