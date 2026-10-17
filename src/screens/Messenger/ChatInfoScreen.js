@@ -40,6 +40,7 @@ export default function ChatInfoScreen({ navigation, route }) {
   const [renaming, setRenaming] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -133,7 +134,7 @@ export default function ChatInfoScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
-      <View style={s.topBar}>
+      <View style={[s.topBar, scrolled && s.topBarScrolled]}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={s.back} accessibilityLabel="Назад">
           <Ionicons name="chevron-back" size={28} color={theme.accent} />
         </Pressable>
@@ -142,7 +143,11 @@ export default function ChatInfoScreen({ navigation, route }) {
       </View>
 
       {!info ? <ActivityIndicator style={s.loader} size="large" color={theme.accent} /> : (
-        <ScrollView contentContainerStyle={s.content}>
+        <ScrollView
+          contentContainerStyle={s.content}
+          scrollEventThrottle={32}
+          onScroll={(event) => setScrolled(event.nativeEvent.contentOffset.y > 4)}
+        >
           <View style={s.hero}>
             <ChatAvatar chat={headerChat} size={92} />
             <Text style={s.heroTitle}>{title}</Text>
@@ -302,6 +307,8 @@ export default function ChatInfoScreen({ navigation, route }) {
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.dark ? theme.background : theme.surfaceAlt },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, height: 50 },
+  // Линия под шапкой появляется, когда контент уезжает под неё
+  topBarScrolled: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.separator },
   back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   topTitle: { fontSize: 17, fontWeight: '600', color: theme.text },
   loader: { marginTop: 80 },

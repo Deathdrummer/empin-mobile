@@ -3,9 +3,12 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../../theme';
 
+// Android 12+ размывает через RenderEffect на GPU; на старых версиях размытие идёт через
+// RenderScript и тормозит на слабых телефонах — там остаётся плотный полупрозрачный фон
+const CAN_BLUR = Platform.OS === 'ios' || (Platform.OS === 'android' && Platform.Version >= 31);
+
 /**
- * Полупрозрачная панель: на iOS — системное размытие, как у Telegram и iOS 26,
- * на Android — полупрозрачный фон (размытие там тяжёлое для слабых телефонов).
+ * Полупрозрачная панель с размытием контента под ней, как у Telegram и iOS 26.
  * edge — тонкая граница со стороны контента: 'top' | 'bottom'.
  */
 export const GlassView = ({ style, children, edge, intensity = 80, ...rest }) => {
@@ -14,12 +17,13 @@ export const GlassView = ({ style, children, edge, intensity = 80, ...rest }) =>
     ? { [edge === 'top' ? 'borderTopWidth' : 'borderBottomWidth']: StyleSheet.hairlineWidth, [edge === 'top' ? 'borderTopColor' : 'borderBottomColor']: theme.glassBorder }
     : null;
 
-  if (Platform.OS === 'ios') {
+  if (CAN_BLUR) {
     return (
       <BlurView
         tint={theme.dark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
         intensity={intensity}
-        style={[styles.ios, border, style]}
+        experimentalBlurMethod="dimezisBlurView"
+        style={[styles.blur, border, style]}
         {...rest}
       >
         {children}
@@ -35,5 +39,5 @@ export const GlassView = ({ style, children, edge, intensity = 80, ...rest }) =>
 };
 
 const styles = StyleSheet.create({
-  ios: { overflow: 'hidden' },
+  blur: { overflow: 'hidden' },
 });

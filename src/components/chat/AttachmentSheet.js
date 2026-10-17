@@ -132,8 +132,9 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
   sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 8, paddingBottom: 34, paddingHorizontal: 16 },
   handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: 18 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', rowGap: 16 },
-  option: { alignItems: 'center', gap: 8, width: 76 },
+  // Четыре колонки: пятый пункт («Опрос») встаёт под первым, а не по центру
+  grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 },
+  option: { alignItems: 'center', gap: 8, width: '25%' },
   icon: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
   label: { fontSize: 13, fontWeight: '500' },
 });

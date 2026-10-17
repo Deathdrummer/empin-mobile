@@ -13,6 +13,11 @@ import { DocumentCard, MediaGrid } from './MessageAttachments';
 
 const AVATAR_SLOT = 34;
 
+// Отступ под скрепку и галочки в невидимом хвосте текста. Неразрывные пробелы: обычные
+// в конце строки «висят» за её краем и не учитываются при переносе
+const NBSP = ' ';
+const metaPadding = (pinned, isMine) => NBSP.repeat(1 + (pinned ? 5 : 0) + (isMine ? 7 : 0));
+
 // «@Самсонов А.» — упоминание в тексте
 const MENTION_PATTERN = /(@[A-Za-zА-Яа-яЁё-]+(?:\s[A-ZА-ЯЁ]\.)?)/g;
 
@@ -209,7 +214,7 @@ const MessageBubbleComponent = ({
               : part))
             : text}
           {/* Невидимый хвост резервирует место под время и галочки на последней строке */}
-          <Text style={styles.metaSpacer}>{`  ${metaText}${isMine ? '    ' : ''}`}</Text>
+          <Text style={styles.metaSpacer}>{`  ${metaText}${metaPadding(message.pinned, isMine)}`}</Text>
         </Text>
       ) : null}
 
@@ -308,7 +313,9 @@ const styles = StyleSheet.create({
   quoteName: { fontSize: 13, fontWeight: '600' },
   quoteText: { fontSize: 13, opacity: 0.85 },
   text: { fontSize: 16, lineHeight: 21 },
-  metaSpacer: { fontSize: 11, color: 'transparent' },
+  // Не 'transparent': на Android цвет 0x00000000 во вложенном Text считается «не задан»
+  // и наследует цвет текста — время становилось видно дважды
+  metaSpacer: { fontSize: 11, color: 'rgba(255, 255, 255, 0)' },
   meta: { position: 'absolute', right: 9, bottom: 5, flexDirection: 'row', alignItems: 'center', gap: 3 },
   metaOnMedia: {
     right: 10,

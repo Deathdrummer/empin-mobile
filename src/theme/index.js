@@ -41,8 +41,8 @@ const light = {
   overlay: 'rgba(10, 10, 12, 0.45)',
   veil: 'rgba(255, 255, 255, 0.75)',
   fill: 'rgba(20, 21, 26, 0.05)',
-  // Полупрозрачные панели (на Android — вместо размытия)
-  glass: 'rgba(255, 255, 255, 0.86)',
+  // Фон панелей там, где нет размытия (Android до 12): плотный, чтобы текст под панелью не двоился
+  glass: 'rgba(255, 255, 255, 0.95)',
   glassBorder: 'rgba(20, 21, 26, 0.08)',
   pattern: 'rgba(20, 21, 26, 0.07)',
   online: '#2E9E6A',
@@ -83,7 +83,7 @@ const dark = {
   overlay: 'rgba(0, 0, 0, 0.6)',
   veil: 'rgba(13, 13, 16, 0.7)',
   fill: 'rgba(255, 255, 255, 0.07)',
-  glass: 'rgba(22, 22, 26, 0.86)',
+  glass: 'rgba(22, 22, 26, 0.95)',
   glassBorder: 'rgba(255, 255, 255, 0.08)',
   pattern: 'rgba(255, 255, 255, 0.05)',
   online: '#3FBF7F',
