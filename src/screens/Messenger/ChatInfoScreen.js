@@ -27,8 +27,8 @@ import { getUserFacingError } from '../../utils/userFacingError';
 import { StaffPicker } from './NewChatModal';
 
 /**
- * Сведения о чате: собеседник, группа (участники, название, выход) или объект.
- * Здесь же «Без звука» и закреплённые сообщения.
+ * Сведения о чате: собеседник, группа (участники, название, выход) или объект (участники, выход).
+ * Здесь же «Без звука» и закреплённые сообщения. Что можно делать с составом, решает сервер.
  */
 export default function ChatInfoScreen({ navigation, route }) {
   const { chatId, chatType, title: initialTitle } = route.params || {};
@@ -61,7 +61,14 @@ export default function ChatInfoScreen({ navigation, route }) {
   }, [chatId, load]);
 
   const isGroup = chatType === 'group';
+  const isObject = chatType === 'object';
+  const hasMembers = isGroup || isObject;
   const isAdmin = info?.role === 'admin';
+  const isMe = (member) => Number(member.id) === Number(myStaffId);
+  // Права на состав присылает сервер; без них — прежние правила группы
+  const canAdd = info?.can_add_members ?? isGroup;
+  const canRemove = info?.can_remove_members ?? (isGroup && isAdmin);
+  const isMember = info?.is_member ?? isGroup;
   const title = info?.title || initialTitle || 'Чат';
 
   const run = async (action, failText) => {
@@ -90,21 +97,33 @@ export default function ChatInfoScreen({ navigation, route }) {
   };
 
   const removeMember = (member) => {
-    Alert.alert(`Исключить ${fullName(member)}?`, 'Участник больше не увидит переписку группы.', [
+    const [question, details, action] = isObject
+      ? [`Убрать ${fullName(member)} из чата объекта?`, 'Чат вернётся к нему, только если объект снова поставят его бригаде.', 'Убрать']
+      : [`Исключить ${fullName(member)}?`, 'Участник больше не увидит переписку группы.', 'Исключить'];
+    const remove = isObject ? messengerAPI.removeObjectMember : messengerAPI.removeGroupMember;
+    Alert.alert(question, details, [
       { text: 'Отмена', style: 'cancel' },
-      { text: 'Исключить', style: 'destructive', onPress: () => run(() => messengerAPI.removeGroupMember(chatId, member.id), 'Не удалось исключить') },
+      { text: action, style: 'destructive', onPress: () => run(() => remove(chatId, member.id), 'Не удалось убрать участника') },
     ]);
   };
 
+  const addMembers = (people) => {
+    const add = isObject ? messengerAPI.addObjectMembers : messengerAPI.addGroupMembers;
+    run(() => add(chatId, people.map((person) => person.id)), 'Не удалось добавить');
+  };
+
   const leave = () => {
-    Alert.alert('Покинуть группу?', 'Переписка группы пропадёт из ваших чатов.', [
+    const [question, details] = isObject
+      ? ['Покинуть чат объекта?', 'Объект пропадёт из ваших чатов, пока его снова не поставят вашей бригаде.']
+      : ['Покинуть группу?', 'Переписка группы пропадёт из ваших чатов.'];
+    Alert.alert(question, details, [
       { text: 'Отмена', style: 'cancel' },
       {
         text: 'Покинуть',
         style: 'destructive',
         onPress: async () => {
           try {
-            await messengerAPI.leaveGroup(chatId);
+            await (isObject ? messengerAPI.leaveObject(chatId) : messengerAPI.leaveGroup(chatId));
             navigation.popToTop();
           } catch (error) {
             Toast.show({ type: 'error', text1: 'Не удалось выйти', text2: getUserFacingError(error, 'Попробуйте ещё раз.'), position: 'top' });
@@ -124,11 +143,10 @@ export default function ChatInfoScreen({ navigation, route }) {
 
   const subtitle = (() => {
     if (chatType === 'direct' && info?.participant) return formatLastSeen(info.participant.online, info.participant.last_seen_at);
-    if (isGroup && info) {
+    if (hasMembers && info) {
       const count = info.members_count || 0;
       return `${count} ${plural(count, 'участник', 'участника', 'участников')}${info.online_count ? `, ${info.online_count} в сети` : ''}`;
     }
-    if (chatType === 'object' && info?.object) return 'Комментарии табеля к объекту за все дни';
     return '';
   })();
 
@@ -211,21 +229,23 @@ export default function ChatInfoScreen({ navigation, route }) {
             </>
           ) : null}
 
-          {isGroup ? (
+          {hasMembers ? (
             <>
               <Text style={s.sectionTitle}>Участники</Text>
               <View style={s.card}>
-                <Pressable style={({ pressed }) => [s.row, pressed && { backgroundColor: theme.surfacePressed }]} onPress={() => setAdding(true)}>
-                  <View style={[s.rowIcon, s.addIcon, { backgroundColor: theme.accentSoft }]}>
-                    <Ionicons name="person-add" size={17} color={theme.accent} />
-                  </View>
-                  <Text style={[s.rowTitle, { color: theme.accentText }]}>Добавить участников</Text>
-                </Pressable>
-                {(info.members || []).map((member) => (
+                {canAdd ? (
+                  <Pressable style={({ pressed }) => [s.row, pressed && { backgroundColor: theme.surfacePressed }]} onPress={() => setAdding(true)}>
+                    <View style={[s.rowIcon, s.addIcon, { backgroundColor: theme.accentSoft }]}>
+                      <Ionicons name="person-add" size={17} color={theme.accent} />
+                    </View>
+                    <Text style={[s.rowTitle, { color: theme.accentText }]}>Добавить участников</Text>
+                  </Pressable>
+                ) : null}
+                {(info.members || []).map((member, index) => (
                   <Pressable
                     key={member.id}
-                    style={({ pressed }) => [s.row, s.rowBorder, pressed && { backgroundColor: theme.surfacePressed }]}
-                    onLongPress={isAdmin && Number(member.id) !== Number(myStaffId) ? () => removeMember(member) : undefined}
+                    style={({ pressed }) => [s.row, (canAdd || index > 0) && s.rowBorder, pressed && { backgroundColor: theme.surfacePressed }]}
+                    onLongPress={canRemove && !isMe(member) ? () => removeMember(member) : undefined}
                   >
                     <View>
                       <Avatar person={member} id={member.id} size={40} />
@@ -234,26 +254,33 @@ export default function ChatInfoScreen({ navigation, route }) {
                     <View style={s.rowBody}>
                       <Text style={s.rowTitle} numberOfLines={1}>
                         {fullName(member)}
-                        {Number(member.id) === Number(myStaffId) ? <Text style={s.rowSub}> (вы)</Text> : null}
+                        {isMe(member) ? <Text style={s.rowSub}> (вы)</Text> : null}
                       </Text>
                       <Text style={[s.rowSub, member.online && { color: theme.accent }]}>{formatLastSeen(member.online, member.last_seen_at)}</Text>
                     </View>
-                    {member.role === 'admin' ? <Text style={s.admin}>админ</Text> : null}
-                    {isAdmin && Number(member.id) !== Number(myStaffId) ? (
-                      <TouchableOpacity onPress={() => removeMember(member)} hitSlop={8} accessibilityLabel={`Исключить: ${fullName(member)}`}>
+                    {isGroup && member.role === 'admin' ? <Text style={s.admin}>админ</Text> : null}
+                    {canRemove && !isMe(member) ? (
+                      <TouchableOpacity onPress={() => removeMember(member)} hitSlop={8} accessibilityLabel={`Убрать: ${fullName(member)}`}>
                         <Ionicons name="remove-circle-outline" size={22} color={theme.textMuted} />
                       </TouchableOpacity>
                     ) : null}
                   </Pressable>
                 ))}
               </View>
+              {isObject ? (
+                <Text style={s.sectionHint}>
+                  В чат автоматически входят мастера бригад, которым объект поставлен в табеле.
+                </Text>
+              ) : null}
 
-              <View style={[s.card, s.dangerCard]}>
-                <Pressable style={({ pressed }) => [s.row, pressed && { backgroundColor: theme.surfacePressed }]} onPress={leave}>
-                  <Ionicons name="exit-outline" size={20} color={theme.danger} style={s.pinIcon} />
-                  <Text style={[s.rowTitle, { color: theme.danger }]}>Покинуть группу</Text>
-                </Pressable>
-              </View>
+              {isMember ? (
+                <View style={[s.card, s.dangerCard]}>
+                  <Pressable style={({ pressed }) => [s.row, pressed && { backgroundColor: theme.surfacePressed }]} onPress={leave}>
+                    <Ionicons name="exit-outline" size={20} color={theme.danger} style={s.pinIcon} />
+                    <Text style={[s.rowTitle, { color: theme.danger }]}>{isObject ? 'Покинуть чат объекта' : 'Покинуть группу'}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </>
           ) : null}
         </ScrollView>
@@ -263,14 +290,14 @@ export default function ChatInfoScreen({ navigation, route }) {
         <SafeAreaView style={s.container} edges={['top', 'bottom']}>
           <StaffPicker
             visible={adding}
-            title="Добавить в группу"
+            title={isObject ? 'Добавить в чат объекта' : 'Добавить в группу'}
             multiple
             confirmLabel="Добавить"
             excludeIds={(info?.members || []).map((member) => member.id)}
             onClose={() => setAdding(false)}
             onConfirm={(people) => {
               setAdding(false);
-              run(() => messengerAPI.addGroupMembers(chatId, people.map((person) => person.id)), 'Не удалось добавить');
+              addMembers(people);
             }}
           />
         </SafeAreaView>
@@ -322,6 +349,7 @@ const styles = (theme) => StyleSheet.create({
   quick: { flex: 1, alignItems: 'center', gap: 4, paddingVertical: 12, borderRadius: 14, backgroundColor: theme.surface },
   quickText: { fontSize: 13, color: theme.accentText, fontWeight: '600' },
   sectionTitle: { fontSize: 13, fontWeight: '600', color: theme.textSecondary, marginTop: 22, marginBottom: 8, marginLeft: 4 },
+  sectionHint: { fontSize: 13, color: theme.textMuted, marginTop: 8, marginHorizontal: 4, lineHeight: 18 },
   card: { backgroundColor: theme.surface, borderRadius: 14, overflow: 'hidden', marginTop: 12 },
   dangerCard: { marginTop: 22 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 10, minHeight: 52 },

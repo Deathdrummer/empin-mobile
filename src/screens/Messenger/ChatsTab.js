@@ -25,6 +25,7 @@ import { useCallContext } from '../../contexts/CallContext';
 import { useTheme } from '../../theme';
 import { useTabBarHeight } from '../../components/TabBar';
 import { ChatAvatar } from '../../components/chat/ChatAvatar';
+import { TypingDots } from '../../components/chat/TypingDots';
 import { formatListTime, fullName, plural } from '../../utils/chatFormat';
 import NewChatModal from './NewChatModal';
 
@@ -35,10 +36,11 @@ const SEARCH_DELAY_MS = 350;
 
 const FOLDERS = [
   { key: 'all', label: 'Все' },
-  { key: 'unread', label: 'Непрочитанные' },
+  { key: 'object', label: 'Объекты' },
+  { key: 'no-objects', label: 'Все, кроме объектов' },
   { key: 'direct', label: 'Личные' },
   { key: 'group', label: 'Группы' },
-  { key: 'object', label: 'Объекты' },
+  { key: 'unread', label: 'Непрочитанные' },
 ];
 
 const MESSAGE_TYPE_ICONS = {
@@ -166,9 +168,10 @@ export default function ChatsTab() {
   const unreadChats = useMemo(() => chats.filter((chat) => chat.unread_count > 0).length, [chats]);
 
   const visibleChats = useMemo(() => chats.filter((chat) => {
+    if (folder === 'all') return true;
     if (folder === 'unread') return chat.unread_count > 0 || chat.mentioned;
-    if (folder !== 'all') return chat.type === folder;
-    return true;
+    if (folder === 'no-objects') return chat.type !== 'object';
+    return chat.type === folder;
   }), [chats, folder]);
 
   const localMatches = useMemo(() => {
@@ -257,9 +260,12 @@ export default function ChatsTab() {
     const typingNow = typing[chat.chat_id];
     if (typingNow && typingNow.until > Date.now()) {
       return (
-        <Text style={[s.previewText, { color: theme.accent }]} numberOfLines={1}>
-          {chat.type === 'direct' ? 'печатает…' : `${typingNow.name || 'Кто-то'} печатает…`}
-        </Text>
+        <View style={s.preview}>
+          <TypingDots color={theme.accent} />
+          <Text style={[s.previewText, { color: theme.accent }]} numberOfLines={1}>
+            {chat.type === 'direct' ? 'печатает…' : `${typingNow.name || 'Кто-то'} печатает…`}
+          </Text>
+        </View>
       );
     }
 
@@ -422,6 +428,7 @@ export default function ChatsTab() {
     direct: 'Личных чатов пока нет',
     group: 'Групп пока нет',
     object: 'Здесь появятся объекты вашей бригады',
+    'no-objects': 'Начните первый чат',
   }[folder];
 
   return (
@@ -505,10 +512,10 @@ export default function ChatsTab() {
                   <Text style={s.emptyTitle}>{emptyTitle}</Text>
                   {folder === 'object' ? (
                     <Text style={s.emptyText}>
-                      Комментарии к объектам из табеля — одной лентой. Найти любой объект можно поиском по номеру.
+                      Объект появится здесь, когда его поставят вашей бригаде в табеле. Найти любой объект можно поиском по номеру.
                     </Text>
                   ) : null}
-                  {folder === 'all' || folder === 'direct' || folder === 'group' ? (
+                  {folder === 'all' || folder === 'no-objects' || folder === 'direct' || folder === 'group' ? (
                     <TouchableOpacity style={s.emptyButton} onPress={() => setNewChatVisible(true)}>
                       <Text style={s.emptyButtonText}>{folder === 'group' ? 'Новая группа' : 'Новый чат'}</Text>
                     </TouchableOpacity>

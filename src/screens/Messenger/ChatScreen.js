@@ -18,6 +18,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -44,7 +45,8 @@ import {
 import { ChatAvatar } from '../../components/chat/ChatAvatar';
 import { ChatBackground } from '../../components/chat/ChatBackground';
 import { MessageBubble, normalizeMedia } from '../../components/chat/MessageBubble';
-import { MessageActionsSheet } from '../../components/chat/MessageActionsSheet';
+import { MessageActionsSheet, QUICK_REACTIONS } from '../../components/chat/MessageActionsSheet';
+import { TypingDots } from '../../components/chat/TypingDots';
 import { Composer } from '../../components/chat/Composer';
 import { PollCreateModal } from '../../components/chat/PollCreateModal';
 import { VideoViewer } from '../../components/chat/VideoViewer';
@@ -131,6 +133,8 @@ export default function ChatScreen({ navigation, route }) {
   const [composerHeight, setComposerHeight] = useState(64);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [highlightId, setHighlightId] = useState(null);
+  // Только что поставленная реакция: сообщение и эмодзи для анимации «всплеска»
+  const [burst, setBurst] = useState(null);
   const [pinnedIndex, setPinnedIndex] = useState(0);
   const [pollVisible, setPollVisible] = useState(false);
   const [search, setSearch] = useState({ active: false, query: '', loading: false, results: [] });
@@ -417,9 +421,10 @@ export default function ChatScreen({ navigation, route }) {
           }
           if (scrolledAwayRef.current) setNewWhileAway((count) => count + 1);
         }
+        const incoming = name === 'message.created' ? { ...data.message, _appear: true } : data.message;
         setMessages((current) => (name === 'message.updated' && !current.some((item) => item.id === data.message.id)
           ? current
-          : mergeMessages(current, [data.message])));
+          : mergeMessages(current, [incoming])));
       } else if (name === 'message.deleted') {
         setMessages((current) => current.filter((message) => message.id !== data.message_id));
       } else if (name === 'chat.read') {
@@ -526,6 +531,7 @@ export default function ChatScreen({ navigation, route }) {
       created_at: new Date().toISOString(),
       _status: 'sending',
       _payload: payload,
+      _appear: true,
     };
 
     setText('');
@@ -578,6 +584,10 @@ export default function ChatScreen({ navigation, route }) {
   const toggleReaction = useCallback(async (message, emoji, hasReacted) => {
     setActionMessage(null);
     if (!isServerId(message.id) || !me.userId) return;
+    if (!hasReacted) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      setBurst({ messageId: message.id, emoji, key: Date.now() });
+    }
     const before = message.reactions || [];
     const optimistic = hasReacted
       ? before.filter((reaction) => !(Number(reaction.user_id) === Number(me.userId) && reaction.emoji === emoji))
@@ -593,6 +603,20 @@ export default function ChatScreen({ navigation, route }) {
       Toast.show({ type: 'error', text1: 'Не удалось поставить реакцию', position: 'top' });
     }
   }, [me.userId, chatId]);
+
+  // Двойное касание по сообщению: первая реакция из быстрых, повторное — снять её
+  const quickReact = useCallback((message) => {
+    const emoji = QUICK_REACTIONS[0];
+    const mine = (message.reactions || []).some((reaction) => Number(reaction.user_id) === Number(me.userId) && reaction.emoji === emoji);
+    toggleReaction(message, emoji, mine);
+  }, [me.userId, toggleReaction]);
+
+  // «Всплеск» проигрывается один раз: при повторном показе строки он не нужен
+  useEffect(() => {
+    if (!burst) return undefined;
+    const timer = setTimeout(() => setBurst(null), 1100);
+    return () => clearTimeout(timer);
+  }, [burst]);
 
   const deleteMessage = useCallback((message) => {
     setActionMessage(null);
@@ -816,9 +840,11 @@ export default function ChatScreen({ navigation, route }) {
         onQuotePress={jumpToMessage}
         onRetry={retry}
         onVote={vote}
+        onQuickReact={quickReact}
+        burst={burst?.messageId === item.message.id ? burst : null}
       />
     );
-  }, [theme, me.userId, me.staffId, chatType, highlightId, toggleReaction, openMedia, openDocument, jumpToMessage, retry, vote, info]);
+  }, [theme, me.userId, me.staffId, chatType, highlightId, toggleReaction, quickReact, burst, openMedia, openDocument, jumpToMessage, retry, vote, info]);
 
   // --- Поиск в чате ---
 
@@ -855,10 +881,11 @@ export default function ChatScreen({ navigation, route }) {
       if (!participant) return null;
       return { text: formatLastSeen(participant.online, participant.last_seen_at), accent: participant.online };
     }
-    if (isGroup && info) {
+    if ((isGroup || isObject) && info) {
       const count = info.members_count || 0;
       const online = info.online_count || 0;
-      return { text: `${count} ${plural(count, 'участник', 'участника', 'участников')}${online ? `, ${online} в сети` : ''}` };
+      const members = `${count} ${plural(count, 'участник', 'участника', 'участников')}${online ? `, ${online} в сети` : ''}`;
+      return { text: isObject ? `Чат объекта · ${members}` : members };
     }
     if (isObject) return { text: 'Чат объекта · комментарии табеля' };
     return null;
@@ -1013,9 +1040,12 @@ export default function ChatScreen({ navigation, route }) {
                 <View style={s.headerBody}>
                   <Text style={s.headerName} numberOfLines={1}>{title}</Text>
                   {subtitle ? (
-                    <Text style={[s.headerStatus, { color: subtitle.accent ? theme.accent : theme.textSecondary }]} numberOfLines={1}>
-                      {subtitle.text}
-                    </Text>
+                    <View style={s.headerStatusRow}>
+                      {peerTyping ? <TypingDots color={theme.accent} /> : null}
+                      <Text style={[s.headerStatus, { color: subtitle.accent ? theme.accent : theme.textSecondary }]} numberOfLines={1}>
+                        {subtitle.text}
+                      </Text>
+                    </View>
                   ) : null}
                 </View>
               </Pressable>
@@ -1143,7 +1173,8 @@ const screenStyles = (theme) => StyleSheet.create({
   headerMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerBody: { flex: 1, justifyContent: 'center' },
   headerName: { fontSize: 17, fontWeight: '600', color: theme.text },
-  headerStatus: { fontSize: 13, marginTop: 1 },
+  headerStatusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 1 },
+  headerStatus: { fontSize: 13, flexShrink: 1 },
   headerAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
   pinned: {
     flexDirection: 'row',

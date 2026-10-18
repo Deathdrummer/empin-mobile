@@ -466,6 +466,33 @@ export const messengerAPI = {
     return response.data;
   },
 
+  // Состав чата объекта: участников подбирает табель, здесь их меняют вручную
+  addObjectMembers: async (chatId, memberIds) => {
+    const response = await api.post('/messenger/object/members/add', { chat_id: chatId, member_ids: memberIds });
+    return response.data;
+  },
+
+  removeObjectMember: async (chatId, staffId) => {
+    const response = await api.post('/messenger/object/members/remove', { chat_id: chatId, staff_id: staffId });
+    return response.data;
+  },
+
+  leaveObject: async (chatId) => {
+    const response = await api.post('/messenger/object/leave', { chat_id: chatId });
+    return response.data;
+  },
+
+  // Настройки мессенджера — общие для всех устройств сотрудника
+  getSettings: async () => {
+    const response = await api.get('/messenger/settings');
+    return response.data;
+  },
+
+  updateSettings: async (settings) => {
+    const response = await api.post('/messenger/settings', settings);
+    return response.data;
+  },
+
   markRead: async (chatId, messageId) => {
     const response = await api.post('/messenger/chat/read', {
       chat_id: chatId,

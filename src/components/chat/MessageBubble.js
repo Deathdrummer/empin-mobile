@@ -1,8 +1,9 @@
-import React, { memo, useMemo, useRef } from 'react';
+import React, { memo, useEffect, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import Animated, { Keyframe, LayoutAnimationConfig, ZoomIn } from 'react-native-reanimated';
 import { SERVER_URL } from '../../services/api';
 import { avatarColor } from '../../theme';
 import { formatMessageTime, formatShortDay, fullName, mediaLabel, shortName } from '../../utils/chatFormat';
@@ -10,12 +11,13 @@ import { Avatar } from './Avatar';
 import { PollCard } from './PollCard';
 import { VoiceMessage } from './VoiceMessage';
 import { DocumentCard, MediaGrid } from './MessageAttachments';
+import { ReactionBurst } from './ReactionBurst';
 
 const AVATAR_SLOT = 34;
 
 // Отступ под скрепку и галочки в невидимом хвосте текста. Неразрывные пробелы: обычные
 // в конце строки «висят» за её краем и не учитываются при переносе
-const NBSP = ' ';
+const NBSP = '\u00A0';
 const metaPadding = (pinned, isMine) => NBSP.repeat(1 + (pinned ? 5 : 0) + (isMine ? 7 : 0));
 
 // «@Самсонов А.» — упоминание в тексте
@@ -23,6 +25,51 @@ const MENTION_PATTERN = /(@[A-Za-zА-Яа-яЁё-]+(?:\s[A-ZА-ЯЁ]\.)?)/g;
 
 /** Текст с подсвеченными упоминаниями */
 const textParts = (text) => text.split(MENTION_PATTERN).filter((part) => part !== '');
+
+// Эмодзи без регулярных выражений с \p{…}: диапазоны символов, соединители и модификаторы
+const isEmojiBase = (code) => (code >= 0x1f000 && code <= 0x1faff) || (code >= 0x2600 && code <= 0x27bf)
+  || (code >= 0x2300 && code <= 0x23ff) || (code >= 0x2b00 && code <= 0x2bff) || (code >= 0x2194 && code <= 0x21aa)
+  || [0xa9, 0xae, 0x203c, 0x2049, 0x2122, 0x2139, 0x3030, 0x303d, 0x3297, 0x3299].includes(code);
+const isEmojiJoiner = (code) => code === 0x200d || code === 0xfe0f || code === 0x20e3 || (code >= 0xe0020 && code <= 0xe007f);
+const isSkinTone = (code) => code >= 0x1f3fb && code <= 0x1f3ff;
+const isRegionalIndicator = (code) => code >= 0x1f1e6 && code <= 0x1f1ff;
+
+/** Сколько эмодзи в сообщении из одних эмодзи (1–3), иначе 0 — такие показываются крупно, как в Telegram */
+export const jumboEmojiCount = (text) => {
+  if (!text || text.length > 40) return 0;
+  let count = 0;
+  let joined = false;
+  let regional = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0);
+    if (char.trim() === '') {
+      joined = false;
+    } else if (isEmojiJoiner(code)) {
+      joined = code === 0x200d;
+    } else if (isRegionalIndicator(code)) {
+      // Флаг — пара символов-букв
+      regional += 1;
+      if (regional % 2 === 1) count += 1;
+    } else if (!isSkinTone(code)) {
+      if (!isEmojiBase(code)) return 0;
+      if (!joined) count += 1;
+      joined = false;
+    }
+  }
+  return count <= 3 ? count : 0;
+};
+
+const JUMBO_SIZES = { 1: 52, 2: 44, 3: 38 };
+const QUICK_TAP_MS = 300;
+
+// Новое сообщение проявляется один раз: при прокрутке истории анимация не повторяется
+const appearedIds = new Set();
+const APPEAR = new Keyframe({
+  0: { opacity: 0, transform: [{ scale: 0.92 }] },
+  100: { opacity: 1, transform: [{ scale: 1 }] },
+}).duration(220);
+const JUMBO_APPEAR = ZoomIn.springify().damping(9).stiffness(170);
+const REACTION_APPEAR = ZoomIn.springify().damping(12).stiffness(260);
 
 /** Вложения сообщения в одном формате: старый формат — один объект, новый — массив */
 export const normalizeMedia = (media) => {
@@ -78,6 +125,8 @@ const MessageBubbleComponent = ({
   onQuotePress,
   onRetry,
   onVote,
+  onQuickReact,
+  burst,
 }) => {
   // В группе и чате объекта у чужих сообщений — автор и аватар, как в Telegram
   const multiAuthor = chatType !== 'direct';
@@ -91,6 +140,14 @@ const MessageBubbleComponent = ({
   const files = media.filter((item) => !['image', 'video', 'audio'].includes(item.type));
   const reactions = useMemo(() => groupReactions(message.reactions, myUserId), [message.reactions, myUserId]);
   const text = (message.message || '').trim();
+  const jumbo = !isPoll && !message.reply_to && !media.length ? jumboEmojiCount(text) : 0;
+  const lastTapRef = useRef(0);
+
+  // Проявление только у только что пришедших и отправленных сообщений (флаг ставит экран чата)
+  const appear = useRef(Boolean(message._appear) && !appearedIds.has(message.id)).current;
+  useEffect(() => {
+    if (message._appear) appearedIds.add(message.id);
+  }, [message._appear, message.id]);
 
   const colors = isMine
     ? { bg: theme.bubbleOut, text: theme.bubbleOutText, meta: theme.bubbleOutMeta, accent: theme.bubbleOutAccent }
@@ -100,16 +157,18 @@ const MessageBubbleComponent = ({
   const edited = isEdited(message);
   const metaText = `${edited ? 'изменено ' : ''}${time}`;
   const mediaOnly = visual.length > 0 && !text && !audio.length && !files.length;
+  // Время на тёмной плашке — поверх фото и рядом с крупными эмодзи
+  const metaOnChip = mediaOnly || jumbo > 0;
 
   const meta = (
-    <View style={[styles.meta, mediaOnly && styles.metaOnMedia]}>
-      {message.pinned ? <Ionicons name="pin" size={11} color={mediaOnly ? '#FFFFFF' : colors.meta} style={styles.metaPin} /> : null}
-      <Text style={[styles.metaText, { color: mediaOnly ? '#FFFFFF' : colors.meta }]}>{metaText}</Text>
+    <View style={[styles.meta, mediaOnly && styles.metaOnMedia, jumbo > 0 && styles.metaJumbo]}>
+      {message.pinned ? <Ionicons name="pin" size={11} color={metaOnChip ? '#FFFFFF' : colors.meta} style={styles.metaPin} /> : null}
+      <Text style={[styles.metaText, { color: metaOnChip ? '#FFFFFF' : colors.meta }]}>{metaText}</Text>
       {isMine ? (
         <StatusIcon
           status={status}
-          color={mediaOnly ? '#FFFFFF' : colors.meta}
-          readColor={mediaOnly ? '#FFFFFF' : colors.accent}
+          color={metaOnChip ? '#FFFFFF' : colors.meta}
+          readColor={metaOnChip ? '#FFFFFF' : colors.accent}
           failedColor={theme.danger}
         />
       ) : null}
@@ -127,16 +186,33 @@ const MessageBubbleComponent = ({
     onLongPress(message);
   };
 
+  // Двойное касание — быстрая реакция, как в Telegram (фото, ответы и опросы ловят касания сами)
+  const handlePress = () => {
+    if (status === 'failed') {
+      onRetry(message);
+      return;
+    }
+    if (!onQuickReact || status === 'sending') return;
+    const now = Date.now();
+    if (now - lastTapRef.current < QUICK_TAP_MS) {
+      lastTapRef.current = 0;
+      onQuickReact(message);
+    } else {
+      lastTapRef.current = now;
+    }
+  };
+
   const bubble = (
     <Pressable
       onLongPress={handleLongPress}
-      onPress={status === 'failed' ? () => onRetry(message) : undefined}
+      onPress={handlePress}
       delayLongPress={280}
       style={[
         styles.bubble,
         corner,
-        { backgroundColor: colors.bg },
+        { backgroundColor: jumbo ? 'transparent' : colors.bg },
         mediaOnly && styles.bubbleMedia,
+        jumbo > 0 && styles.bubbleJumbo,
         // Голосовое, файл или опрос без текста: время ниже содержимого, а не поверх него
         !text && !mediaOnly && styles.bubbleMetaBelow,
         highlighted && { borderWidth: 2, borderColor: theme.accent },
@@ -147,7 +223,7 @@ const MessageBubbleComponent = ({
           <Text style={{ color: avatarColor(message.from_id) }}>{shortName(message.from)}</Text>
           {message.context?.day ? (
             <Text style={[styles.authorContext, { color: colors.meta }]}>
-              {`  ${formatShortDay(message.context.day)}${message.context.team ? ` · бригада ${message.context.team}` : ''}`}
+              {`  ${formatShortDay(message.context.day)}`}
             </Text>
           ) : null}
         </Text>
@@ -158,7 +234,7 @@ const MessageBubbleComponent = ({
           message={message}
           myStaffId={myStaffId}
           theme={theme}
-          colors={{ ...colors, track: isMine ? 'rgba(160, 65, 74, 0.25)' : theme.separator }}
+          colors={{ ...colors, track: isMine ? theme.bubbleOutTrack : theme.separator }}
           onVote={onVote}
         />
       ) : null}
@@ -190,7 +266,7 @@ const MessageBubbleComponent = ({
           uri={item.uri}
           messageId={message.id}
           tint={theme.accent}
-          trackColor={isMine ? 'rgba(160, 65, 74, 0.35)' : theme.separator}
+          trackColor={isMine ? theme.bubbleOutTrack : theme.separator}
           metaColor={colors.meta}
         />
       ))}
@@ -206,7 +282,16 @@ const MessageBubbleComponent = ({
         />
       ))}
 
-      {text ? (
+      {jumbo ? (
+        <Animated.Text
+          entering={appear ? JUMBO_APPEAR : undefined}
+          style={[styles.jumbo, { fontSize: JUMBO_SIZES[jumbo], lineHeight: JUMBO_SIZES[jumbo] * 1.2 }]}
+        >
+          {text}
+        </Animated.Text>
+      ) : null}
+
+      {text && !jumbo ? (
         <Text style={[styles.text, { color: colors.text }]} selectable={false}>
           {text.includes('@')
             ? textParts(text).map((part, index) => (part.startsWith('@')
@@ -246,30 +331,36 @@ const MessageBubbleComponent = ({
       </ReanimatedSwipeable>
   );
 
+  // Реакции, которые уже были при показе, не анимируются; новая плашка появляется с пружинкой
   const reactionsRow = reactions.length ? (
-    <View style={[styles.reactions, isMine ? styles.reactionsMine : styles.reactionsTheirs]}>
-      {reactions.map((reaction) => (
-        <Pressable
-          key={reaction.emoji}
-          onPress={() => onReactionPress(message, reaction.emoji, reaction.mine)}
-          style={[
-            styles.reaction,
-            {
-              backgroundColor: reaction.mine ? theme.reactionMine : theme.reactionBackground,
-              borderColor: reaction.mine ? theme.accent : theme.reactionBorder,
-            },
-          ]}
-        >
-          <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
-          {reaction.count > 1 ? <Text style={[styles.reactionCount, { color: theme.text }]}>{reaction.count}</Text> : null}
-        </Pressable>
-      ))}
-    </View>
+    <LayoutAnimationConfig skipEntering>
+      <View style={[styles.reactions, isMine ? styles.reactionsMine : styles.reactionsTheirs]}>
+        {reactions.map((reaction) => (
+          <Animated.View key={reaction.emoji} entering={REACTION_APPEAR}>
+            <Pressable
+              onPress={() => onReactionPress(message, reaction.emoji, reaction.mine)}
+              style={[
+                styles.reaction,
+                {
+                  backgroundColor: reaction.mine ? theme.reactionMine : theme.reactionBackground,
+                  borderColor: reaction.mine ? theme.accent : theme.reactionBorder,
+                },
+              ]}
+            >
+              <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
+              {reaction.count > 1 ? <Text style={[styles.reactionCount, { color: theme.text }]}>{reaction.count}</Text> : null}
+            </Pressable>
+          </Animated.View>
+        ))}
+      </View>
+    </LayoutAnimationConfig>
   ) : null;
+
+  const burstView = burst ? <ReactionBurst key={burst.key} emoji={burst.emoji} alignRight={isMine} /> : null;
 
   if (showAvatarSlot) {
     return (
-      <View style={[styles.row, styles.rowWithAvatar, isFirstInGroup && styles.rowGroupStart]}>
+      <Animated.View entering={appear ? APPEAR : undefined} style={[styles.row, styles.rowWithAvatar, isFirstInGroup && styles.rowGroupStart]}>
         <View style={styles.avatarSlot}>
           {isLastInGroup ? <Avatar person={message.from} id={message.from_id} size={30} /> : null}
         </View>
@@ -277,15 +368,20 @@ const MessageBubbleComponent = ({
           {swipeable}
           {reactionsRow}
         </View>
-      </View>
+        {burstView}
+      </Animated.View>
     );
   }
 
   return (
-    <View style={[styles.row, isMine ? styles.rowMine : styles.rowTheirs, isFirstInGroup && styles.rowGroupStart]}>
+    <Animated.View
+      entering={appear ? APPEAR : undefined}
+      style={[styles.row, isMine ? styles.rowMine : styles.rowTheirs, isFirstInGroup && styles.rowGroupStart]}
+    >
       {swipeable}
       {reactionsRow}
-    </View>
+      {burstView}
+    </Animated.View>
   );
 };
 
@@ -307,6 +403,8 @@ const styles = StyleSheet.create({
   swipeContainer: { maxWidth: '82%', overflow: 'visible' },
   bubble: { paddingHorizontal: 10, paddingTop: 6, paddingBottom: 6, minWidth: 64 },
   bubbleMedia: { padding: 3 },
+  bubbleJumbo: { paddingHorizontal: 2, paddingTop: 0, paddingBottom: 2, minWidth: 0 },
+  jumbo: { textAlign: 'center' },
   bubbleMetaBelow: { paddingBottom: 20 },
   mediaSpacing: { marginBottom: 4 },
   quote: { borderLeftWidth: 3, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, marginBottom: 5 },
@@ -324,6 +422,17 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
     backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  metaJumbo: {
+    position: 'relative',
+    right: 0,
+    bottom: 0,
+    alignSelf: 'flex-end',
+    marginTop: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   metaText: { fontSize: 11 },
   swipeAction: { width: 56, justifyContent: 'center', alignItems: 'center' },
