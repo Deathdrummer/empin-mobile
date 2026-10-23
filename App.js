@@ -15,12 +15,10 @@ import ChatScreen from './src/screens/Messenger/ChatScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import ChatInfoScreen from './src/screens/Messenger/ChatInfoScreen';
 import { clearDrafts, DRAFTS_STORAGE_KEY } from './src/services/drafts';
-import { authAPI, setUnauthorizedCallback, checkApiAvailability } from './src/services/api';
+import { authAPI, setUnauthorizedCallback } from './src/services/api';
 import { disconnectPusher } from './src/services/pusher';
 import { useAppStatePermissions } from './src/hooks/useAppStatePermissions';
 import { requestCallPermissions } from './src/utils/requestCallPermissions';
-import apiBlockEmitter from './src/utils/apiBlockEmitter';
-import { ApiBlockModal } from './src/components/ApiBlockModal';
 import { CallProvider } from './src/contexts/CallContext';
 import { useMessengerSync } from './src/hooks/useMessengerSync';
 import { navigationRef } from './src/services/navigationRef';
@@ -31,13 +29,13 @@ import {
 } from './src/services/pushNotifications';
 import { disableIosVoip, unregisterIosVoipToken } from './src/services/iosVoip';
 import { restoreThemePreference, useTheme } from './src/theme';
+import { STATUS_BAR_HIDDEN } from './src/utils/statusBar';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isApiBlocked, setIsApiBlocked] = useState(false);
   const theme = useTheme();
 
   // Фон и цвета навигации из темы: без белых вспышек при переходах в тёмной теме
@@ -95,14 +93,8 @@ export default function App() {
     // Устанавливаем callback для принудительного выхода при 401
     setUnauthorizedCallback(() => clearSession());
 
-    // Подписываемся на события блокировки API
-    const unsubscribe = apiBlockEmitter.subscribe((isBlocked) => {
-      setIsApiBlocked(isBlocked);
-    });
-
     return () => {
       setUnauthorizedCallback(null);
-      unsubscribe();
     };
   }, [clearSession]);
 
@@ -131,10 +123,6 @@ export default function App() {
     await clearSession({ notifyServer: true });
   };
 
-  const handleRetryApi = async () => {
-    await checkApiAvailability();
-  };
-
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
@@ -149,7 +137,8 @@ export default function App() {
         <ActionSheetProvider>
           <CallProvider isLoggedIn={isLoggedIn}>
             <>
-              <StatusBar hidden={true} />
+              {/* На iPhone строка состояния видна (иначе содержимое заходит под «чёлку»), на Android — во весь экран */}
+              <StatusBar hidden={STATUS_BAR_HIDDEN} barStyle={theme.statusBar} />
               <View style={[styles.appContainer, { backgroundColor: theme.background }]}>
                 {isLoggedIn ? (
                   <NavigationContainer ref={navigationRef} theme={navigationTheme}>
@@ -174,7 +163,6 @@ export default function App() {
                   <LoginScreen onLoginSuccess={handleLoginSuccess} />
                 )}
                 <Toast />
-                <ApiBlockModal visible={isApiBlocked} onRetry={handleRetryApi} />
                 {isLoggedIn && <GlobalCallModal />}
               </View>
             </>

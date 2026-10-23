@@ -1,7 +1,7 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Modal, StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { ViewerHeader } from './ViewerHeader';
 
 const Player = ({ uri }) => {
   const player = useVideoPlayer(uri, (instance) => {
@@ -15,9 +15,9 @@ export const VideoViewer = ({ uri, onClose }) => (
   <Modal visible={Boolean(uri)} animationType="fade" onRequestClose={onClose} supportedOrientations={['portrait', 'landscape']}>
     <View style={styles.container}>
       {uri ? <Player uri={uri} /> : null}
-      <Pressable style={styles.close} onPress={onClose} hitSlop={12} accessibilityLabel="Закрыть видео">
-        <Ionicons name="close" size={28} color="#FFFFFF" />
-      </Pressable>
+      <View style={styles.header} pointerEvents="box-none">
+        <ViewerHeader onClose={onClose} />
+      </View>
     </View>
   </Modal>
 );
@@ -25,15 +25,5 @@ export const VideoViewer = ({ uri, onClose }) => (
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000000', justifyContent: 'center' },
   video: { width: '100%', height: '100%' },
-  close: {
-    position: 'absolute',
-    top: 48,
-    right: 16,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  header: { position: 'absolute', top: 0, left: 0, right: 0 },
 });

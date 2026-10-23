@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { PinIcon } from './PinIcon';
 import { mediaLabel } from '../../utils/chatFormat';
 import { normalizeMedia } from './MessageBubble';
 
@@ -8,7 +9,7 @@ export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥'
 
 /**
  * Меню сообщения по долгому нажатию: быстрые реакции, превью и действия.
- * actions: [{ key, label, icon, destructive?, onPress }]
+ * actions: [{ key, label, icon, destructive?, onPress }]; icon 'pin' / 'pin-off' — значок закрепления как в Telegram
  */
 export const MessageActionsSheet = ({ visible, message, theme, myUserId, actions, onReact, onClose }) => {
   if (!message) return null;
@@ -61,7 +62,11 @@ export const MessageActionsSheet = ({ visible, message, theme, myUserId, actions
                 ]}
               >
                 <Text style={[styles.actionLabel, { color: action.destructive ? theme.danger : theme.text }]}>{action.label}</Text>
-                <Ionicons name={action.icon} size={20} color={action.destructive ? theme.danger : theme.textSecondary} />
+                {action.icon === 'pin' || action.icon === 'pin-off' ? (
+                  <PinIcon variant={action.icon === 'pin-off' ? 'off' : 'pin'} size={20} color={theme.textSecondary} />
+                ) : (
+                  <Ionicons name={action.icon} size={20} color={action.destructive ? theme.danger : theme.textSecondary} />
+                )}
               </Pressable>
             ))}
           </View>

@@ -34,12 +34,12 @@ const Row = ({ theme, icon, iconColor, title, subtitle, destructive, onPress, la
   </Pressable>
 );
 
-/** Как выглядит переписка в выбранном оформлении: фон с узором и два сообщения */
+/** Как выглядит переписка в выбранном оформлении: фон с узором и два сообщения (имя условное) */
 const ThemePreview = ({ theme }) => (
   <View style={[styles.preview, { borderColor: theme.separator }]}>
     <ChatBackground />
     <View style={[styles.previewBubble, styles.previewIn, { backgroundColor: theme.bubbleIn }]}>
-      <Text style={[styles.previewAuthor, { color: avatarColor(2) }]}>Петров А.</Text>
+      <Text style={[styles.previewAuthor, { color: avatarColor(2) }]}>Иванов И.</Text>
       <Text style={[styles.previewText, { color: theme.bubbleInText }]}>Щит смонтирован, можно подключать ⚡</Text>
     </View>
     <View style={[styles.previewBubble, styles.previewOut, { backgroundColor: theme.bubbleOut }]}>
@@ -176,7 +176,7 @@ export default function ProfileScreen({ onLogout }) {
               icon="flash"
               iconColor="#C46A1B"
               title="Чаты объектов без звука"
-              subtitle="И новые объекты — сразу без звука. Остальные чаты со звуком"
+              subtitle="Автоматически добавляемые чаты объектов — сразу без звука. Остальные чаты со звуком"
               onPress={muteObjects === null ? undefined : () => toggleMuteObjects(!muteObjects)}
               accessory={(
                 <Switch

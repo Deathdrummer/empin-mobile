@@ -53,12 +53,18 @@ export const useMessengerSync = (isLoggedIn) => {
       if (name === 'message.created' && Number(data?.chat_id) !== getActiveChatId()) refreshSoon();
       if (name === 'message.deleted' || name === 'chat.updated') refreshSoon();
     });
+    // Уведомление о сообщении, пришедшее при открытом приложении: значок на «Чатах» обновляется,
+    // даже если соединение Pusher после возврата из фона ещё не восстановилось
+    const received = Notifications.addNotificationReceivedListener((notification) => {
+      if (notification?.request?.content?.data?.type === 'message') refreshSoon();
+    });
 
     return () => {
       clearTimeout(timer);
       clearInterval(presenceTimer);
       appState.remove();
       unsubscribe();
+      received.remove();
     };
   }, [isLoggedIn]);
 

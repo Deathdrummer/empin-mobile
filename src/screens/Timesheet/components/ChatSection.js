@@ -29,6 +29,7 @@ import { useAudioRecorder, RecordingPresets, AudioModule, setAudioModeAsync } fr
 import { isPermissionError, showPermissionSettingsAlert } from '../../../utils/permissionSettingsAlert';
 import { formatDateTime, formatEditTime } from '../../../utils/dateTime';
 import { useTheme, useThemedStyles } from '../../../theme';
+import { restoreStatusBar } from '../../../utils/statusBar';
 
 // Константы для расчета позиции меню
 const EMOJI_PICKER_HEIGHT = 60; // Высота блока реакций
@@ -243,7 +244,7 @@ export const ChatSection = ({
       });
 
       // Принудительно скрываем StatusBar после закрытия системного диалога
-      StatusBar.setHidden(true);
+      restoreStatusBar();
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         // Добавляем все выбранные медиа к существующим
@@ -293,7 +294,7 @@ export const ChatSection = ({
       });
 
       // Принудительно скрываем StatusBar после закрытия камеры
-      StatusBar.setHidden(true);
+      restoreStatusBar();
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const media = result.assets[0];
@@ -333,7 +334,7 @@ export const ChatSection = ({
       });
 
       // Принудительно скрываем StatusBar после закрытия камеры
-      StatusBar.setHidden(true);
+      restoreStatusBar();
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const media = result.assets[0];
@@ -364,7 +365,7 @@ export const ChatSection = ({
       });
 
       // Принудительно скрываем StatusBar после закрытия системного диалога
-      StatusBar.setHidden(true);
+      restoreStatusBar();
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         // Добавляем выбранные документы к массиву медиа

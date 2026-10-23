@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import Toast from 'react-native-toast-message';
+import { restoreStatusBar } from '../../utils/statusBar';
 
 const openSettingsAlert = (title, message) => {
   Alert.alert(title, message, [
@@ -23,10 +24,10 @@ export const takePhoto = async () => {
       return null;
     }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
-    StatusBar.setHidden(true);
+    restoreStatusBar();
     return result.canceled ? null : result.assets;
   } catch (error) {
-    StatusBar.setHidden(true);
+    restoreStatusBar();
     console.warn('[Attach] Камера:', error?.message ?? error);
     Toast.show({ type: 'error', text1: 'Не удалось открыть камеру', position: 'top' });
     return null;
@@ -45,10 +46,10 @@ export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOption
     try {
       const assets = await picker();
       // Системные окна выбора показывают статус-бар, а приложение работает без него
-      StatusBar.setHidden(true);
+      restoreStatusBar();
       if (assets?.length) onPicked(assets);
     } catch (error) {
-      StatusBar.setHidden(true);
+      restoreStatusBar();
       if (isPermissionError(error)) {
         openSettingsAlert('Нет доступа', 'Разрешите доступ в настройках телефона, чтобы прикрепить файл.');
         return;

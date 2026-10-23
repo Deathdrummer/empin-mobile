@@ -254,12 +254,13 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
   },
+  // Кнопки не у края: на iPhone с большими скруглениями угла (17 Pro Max) крестик уходил в угол
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingHorizontal: 24,
+    paddingTop: 12,
   },
   headerSpacer: {
     width: 40,

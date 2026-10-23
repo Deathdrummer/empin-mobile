@@ -1,10 +1,8 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
-import * as Updates from 'expo-updates';
 import { Platform } from 'react-native';
 import permissionsEmitter from '../utils/permissionsEmitter';
-import apiBlockEmitter from '../utils/apiBlockEmitter';
 import { getInstallationId } from './deviceInstallation';
 
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://empin-pro.ru/api')
@@ -50,17 +48,14 @@ export const setUnauthorizedCallback = (callback) => {
   onUnauthorizedCallback = callback;
 };
 
-// Перехватчик ответов для обработки ошибок авторизации и сети
+// Перехватчик ответов: 401 — выход на экран входа.
+// Сетевые сбои приложение не блокирует: после возврата из фона iOS какое-то время поднимает сеть,
+// и одиночная ошибка — не повод перекрывать экран. Ошибку показывает тот экран, где она важна
+// (звонок, отправка сообщения), а списки обновятся при следующей загрузке.
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // Network Error - сервер недоступен
-    if (error.message === 'Network Error') {
-      // Блокируем приложение
-      apiBlockEmitter.block();
-    }
-    // 401 - невалидный токен, выкидываем пользователя на экран логина
-    else if (error.response?.status === 401) {
+    if (error.response?.status === 401) {
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('user');
       await AsyncStorage.removeItem('permissions');
@@ -72,38 +67,6 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-/**
- * Проверить доступность API сервера
- * @returns {Promise<boolean>} true если сервер доступен
- */
-export const checkApiAvailability = async () => {
-  try {
-    await api.get('/health', { timeout: 5000 });
-    apiBlockEmitter.unblock();
-
-    // Перезагружаем приложение после восстановления соединения
-    try {
-      if (__DEV__) {
-        // В DEV режиме используем DevSettings
-        const DevSettings = require('react-native').DevSettings;
-        DevSettings.reload();
-      } else {
-        // В production используем expo-updates
-        await Updates.reloadAsync();
-      }
-    } catch (_reloadError) {
-      // Если перезагрузка не удалась, просто разблокируем
-    }
-
-    return true;
-  } catch (error) {
-    if (error.message === 'Network Error') {
-      apiBlockEmitter.block();
-    }
-    return false;
-  }
-};
 
 // API методы
 export const authAPI = {
@@ -341,9 +304,11 @@ export const timesheetAPI = {
     return response.data;
   },
 
+  // Сервер переключает реакцию: повтор той же снимает её (отдельного DELETE-маршрута нет)
   removeReaction: async (commentId, emoji) => {
-    const response = await api.delete(`/timesheet/comment/${commentId}/reaction`, {
-      data: { emoji },
+    const response = await api.post('/timesheet/comment/reaction', {
+      comment_id: commentId,
+      emoji,
     });
     return response.data;
   },

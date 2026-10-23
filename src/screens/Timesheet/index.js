@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, Dimensions, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { DeviceMotion } from 'expo-sensors';
+import { Accelerometer } from 'expo-sensors';
 import { Ionicons } from '@expo/vector-icons';
 import { TabBar, useTabBarHeight } from '../../components/TabBar';
 import { useTheme, useThemedStyles } from '../../theme';
@@ -134,45 +134,32 @@ function TimesheetScreenContent({ onLogout }) {
     }
   }, [localFlatListRef, flatListRef]);
 
-  // Shake detection
+  // Встряхивание — обновить табель. Акселерометр, а не DeviceMotion: на iPhone ему не нужно
+  // разрешение «Движение и фитнес», и при запуске не всплывает системный запрос
   useEffect(() => {
-    let lastUpdate = 0;
+    const SHAKE_FORCE_G = 2.3; // сильный рывок; телефон в покое — около 1 g
+    const PEAK_WINDOW_MS = 600; // два рывка подряд — встряхивание, а не случайный удар
+    const SHAKE_COOLDOWN_MS = 2000;
+    let lastPeak = 0;
     let lastShake = 0;
-    const SHAKE_THRESHOLD = 800;
-    const SHAKE_COOLDOWN = 2000; // 2 секунды между встряхиваниями
 
-    const subscription = DeviceMotion.addListener((data) => {
-      const { acceleration } = data;
+    Accelerometer.setUpdateInterval(100);
+    const subscription = Accelerometer.addListener(({ x, y, z }) => {
+      if (Math.sqrt(x * x + y * y + z * z) < SHAKE_FORCE_G) return;
 
-      if (!acceleration || typeof acceleration.x !== 'number') {
-        return;
-      }
+      const now = Date.now();
+      if (now - lastShake < SHAKE_COOLDOWN_MS) return;
 
-      const curTime = new Date().getTime();
-
-      // Проверка cooldown для избежания множественных срабатываний
-      if ((curTime - lastShake) < SHAKE_COOLDOWN) {
-        return;
-      }
-
-      if ((curTime - lastUpdate) > 100) {
-        const diffTime = curTime - lastUpdate;
-        lastUpdate = curTime;
-
-        const speed = Math.abs(acceleration.x + acceleration.y + acceleration.z - 0) / diffTime * 10000;
-
-        if (speed > SHAKE_THRESHOLD && !refreshing) {
-          lastShake = curTime;
-          onRefresh();
-        }
+      if (now - lastPeak > 80 && now - lastPeak < PEAK_WINDOW_MS) {
+        lastShake = now;
+        lastPeak = 0;
+        if (!refreshing) onRefresh();
+      } else {
+        lastPeak = now;
       }
     });
 
-    DeviceMotion.setUpdateInterval(100);
-
-    return () => {
-      subscription && subscription.remove();
-    };
+    return () => subscription.remove();
   }, [onRefresh, refreshing]);
 
   const handleCalendarPress = () => {

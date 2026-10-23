@@ -15,6 +15,7 @@ import { AudioPlayer } from './AudioPlayer';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
 import { formatShortName } from '../../../utils/formatName';
 import { isPermissionError, showPermissionSettingsAlert } from '../../../utils/permissionSettingsAlert';
+import { restoreStatusBar } from '../../../utils/statusBar';
 
 // Функция для определения типа медиа (изображение/видео или документ)
 const isMediaFile = (media) => {
@@ -158,7 +159,7 @@ export const ChatInputPanel = ({
       });
 
       // Принудительно скрываем StatusBar после закрытия системного диалога
-      StatusBar.setHidden(true);
+      restoreStatusBar();
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         // Добавляем все выбранные медиа к существующим
@@ -208,7 +209,7 @@ export const ChatInputPanel = ({
       });
 
       // Принудительно скрываем StatusBar после закрытия камеры
-      StatusBar.setHidden(true);
+      restoreStatusBar();
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const media = result.assets[0];
@@ -248,7 +249,7 @@ export const ChatInputPanel = ({
       });
 
       // Принудительно скрываем StatusBar после закрытия камеры
-      StatusBar.setHidden(true);
+      restoreStatusBar();
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const media = result.assets[0];
@@ -279,7 +280,7 @@ export const ChatInputPanel = ({
       });
 
       // Принудительно скрываем StatusBar после закрытия системного диалога
-      StatusBar.setHidden(true);
+      restoreStatusBar();
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         // Добавляем выбранные документы к массиву медиа

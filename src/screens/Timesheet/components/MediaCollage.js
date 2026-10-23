@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, Pressable, Dime
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import ImageViewing from 'react-native-image-viewing';
+import { ViewerHeader } from '../../../components/chat/ViewerHeader';
 import { useAudioPlayerContext } from '../../../contexts/AudioPlayerContext';
 import { useTheme } from '../../../theme';
 
@@ -258,6 +259,12 @@ export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
         onRequestClose={handleCloseImageViewer}
         swipeToCloseEnabled={true}
         doubleTapToZoomEnabled={true}
+        HeaderComponent={({ imageIndex }) => (
+          <ViewerHeader
+            title={imageViewingData.length > 1 ? `${imageIndex + 1} из ${imageViewingData.length}` : ''}
+            onClose={handleCloseImageViewer}
+          />
+        )}
       />
 
       {/* Modal для полноэкранного просмотра видео */}
@@ -275,14 +282,10 @@ export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
 
           <FullscreenVideo uri={mediaArray[selectedMediaIndex]?.uri} />
 
-          {/* Кнопка закрытия */}
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={handleCloseVideoViewer}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="close" size={28} color="#FFFFFF" />
-          </TouchableOpacity>
+          {/* Кнопка закрытия — с отступом от безопасной зоны экрана */}
+          <View style={styles.viewerHeader} pointerEvents="box-none">
+            <ViewerHeader onClose={handleCloseVideoViewer} />
+          </View>
         </View>
       </Modal>
     </>
@@ -374,18 +377,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
-  closeButton: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
+  viewerHeader: { position: 'absolute', top: 0, left: 0, right: 0 },
   videoPreviewLoading: {
     position: 'absolute',
     top: 0,

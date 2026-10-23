@@ -50,6 +50,8 @@ import { TypingDots } from '../../components/chat/TypingDots';
 import { Composer } from '../../components/chat/Composer';
 import { PollCreateModal } from '../../components/chat/PollCreateModal';
 import { VideoViewer } from '../../components/chat/VideoViewer';
+import { ViewerHeader } from '../../components/chat/ViewerHeader';
+import { PinIcon } from '../../components/chat/PinIcon';
 import { GlassView } from '../../components/ui/GlassView';
 
 const PAGE_SIZE = 40;
@@ -58,6 +60,8 @@ const INFO_INTERVAL_MS = 30000;
 const TYPING_VISIBLE_MS = 5000;
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 const HIGHLIGHT_MS = 1600;
+// Отступ от последнего сообщения до панели ввода
+const LIST_GAP = 18;
 
 const isServerId = (id) => typeof id === 'number';
 
@@ -589,9 +593,9 @@ export default function ChatScreen({ navigation, route }) {
       setBurst({ messageId: message.id, emoji, key: Date.now() });
     }
     const before = message.reactions || [];
-    const optimistic = hasReacted
-      ? before.filter((reaction) => !(Number(reaction.user_id) === Number(me.userId) && reaction.emoji === emoji))
-      : [...before, { user_id: me.userId, emoji }];
+    // Одна реакция от человека: та же снимается, другая заменяет прежнюю (как на сервере)
+    const others = before.filter((reaction) => Number(reaction.user_id) !== Number(me.userId));
+    const optimistic = hasReacted ? others : [...others, { user_id: me.userId, emoji }];
     setMessages((current) => current.map((item) => (item.id === message.id ? { ...item, reactions: optimistic } : item)));
     try {
       const data = await messengerAPI.addReaction(message.id, emoji, chatId);
@@ -678,7 +682,7 @@ export default function ChatScreen({ navigation, route }) {
       list.push({
         key: 'pin',
         label: actionMessage.pinned ? 'Открепить' : 'Закрепить',
-        icon: actionMessage.pinned ? 'pin-outline' : 'pin',
+        icon: actionMessage.pinned ? 'pin-off' : 'pin',
         onPress: () => togglePin(actionMessage),
       });
     }
@@ -928,7 +932,7 @@ export default function ChatScreen({ navigation, route }) {
                 inverted
                 keyExtractor={(item) => item.key}
                 renderItem={renderItem}
-                contentContainerStyle={{ paddingTop: composerHeight + 8, paddingBottom: headerHeight + 8 }}
+                contentContainerStyle={{ paddingTop: composerHeight + LIST_GAP, paddingBottom: headerHeight + 8 }}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
                 onEndReached={loadOlder}
@@ -1050,7 +1054,10 @@ export default function ChatScreen({ navigation, route }) {
                 </View>
               </Pressable>
               <Pressable
-                onPress={() => setSearch({ active: true, query: '', loading: false, results: [] })}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setSearch({ active: true, query: '', loading: false, results: [] });
+                }}
                 hitSlop={8}
                 style={s.headerAction}
                 accessibilityLabel="Поиск в чате"
@@ -1096,7 +1103,7 @@ export default function ChatScreen({ navigation, route }) {
                   {currentPinned.text || mediaLabel(currentPinned.type) || 'Сообщение'}
                 </Text>
               </View>
-              <Ionicons name="pin" size={18} color={theme.textMuted} style={s.pinnedIcon} />
+              <PinIcon size={18} color={theme.textMuted} style={s.pinnedIcon} />
             </Pressable>
           ) : null}
 
@@ -1144,6 +1151,12 @@ export default function ChatScreen({ navigation, route }) {
           onRequestClose={() => setImageViewer(null)}
           swipeToCloseEnabled
           doubleTapToZoomEnabled
+          HeaderComponent={({ imageIndex }) => (
+            <ViewerHeader
+              title={(imageViewer?.images?.length ?? 0) > 1 ? `${imageIndex + 1} из ${imageViewer.images.length}` : ''}
+              onClose={() => setImageViewer(null)}
+            />
+          )}
         />
         <VideoViewer uri={videoUri} onClose={() => setVideoUri(null)} />
       </View>
@@ -1190,7 +1203,7 @@ const screenStyles = (theme) => StyleSheet.create({
   pinnedBody: { flex: 1 },
   pinnedTitle: { fontSize: 13, fontWeight: '600', color: theme.accent },
   pinnedText: { fontSize: 14, color: theme.textSecondary, marginTop: 1 },
-  pinnedIcon: { transform: [{ rotate: '45deg' }] },
+  pinnedIcon: { marginLeft: 4 },
   searchBox: {
     flex: 1,
     flexDirection: 'row',

@@ -26,6 +26,7 @@ import { useTheme } from '../../theme';
 import { useTabBarHeight } from '../../components/TabBar';
 import { ChatAvatar } from '../../components/chat/ChatAvatar';
 import { TypingDots } from '../../components/chat/TypingDots';
+import { PinIcon } from '../../components/chat/PinIcon';
 import { formatListTime, fullName, plural } from '../../utils/chatFormat';
 import NewChatModal from './NewChatModal';
 
@@ -250,7 +251,7 @@ export default function ChatsTab() {
         <Text style={s.actionText}>{chat.muted ? 'Со звуком' : 'Без звука'}</Text>
       </Pressable>
       <Pressable style={[s.action, { backgroundColor: theme.accent }]} onPress={() => runAction(chat, 'pin')}>
-        <Ionicons name={chat.pinned ? 'pin-outline' : 'pin'} size={22} color="#FFFFFF" />
+        <PinIcon variant={chat.pinned ? 'off' : 'pin'} size={24} color="#FFFFFF" />
         <Text style={s.actionText}>{chat.pinned ? 'Открепить' : 'Закрепить'}</Text>
       </Pressable>
     </View>
@@ -352,7 +353,7 @@ export default function ChatsTab() {
                   <Text style={s.badgeText}>{item.unread_count > 99 ? '99+' : item.unread_count}</Text>
                 </View>
               ) : item.pinned ? (
-                <Ionicons name="pin" size={16} color={theme.textMuted} style={s.pin} />
+                <PinIcon size={16} color={theme.textMuted} style={s.pin} />
               ) : null}
             </View>
           </View>
@@ -600,7 +601,7 @@ const styles = (theme) => StyleSheet.create({
   },
   mention: { backgroundColor: theme.accent },
   badgeText: { color: theme.onAccent, fontSize: 12, fontWeight: '700' },
-  pin: { transform: [{ rotate: '45deg' }] },
+  pin: { marginLeft: 2 },
   actions: { flexDirection: 'row' },
   action: { width: 78, alignItems: 'center', justifyContent: 'center', gap: 4 },
   actionText: { color: '#FFFFFF', fontSize: 11, fontWeight: '600' },

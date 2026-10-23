@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useThemedStyles } from '../../theme';
+import { STATUS_BAR_HIDDEN } from '../../utils/statusBar';
 
 /**
  * Диалог по центру экрана в стиле приложения: заголовок, текст, содержимое и кнопки.
@@ -27,7 +28,7 @@ export const Dialog = ({ visible, onClose, icon, title, message, children, butto
       onRequestClose={onClose}
       statusBarTranslucent={!keyboard}
     >
-      <StatusBar hidden />
+      <StatusBar hidden={STATUS_BAR_HIDDEN} />
       <KeyboardAvoidingView
         style={s.overlay}
         enabled={keyboard}

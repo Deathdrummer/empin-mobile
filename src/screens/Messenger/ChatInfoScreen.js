@@ -22,6 +22,7 @@ import { useCallContext } from '../../contexts/CallContext';
 import { useTheme } from '../../theme';
 import { Avatar } from '../../components/chat/Avatar';
 import { ChatAvatar } from '../../components/chat/ChatAvatar';
+import { PinIcon } from '../../components/chat/PinIcon';
 import { formatLastSeen, fullName, mediaLabel, plural } from '../../utils/chatFormat';
 import { getUserFacingError } from '../../utils/userFacingError';
 import { StaffPicker } from './NewChatModal';
@@ -218,7 +219,7 @@ export default function ChatInfoScreen({ navigation, route }) {
                     onPress={() => openPinned(message)}
                     style={({ pressed }) => [s.row, index > 0 && s.rowBorder, pressed && { backgroundColor: theme.surfacePressed }]}
                   >
-                    <Ionicons name="pin" size={18} color={theme.accent} style={s.pinIcon} />
+                    <PinIcon size={18} color={theme.accent} style={s.pinIcon} />
                     <View style={s.rowBody}>
                       {message.from_name ? <Text style={s.rowSub}>{message.from_name}</Text> : null}
                       <Text style={s.rowTitle} numberOfLines={2}>{message.text || mediaLabel(message.type) || 'Сообщение'}</Text>

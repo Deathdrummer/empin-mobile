@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, useThemedStyles } from '../../theme';
+import { STATUS_BAR_HIDDEN } from '../../utils/statusBar';
 
 /**
  * Нижняя шторка со списком: заголовок, крестик, тап по затемнению закрывает.
@@ -31,7 +32,7 @@ export const Sheet = ({ visible, onClose, title, children, keyboard = false }) =
       onRequestClose={onClose}
       statusBarTranslucent={!keyboard}
     >
-      <StatusBar hidden />
+      <StatusBar hidden={STATUS_BAR_HIDDEN} />
       <KeyboardAvoidingView
         style={s.root}
         enabled={keyboard && Platform.OS === 'ios'}

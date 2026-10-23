@@ -12,6 +12,7 @@ import { PollCard } from './PollCard';
 import { VoiceMessage } from './VoiceMessage';
 import { DocumentCard, MediaGrid } from './MessageAttachments';
 import { ReactionBurst } from './ReactionBurst';
+import { PinIcon } from './PinIcon';
 
 const AVATAR_SLOT = 34;
 
@@ -162,7 +163,7 @@ const MessageBubbleComponent = ({
 
   const meta = (
     <View style={[styles.meta, mediaOnly && styles.metaOnMedia, jumbo > 0 && styles.metaJumbo]}>
-      {message.pinned ? <Ionicons name="pin" size={11} color={metaOnChip ? '#FFFFFF' : colors.meta} style={styles.metaPin} /> : null}
+      {message.pinned ? <PinIcon size={12} color={metaOnChip ? '#FFFFFF' : colors.meta} /> : null}
       <Text style={[styles.metaText, { color: metaOnChip ? '#FFFFFF' : colors.meta }]}>{metaText}</Text>
       {isMine ? (
         <StatusIcon
@@ -399,7 +400,6 @@ const styles = StyleSheet.create({
   authorOnMedia: { paddingHorizontal: 7, paddingTop: 3 },
   authorContext: { fontSize: 11, fontWeight: '400' },
   mention: { fontWeight: '600' },
-  metaPin: { transform: [{ rotate: '45deg' }] },
   swipeContainer: { maxWidth: '82%', overflow: 'visible' },
   bubble: { paddingHorizontal: 10, paddingTop: 6, paddingBottom: 6, minWidth: 64 },
   bubbleMedia: { padding: 3 },
