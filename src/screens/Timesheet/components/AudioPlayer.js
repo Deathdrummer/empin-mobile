@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { prepareMediaPlayback } from '../../../services/chatSounds';
 import Slider from '@react-native-community/slider';
 import Toast from 'react-native-toast-message';
 import { useAudioPlayerContext } from '../../../contexts/AudioPlayerContext';
@@ -96,11 +97,14 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
       }
       // Перед началом воспроизведения регистрируем плеер (остановит остальные)
       registerPlayer(player, audioUri);
-      try {
-        player.play();
-      } catch (error) {
-        console.warn('[AudioPlayer] Не удалось воспроизвести:', error?.message ?? error);
-      }
+      // Голосовое слышно и при выключенном звуке iPhone (звук отправки мог включить «тихий» режим)
+      prepareMediaPlayback().finally(() => {
+        try {
+          player.play();
+        } catch (error) {
+          console.warn('[AudioPlayer] Не удалось воспроизвести:', error?.message ?? error);
+        }
+      });
     }
   };
 

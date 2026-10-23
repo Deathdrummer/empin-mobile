@@ -23,6 +23,8 @@ import { Avatar } from './Avatar';
 
 const TYPING_THROTTLE_MS = 3000;
 const CANCEL_DISTANCE = 90;
+// Вверх на столько — запись фиксируется, палец можно отпустить
+const LOCK_DISTANCE = 70;
 const MIN_VOICE_SECONDS = 0.8;
 const MAX_SUGGESTIONS = 5;
 
@@ -34,7 +36,8 @@ const isImageAsset = (asset) => asset.type === 'image' || asset.mimeType?.starts
 
 /**
  * Панель ввода как в мессенджерах: скрепка, поле с камерой, микрофон/отправка.
- * Микрофон: удерживать — запись, отпустить — отправить, сдвинуть влево — отмена.
+ * Микрофон: удерживать — запись, отпустить — отправить, сдвинуть влево — отмена,
+ * вверх — запись фиксируется (как в Telegram): дальше «Удалить» или «Отправить».
  * В группе «@» показывает участников для упоминания; onCreatePoll добавляет «Опрос» во вложения.
  */
 export const Composer = ({
@@ -57,6 +60,7 @@ export const Composer = ({
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [cancelling, setCancelling] = useState(false);
+  const [locked, setLocked] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const lastTypingRef = useRef(0);
   const startedAtRef = useRef(0);
@@ -64,6 +68,7 @@ export const Composer = ({
   const startingRef = useRef(null);
   const releaseRequestedRef = useRef(false);
   const cancelledRef = useRef(false);
+  const lockedRef = useRef(false);
   const pulse = useRef(new Animated.Value(1)).current;
 
   const canSend = value.trim().length > 0 || attachments.length > 0 || context?.type === 'edit';
@@ -166,6 +171,8 @@ export const Composer = ({
     startedAtRef.current = 0;
     setRecording(false);
     setCancelling(false);
+    setLocked(false);
+    lockedRef.current = false;
 
     try {
       await recorder.stop();
@@ -205,6 +212,7 @@ export const Composer = ({
     onStartShouldSetPanResponder: () => true,
     onPanResponderGrant: () => {
       cancelledRef.current = false;
+      lockedRef.current = false;
       releaseRequestedRef.current = false;
       startingRef.current = latest.current.startRecording().catch((error) => {
         console.warn('[Voice] Не удалось начать запись:', error?.message ?? error);
@@ -214,6 +222,15 @@ export const Composer = ({
       });
     },
     onPanResponderMove: (_event, gesture) => {
+      if (lockedRef.current || cancelledRef.current) return;
+      // Вверх — фиксация: запись идёт без пальца
+      if (gesture.dy < -LOCK_DISTANCE && gesture.dy < gesture.dx) {
+        lockedRef.current = true;
+        setLocked(true);
+        setCancelling(false);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        return;
+      }
       const willCancel = gesture.dx < -CANCEL_DISTANCE;
       setCancelling(willCancel);
       if (willCancel && !cancelledRef.current) {
@@ -223,10 +240,10 @@ export const Composer = ({
       }
     },
     onPanResponderRelease: () => {
-      if (!cancelledRef.current) latest.current.release(true);
+      if (!cancelledRef.current && !lockedRef.current) latest.current.release(true);
     },
     onPanResponderTerminate: () => {
-      if (!cancelledRef.current) latest.current.release(false);
+      if (!cancelledRef.current && !lockedRef.current) latest.current.release(false);
     },
   })).current;
 
@@ -294,10 +311,15 @@ export const Composer = ({
       <View style={s.row}>
         {recording ? (
           <View style={s.recording}>
+            {locked ? (
+              <Pressable onPress={() => release(false)} hitSlop={10} style={s.recordDelete} accessibilityLabel="Удалить запись">
+                <Ionicons name="trash-outline" size={22} color={theme.danger} />
+              </Pressable>
+            ) : null}
             <Animated.View style={[s.recordDot, { opacity: pulse }]} />
             <Text style={s.recordTime}>{formatDuration(recordSeconds)}</Text>
             <Text style={[s.recordHint, cancelling && { color: theme.danger }]} numberOfLines={1}>
-              {cancelling ? 'Отпустите — отмена' : '‹ Влево — отмена'}
+              {locked ? 'Запись идёт' : cancelling ? 'Отпустите — отмена' : '‹ Влево — отмена'}
             </Text>
           </View>
         ) : (
@@ -327,7 +349,15 @@ export const Composer = ({
           </>
         )}
 
-        {canSend && !recording ? (
+        {recording && locked ? (
+          <Pressable
+            onPress={() => release(true)}
+            style={({ pressed }) => [s.action, { backgroundColor: pressed ? theme.accentPressed : theme.accent }]}
+            accessibilityLabel="Отправить голосовое"
+          >
+            <Ionicons name="arrow-up" size={22} color={theme.onAccent} />
+          </Pressable>
+        ) : canSend && !recording ? (
           <Pressable
             onPress={handleSend}
             style={({ pressed }) => [s.action, { backgroundColor: pressed ? theme.accentPressed : theme.accent }]}
@@ -343,6 +373,12 @@ export const Composer = ({
             accessibilityLabel="Удерживайте, чтобы записать голосовое"
           >
             <Ionicons name="mic" size={recording ? 28 : 22} color={theme.onAccent} />
+            {recording ? (
+              <View style={[s.lockHint, { backgroundColor: theme.sheet, borderColor: theme.separator }]} pointerEvents="none">
+                <Ionicons name="lock-open-outline" size={18} color={theme.textSecondary} />
+                <Ionicons name="chevron-up" size={16} color={theme.textMuted} />
+              </View>
+            ) : null}
           </View>
         )}
       </View>
@@ -419,4 +455,17 @@ const styles = (theme) => StyleSheet.create({
   recordDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.danger },
   recordTime: { fontSize: 16, color: theme.text, fontVariant: ['tabular-nums'], minWidth: 44 },
   recordHint: { flex: 1, fontSize: 14, color: theme.textSecondary, textAlign: 'center' },
+  recordDelete: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  // «Замок» над микрофоном при удержании: подсказка, что вверх — зафиксировать запись
+  lockHint: {
+    position: 'absolute',
+    bottom: 72,
+    alignSelf: 'center',
+    width: 38,
+    paddingVertical: 8,
+    borderRadius: 19,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    gap: 2,
+  },
 });

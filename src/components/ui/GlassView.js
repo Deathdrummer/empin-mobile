@@ -10,6 +10,7 @@ const CAN_BLUR = Platform.OS === 'ios' || (Platform.OS === 'android' && Platform
 /**
  * Полупрозрачная панель с размытием контента под ней, как у Telegram и iOS 26.
  * edge — тонкая граница со стороны контента: 'top' | 'bottom'.
+ * Содержимое может выходить за край (увеличенный микрофон при записи, замок над ним) — без обрезки.
  */
 export const GlassView = ({ style, children, edge, intensity = 80, ...rest }) => {
   const theme = useTheme();
@@ -23,7 +24,7 @@ export const GlassView = ({ style, children, edge, intensity = 80, ...rest }) =>
         tint={theme.dark ? 'systemChromeMaterialDark' : 'systemChromeMaterialLight'}
         intensity={intensity}
         experimentalBlurMethod="dimezisBlurView"
-        style={[styles.blur, border, style]}
+        style={[border, style]}
         {...rest}
       >
         {children}
@@ -37,7 +38,3 @@ export const GlassView = ({ style, children, edge, intensity = 80, ...rest }) =>
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  blur: { overflow: 'hidden' },
-});

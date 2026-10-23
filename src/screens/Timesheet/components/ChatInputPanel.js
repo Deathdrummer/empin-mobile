@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, StatusBar, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { isCallAudioActive } from '../../../services/callAudioState';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -474,10 +474,8 @@ export const ChatInputPanel = ({
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
+    // Над клавиатурой поле поднимает прокрутка дня (KeyboardAwareScrollView в DayCard)
+    <View>
       <View style={styles.container}>
           {replyingToComment && (
             <View style={styles.replyBanner}>
@@ -626,7 +624,7 @@ export const ChatInputPanel = ({
             )}
           </View>
         </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
 

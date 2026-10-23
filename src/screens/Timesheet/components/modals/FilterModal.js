@@ -262,6 +262,8 @@ export const FilterModal = ({
       onClose={onClose}
       title="Фильтры"
       wide
+      // В окне поиск по бригадам и объектам: окно поднимается над клавиатурой
+      keyboard
       buttons={(
         <>
           <DialogButton title="Отмена" onPress={onClose} />

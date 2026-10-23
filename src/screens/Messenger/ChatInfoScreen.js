@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -305,6 +307,8 @@ export default function ChatInfoScreen({ navigation, route }) {
       </Modal>
 
       <Modal visible={renaming} transparent animationType="fade" onRequestClose={() => setRenaming(false)}>
+        {/* Окно с полем ввода поднимается над клавиатурой (как общий Dialog) */}
+        <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <Pressable style={s.overlay} onPress={() => setRenaming(false)}>
           <Pressable style={s.dialog}>
             <Text style={s.dialogTitle}>Название группы</Text>
@@ -327,6 +331,7 @@ export default function ChatInfoScreen({ navigation, route }) {
             </View>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -363,6 +368,7 @@ const styles = (theme) => StyleSheet.create({
   pinIcon: { width: 24, textAlign: 'center' },
   admin: { fontSize: 12, color: theme.textMuted, marginRight: 4 },
   online: { position: 'absolute', right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6, borderWidth: 2 },
+  flex: { flex: 1 },
   overlay: { flex: 1, backgroundColor: theme.overlay, justifyContent: 'center', paddingHorizontal: 24 },
   dialog: { backgroundColor: theme.sheet, borderRadius: 18, padding: 18 },
   dialogTitle: { fontSize: 17, fontWeight: '700', color: theme.text, marginBottom: 12 },

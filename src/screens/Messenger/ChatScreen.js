@@ -5,8 +5,6 @@ import {
   AppState,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -14,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAvoidingView, KeyboardGestureArea } from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,6 +26,7 @@ import Toast from 'react-native-toast-message';
 import { messengerAPI } from '../../services/api';
 import { setActiveChatId, setTotalUnread, subscribeMessengerEvents } from '../../services/messengerStore';
 import { getDraft, setDraft } from '../../services/drafts';
+import { playMessageSent } from '../../services/chatSounds';
 import { isCallAudioActive } from '../../services/callAudioState';
 import { AudioPlayerProvider } from '../../contexts/AudioPlayerContext';
 import { useCallContext } from '../../contexts/CallContext';
@@ -135,7 +135,6 @@ export default function ChatScreen({ navigation, route }) {
   const [newWhileAway, setNewWhileAway] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(insets.top + 56);
   const [composerHeight, setComposerHeight] = useState(64);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [highlightId, setHighlightId] = useState(null);
   // Только что поставленная реакция: сообщение и эмодзи для анимации «всплеска»
   const [burst, setBurst] = useState(null);
@@ -455,15 +454,7 @@ export default function ChatScreen({ navigation, route }) {
     return () => clearTimeout(timer);
   }, [peerTyping]);
 
-  useEffect(() => {
-    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardVisible(false));
-    return () => {
-      show.remove();
-      hide.remove();
-      clearTimeout(markReadTimerRef.current);
-    };
-  }, []);
+  useEffect(() => () => clearTimeout(markReadTimerRef.current), []);
 
   useEffect(() => {
     if (!highlightId) return undefined;
@@ -485,6 +476,8 @@ export default function ChatScreen({ navigation, route }) {
     try {
       const saved = await messengerAPI.addMessage(chatId, payload.text, payload.replyToId, payload.files, { mentionIds: payload.mentionIds });
       setMessages((current) => mergeMessages(current.filter((message) => message.id !== localId), [saved]));
+      // Звук — когда сообщение дошло до сервера, как в Telegram
+      playMessageSent();
     } catch (error) {
       setMessages((current) => current.map((message) => (message.id === localId ? { ...message, _status: 'failed' } : message)));
       Toast.show({
@@ -563,6 +556,7 @@ export default function ChatScreen({ navigation, route }) {
       const saved = await messengerAPI.addPoll(chatId, poll);
       if (detachedRef.current) await backToLatest();
       setMessages((current) => mergeMessages(current, [saved]));
+      playMessageSent();
       return true;
     } catch (error) {
       Toast.show({ type: 'error', text1: 'Не удалось создать опрос', text2: getUserFacingError(error, 'Попробуйте ещё раз.'), position: 'top' });
@@ -919,9 +913,14 @@ export default function ChatScreen({ navigation, route }) {
   return (
     <AudioPlayerProvider>
       <View style={s.container}>
-        <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        {/* Фон не двигается вместе с клавиатурой */}
+        <ChatBackground />
+        {/* Клавиатура как в Telegram: лента и поле ввода едут вместе с ней кадр за кадром; прокрутка вниз
+            опускает клавиатуру вслед за пальцем (iOS — keyboardDismissMode, Android — KeyboardGestureArea).
+            Нижний отступ экрана (полоска «домой») — за пределами: при открытой клавиатуре зазора нет */}
+        <KeyboardGestureArea style={[s.flex, { marginBottom: insets.bottom }]} interpolator="ios" offset={composerHeight}>
+        <KeyboardAvoidingView style={s.flex} behavior="translate-with-padding">
           <View style={s.flex}>
-            <ChatBackground />
 
             {initialLoading ? (
               <ActivityIndicator style={[s.loader, { marginTop: headerHeight + 40 }]} size="large" color={theme.accent} />
@@ -977,11 +976,9 @@ export default function ChatScreen({ navigation, route }) {
               </Pressable>
             ) : null}
 
-            <GlassView
-              edge="top"
-              style={[s.composerBar, { paddingBottom: keyboardVisible ? 0 : insets.bottom }]}
-              onLayout={(event) => setComposerHeight(event.nativeEvent.layout.height)}
-            >
+            {/* Стекло — фоновый слой: сама панель ничего не обрезает (увеличенный микрофон, замок записи) */}
+            <View style={s.composerBar} onLayout={(event) => setComposerHeight(event.nativeEvent.layout.height)}>
+              <GlassView edge="top" style={StyleSheet.absoluteFill} />
               {canWrite ? (
                 <Composer
                   theme={theme}
@@ -1003,9 +1000,12 @@ export default function ChatScreen({ navigation, route }) {
               ) : (
                 <Text style={s.readOnly}>Писать в чат объекта может сотрудник с правом комментировать в табеле</Text>
               )}
-            </GlassView>
+            </View>
           </View>
         </KeyboardAvoidingView>
+        </KeyboardGestureArea>
+        {/* Под полем ввода — та же полупрозрачная панель до края экрана; клавиатура её закрывает */}
+        {insets.bottom > 0 ? <GlassView style={[s.bottomInset, { height: insets.bottom }]} /> : null}
 
         <GlassView
           edge="bottom"
@@ -1226,6 +1226,7 @@ const screenStyles = (theme) => StyleSheet.create({
   searchHitTime: { fontSize: 12, color: theme.textMuted },
   searchHitText: { fontSize: 14, color: theme.textSecondary, marginTop: 1 },
   composerBar: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  bottomInset: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   readOnly: { textAlign: 'center', color: theme.textSecondary, fontSize: 14, paddingHorizontal: 24, paddingVertical: 16 },
   loader: { alignSelf: 'center' },
   olderLoader: { marginVertical: 12 },

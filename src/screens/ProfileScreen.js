@@ -9,6 +9,7 @@ import Constants from 'expo-constants';
 import Toast from 'react-native-toast-message';
 import { messengerAPI } from '../services/api';
 import { setTotalUnread } from '../services/messengerStore';
+import { getChatSounds, setChatSounds } from '../services/chatSounds';
 import { avatarColor, palettes, setPalettePreference, setThemePreference, useTheme } from '../theme';
 import { getUserFacingError } from '../utils/userFacingError';
 import { Avatar } from '../components/chat/Avatar';
@@ -58,6 +59,7 @@ export default function ProfileScreen({ onLogout }) {
   const [user, setUser] = useState(null);
   // null — настройки ещё не загружены (или сервер их не знает): переключатель неактивен
   const [muteObjects, setMuteObjects] = useState(null);
+  const [chatSounds, setChatSoundsState] = useState(getChatSounds());
 
   useEffect(() => {
     AsyncStorage.getItem('user')
@@ -83,6 +85,11 @@ export default function ProfileScreen({ onLogout }) {
     if (key === theme.palette) return;
     Haptics.selectionAsync().catch(() => {});
     setPalettePreference(key);
+  };
+
+  const toggleChatSounds = (value) => {
+    setChatSoundsState(value);
+    setChatSounds(value);
   };
 
   const toggleMuteObjects = async (value) => {
@@ -186,6 +193,23 @@ export default function ProfileScreen({ onLogout }) {
                   trackColor={switchColors}
                   thumbColor="#FFFFFF"
                   accessibilityLabel="Чаты объектов без звука"
+                />
+              )}
+            />
+            <Row
+              theme={theme}
+              icon="volume-high"
+              iconColor="#2F8A6C"
+              title="Звуки в чате"
+              subtitle="Короткий звук, когда сообщение отправлено"
+              onPress={() => toggleChatSounds(!chatSounds)}
+              accessory={(
+                <Switch
+                  value={chatSounds}
+                  onValueChange={toggleChatSounds}
+                  trackColor={switchColors}
+                  thumbColor="#FFFFFF"
+                  accessibilityLabel="Звуки в чате"
                 />
               )}
             />

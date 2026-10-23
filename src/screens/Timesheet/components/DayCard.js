@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
 import { Can } from '../../../components/Can';
 import { TeamCard } from './TeamCard';
@@ -57,12 +58,14 @@ export const DayCard = ({
           </View>
         </View>
 
-        <ScrollView
+        {/* Поле комментария в развёрнутом объекте прокручивается над клавиатурой */}
+        <KeyboardAwareScrollView
           style={styles.content}
           contentContainerStyle={styles.contentInner}
           nestedScrollEnabled={true}
           directionalLockEnabled={true}
           keyboardShouldPersistTaps='handled'
+          bottomOffset={16}
         >
           {item.teams && item.teams.length > 0 ? (
             item.teams.map((team) => (
@@ -96,7 +99,7 @@ export const DayCard = ({
               <Text style={styles.emptyText}>На этот день бригад нет</Text>
             </View>
           )}
-        </ScrollView>
+        </KeyboardAwareScrollView>
 
         <Can permission="mobile-app-can-create-team:site">
           <SwipeBlocker>

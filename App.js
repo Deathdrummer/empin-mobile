@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -30,6 +31,7 @@ import {
 import { disableIosVoip, unregisterIosVoipToken } from './src/services/iosVoip';
 import { restoreThemePreference, useTheme } from './src/theme';
 import { STATUS_BAR_HIDDEN } from './src/utils/statusBar';
+import { restoreChatSounds } from './src/services/chatSounds';
 
 const Stack = createNativeStackNavigator();
 
@@ -101,7 +103,7 @@ export default function App() {
   const checkAuth = async () => {
     try {
       // Тему восстанавливаем, пока виден экран загрузки, чтобы интерфейс не мигнул другой темой
-      const [token] = await Promise.all([AsyncStorage.getItem('token'), restoreThemePreference()]);
+      const [token] = await Promise.all([AsyncStorage.getItem('token'), restoreThemePreference(), restoreChatSounds()]);
       const loggedIn = !!token;
       setIsLoggedIn(loggedIn);
       if (loggedIn) {
@@ -134,6 +136,8 @@ export default function App() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <GestureHandlerRootView style={styles.appContainer}>
+        {/* Клавиатура кадр за кадром (чат как в Telegram). Android работает во весь экран (edge-to-edge) */}
+        <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
         <ActionSheetProvider>
           <CallProvider isLoggedIn={isLoggedIn}>
             <>
@@ -168,6 +172,7 @@ export default function App() {
             </>
           </CallProvider>
         </ActionSheetProvider>
+        </KeyboardProvider>
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );

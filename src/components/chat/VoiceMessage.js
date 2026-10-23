@@ -5,6 +5,7 @@ import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import Toast from 'react-native-toast-message';
 import { useAudioPlayerContext } from '../../contexts/AudioPlayerContext';
 import { isCallAudioActive } from '../../services/callAudioState';
+import { prepareMediaPlayback } from '../../services/chatSounds';
 import { formatDuration } from '../../utils/chatFormat';
 
 const BAR_COUNT = 28;
@@ -35,7 +36,7 @@ export const VoiceMessage = ({ uri, messageId, tint, trackColor, metaColor }) =>
     }
   }, [status.didJustFinish, player]);
 
-  const toggle = () => {
+  const toggle = async () => {
     try {
       if (status.playing) {
         player.pause();
@@ -47,6 +48,8 @@ export const VoiceMessage = ({ uri, messageId, tint, trackColor, metaColor }) =>
         return;
       }
       registerPlayer(player, uri);
+      // Голосовое слышно и при выключенном звуке iPhone (как в Telegram)
+      await prepareMediaPlayback();
       player.play();
     } catch (error) {
       console.warn('[Voice] Не удалось воспроизвести:', error?.message ?? error);
