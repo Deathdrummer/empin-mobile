@@ -186,7 +186,7 @@ export default function ChatInfoScreen({ navigation, route }) {
                 <Ionicons name="chatbubble" size={22} color={theme.accent} />
                 <Text style={s.quickText}>Чат</Text>
               </Pressable>
-              <Pressable style={s.quick} onPress={() => initiateCall(info.participant.id, fullName(info.participant))}>
+              <Pressable style={s.quick} onPress={() => initiateCall(info.participant.id, fullName(info.participant), info.participant.avatar)}>
                 <Ionicons name="call" size={22} color={theme.accent} />
                 <Text style={s.quickText}>Позвонить</Text>
               </Pressable>

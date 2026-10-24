@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
@@ -10,6 +11,8 @@ import Toast from 'react-native-toast-message';
 import { messengerAPI } from '../services/api';
 import { setTotalUnread } from '../services/messengerStore';
 import { getChatSounds, setChatSounds } from '../services/chatSounds';
+import { pickAvatarPhoto } from '../services/profileMedia';
+import { setOpenChatsOnStart } from '../services/startScreen';
 import { avatarColor, palettes, setPalettePreference, setThemePreference, useTheme } from '../theme';
 import { getUserFacingError } from '../utils/userFacingError';
 import { Avatar } from '../components/chat/Avatar';
@@ -60,6 +63,10 @@ export default function ProfileScreen({ onLogout }) {
   // null — настройки ещё не загружены (или сервер их не знает): переключатель неактивен
   const [muteObjects, setMuteObjects] = useState(null);
   const [chatSounds, setChatSoundsState] = useState(getChatSounds());
+  const [openChats, setOpenChats] = useState(null);
+  const [avatar, setAvatar] = useState(undefined);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const { showActionSheetWithOptions } = useActionSheet();
 
   useEffect(() => {
     AsyncStorage.getItem('user')
@@ -71,13 +78,71 @@ export default function ProfileScreen({ onLogout }) {
   useFocusEffect(useCallback(() => {
     let cancelled = false;
     messengerAPI.getSettings()
-      .then((data) => { if (!cancelled) setMuteObjects(Boolean(data?.mute_objects)); })
+      .then((data) => {
+        if (cancelled) return;
+        setMuteObjects(Boolean(data?.mute_objects));
+        setOpenChats(Boolean(data?.open_chats_on_start));
+        setOpenChatsOnStart(Boolean(data?.open_chats_on_start));
+        setAvatar(data?.avatar ?? null);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []));
 
   const nameParts = (user?.full_name || '').trim().split(/\s+/);
-  const person = { sname: nameParts[0], fname: nameParts[1] };
+  const person = { sname: nameParts[0], fname: nameParts[1], avatar: avatar ?? user?.avatar };
+
+  // Своя аватарка видна сразу и в профиле после перезапуска (до ответа сервера)
+  const saveAvatar = (value) => {
+    setAvatar(value);
+    setUser((current) => {
+      const next = current ? { ...current, avatar: value } : current;
+      if (next) AsyncStorage.setItem('user', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
+
+  const uploadAvatar = async (source) => {
+    try {
+      const uri = await pickAvatarPhoto(source);
+      if (!uri) return;
+      setAvatarBusy(true);
+      const data = await messengerAPI.uploadAvatar(uri);
+      saveAvatar(data.avatar);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch (error) {
+      Toast.show({ type: 'error', text1: 'Не удалось сохранить фото', text2: getUserFacingError(error, 'Попробуйте ещё раз.'), position: 'top' });
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const removeAvatar = async () => {
+    setAvatarBusy(true);
+    try {
+      await messengerAPI.deleteAvatar();
+      saveAvatar(null);
+    } catch (error) {
+      Toast.show({ type: 'error', text1: 'Не удалось удалить фото', text2: getUserFacingError(error, 'Попробуйте ещё раз.'), position: 'top' });
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
+
+  const editAvatar = () => {
+    const hasPhoto = Boolean(person.avatar);
+    const options = ['Выбрать из галереи', 'Сделать фото', ...(hasPhoto ? ['Удалить фото'] : []), 'Отмена'];
+    showActionSheetWithOptions({
+      title: 'Фото профиля',
+      options,
+      cancelButtonIndex: options.length - 1,
+      destructiveButtonIndex: hasPhoto ? 2 : undefined,
+    }, (index) => {
+      if (index === 0) uploadAvatar('library');
+      else if (index === 1) uploadAvatar('camera');
+      else if (hasPhoto && index === 2) removeAvatar();
+    });
+  };
 
   const toggleTheme = () => setThemePreference(theme.dark ? 'light' : 'dark');
 
@@ -90,6 +155,18 @@ export default function ProfileScreen({ onLogout }) {
   const toggleChatSounds = (value) => {
     setChatSoundsState(value);
     setChatSounds(value);
+  };
+
+  const toggleOpenChats = async (value) => {
+    setOpenChats(value);
+    setOpenChatsOnStart(value);
+    try {
+      await messengerAPI.updateSettings({ open_chats_on_start: value });
+    } catch (error) {
+      setOpenChats(!value);
+      setOpenChatsOnStart(!value);
+      Toast.show({ type: 'error', text1: 'Не удалось сохранить', text2: getUserFacingError(error, 'Попробуйте ещё раз.'), position: 'top' });
+    }
   };
 
   const toggleMuteObjects = async (value) => {
@@ -119,7 +196,12 @@ export default function ProfileScreen({ onLogout }) {
         <Text style={[styles.title, { color: theme.text }]}>Профиль</Text>
 
         <View style={[styles.card, styles.profileCard, { backgroundColor: theme.surface }]}>
-          <Avatar person={person} id={user?.staff_id} size={64} />
+          <Pressable onPress={editAvatar} disabled={avatarBusy} accessibilityRole="button" accessibilityLabel="Изменить фото профиля">
+            <Avatar person={person} id={user?.staff_id} size={64} />
+            <View style={[styles.avatarBadge, { backgroundColor: theme.accent, borderColor: theme.surface }]}>
+              {avatarBusy ? <ActivityIndicator size="small" color={theme.onAccent} /> : <Ionicons name="camera" size={13} color={theme.onAccent} />}
+            </View>
+          </Pressable>
           <View style={styles.profileText}>
             <Text style={[styles.name, { color: theme.text }]} numberOfLines={2}>{user?.full_name || 'Сотрудник'}</Text>
             {user?.email ? <Text style={[styles.email, { color: theme.textSecondary }]} numberOfLines={1}>{user.email}</Text> : null}
@@ -225,6 +307,31 @@ export default function ProfileScreen({ onLogout }) {
           </View>
         </View>
 
+        <View>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Общие</Text>
+          <View style={[styles.card, { backgroundColor: theme.surface }]}>
+            <Row
+              theme={theme}
+              icon="chatbubbles"
+              iconColor="#1F7FA8"
+              title="При открытии показывать чаты"
+              subtitle="Иначе приложение открывается на табеле"
+              onPress={openChats === null ? undefined : () => toggleOpenChats(!openChats)}
+              last
+              accessory={(
+                <Switch
+                  value={Boolean(openChats)}
+                  disabled={openChats === null}
+                  onValueChange={toggleOpenChats}
+                  trackColor={switchColors}
+                  thumbColor="#FFFFFF"
+                  accessibilityLabel="При открытии показывать чаты"
+                />
+              )}
+            />
+          </View>
+        </View>
+
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
           <Row theme={theme} icon="log-out-outline" iconColor="#8A8D94" title="Выйти" destructive onPress={confirmLogout} last />
         </View>
@@ -246,6 +353,17 @@ const styles = StyleSheet.create({
   card: { borderRadius: 14, overflow: 'hidden' },
   profileCard: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
   profileText: { flex: 1 },
+  avatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   name: { fontSize: 19, fontWeight: '600' },
   email: { fontSize: 14, marginTop: 3 },
   appearance: { padding: 12, gap: 14 },

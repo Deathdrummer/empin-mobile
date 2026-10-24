@@ -5,6 +5,7 @@ import { StackActions } from '@react-navigation/native';
 import { messengerAPI } from '../services/api';
 import { getActiveChatId, setTotalUnread, subscribeMessengerEvents } from '../services/messengerStore';
 import { navigationRef } from '../services/navigationRef';
+import { setOpenChatsOnStart } from '../services/startScreen';
 
 const PRESENCE_INTERVAL_MS = 60000;
 
@@ -41,6 +42,10 @@ export const useMessengerSync = (isLoggedIn) => {
 
     refresh();
     ping();
+    // Настройка первого экрана могла поменяться на другом устройстве — копия для следующего запуска
+    messengerAPI.getSettings()
+      .then((settings) => setOpenChatsOnStart(Boolean(settings?.open_chats_on_start)))
+      .catch(() => {});
     const presenceTimer = setInterval(ping, PRESENCE_INTERVAL_MS);
     const appState = AppState.addEventListener('change', (state) => {
       if (state === 'active') {

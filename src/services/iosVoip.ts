@@ -81,6 +81,21 @@ export const disableIosVoip = async (): Promise<void> => {
   await EmpinVoip.setEnabledAsync(false).catch(() => {});
 };
 
+/** Исходящий звонок — в CallKit (журнал вызовов iPhone, системная плашка звонка) */
+export const startIosOutgoingCall = async (
+  callId: string | number,
+  calleeId: string | number,
+  calleeName: string
+): Promise<void> => {
+  if (!isIosVoipAvailable() || !EmpinVoip) return;
+  await EmpinVoip.startOutgoingCallAsync(String(callId), String(calleeId), calleeName || 'Собеседник').catch(() => {});
+};
+
+export const reportIosOutgoingConnected = async (callId: string | number | null | undefined): Promise<void> => {
+  if (!callId || !isIosVoipAvailable() || !EmpinVoip) return;
+  await EmpinVoip.reportOutgoingConnectedAsync(String(callId)).catch(() => {});
+};
+
 export const endIosSystemCall = async (
   callId: string | number | null | undefined,
   reason: 'failed' | 'unanswered' | 'timeout' | 'declined' | 'remoteEnded' = 'remoteEnded'

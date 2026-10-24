@@ -69,6 +69,14 @@ public final class EmpinVoipModule: Module {
     AsyncFunction("endCallAsync") { (callId: String, reason: String) in
       EmpinVoipManager.shared.endCall(callId: callId, reason: reason)
     }.runOnQueue(.main)
+
+    AsyncFunction("startOutgoingCallAsync") { (callId: String, calleeId: String, calleeName: String) in
+      EmpinVoipManager.shared.startOutgoingCall(callId: callId, calleeId: calleeId, calleeName: calleeName)
+    }.runOnQueue(.main)
+
+    AsyncFunction("reportOutgoingConnectedAsync") { (callId: String) in
+      EmpinVoipManager.shared.reportOutgoingConnected(callId: callId)
+    }.runOnQueue(.main)
   }
 
   private static func stringKeyedPayload(_ userInfo: [AnyHashable: Any]?) -> [String: Any]? {

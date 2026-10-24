@@ -19,7 +19,7 @@ const waveform = (seed) => {
   });
 };
 
-export const VoiceMessage = ({ uri, messageId, tint, trackColor, metaColor }) => {
+export const VoiceMessage = ({ uri, messageId, tint, trackColor, metaColor, onLongPress, disabled = false }) => {
   const player = useAudioPlayer({ uri });
   const status = useAudioPlayerStatus(player);
   const { registerPlayer, unregisterPlayer } = useAudioPlayerContext();
@@ -64,6 +64,9 @@ export const VoiceMessage = ({ uri, messageId, tint, trackColor, metaColor }) =>
     <View style={styles.container}>
       <Pressable
         onPress={toggle}
+        onLongPress={onLongPress}
+        delayLongPress={280}
+        disabled={disabled}
         style={[styles.button, { backgroundColor: tint }]}
         accessibilityRole="button"
         accessibilityLabel={status.playing ? 'Пауза' : 'Воспроизвести голосовое сообщение'}
@@ -83,6 +86,25 @@ export const VoiceMessage = ({ uri, messageId, tint, trackColor, metaColor }) =>
           ))}
         </View>
         <Text style={[styles.time, { color: metaColor }]}>{duration ? formatDuration(shown) : 'Голосовое'}</Text>
+      </View>
+    </View>
+  );
+};
+
+/** Голосовое в меню сообщения: тот же вид, без плеера (второй плеер того же файла не нужен) */
+export const VoiceMessagePreview = ({ messageId, tint, trackColor }) => {
+  const bars = useMemo(() => waveform(messageId), [messageId]);
+  return (
+    <View style={styles.container}>
+      <View style={[styles.button, { backgroundColor: tint }]}>
+        <Ionicons name="play" size={20} color="#FFFFFF" style={styles.playIcon} />
+      </View>
+      <View style={styles.body}>
+        <View style={styles.wave}>
+          {bars.map((height, index) => (
+            <View key={index} style={[styles.bar, { height: 4 + height * 18, backgroundColor: trackColor }]} />
+          ))}
+        </View>
       </View>
     </View>
   );

@@ -540,7 +540,7 @@ export default function ChatsTab() {
         onGroupCreated={(group) => openChat({ chatType: 'group', chatId: group.chatId, title: group.title })}
         onCall={(person) => {
           setNewChatVisible(false);
-          initiateCall(person.id, fullName(person));
+          initiateCall(person.id, fullName(person), person.avatar);
         }}
       />
     </View>

@@ -32,12 +32,15 @@ import { disableIosVoip, unregisterIosVoipToken } from './src/services/iosVoip';
 import { restoreThemePreference, useTheme } from './src/theme';
 import { STATUS_BAR_HIDDEN } from './src/utils/statusBar';
 import { restoreChatSounds } from './src/services/chatSounds';
+import { getOpenChatsOnStart, START_SCREEN_STORAGE_KEY } from './src/services/startScreen';
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Первый экран после входа: табель или «Чаты» (настройка в профиле)
+  const [startRoute, setStartRoute] = useState('Timesheet');
   const theme = useTheme();
 
   // Фон и цвета навигации из темы: без белых вспышек при переходах в тёмной теме
@@ -75,9 +78,11 @@ export default function App() {
       await Promise.allSettled([
         disconnectPusher(),
         disableIosVoip(),
-        AsyncStorage.multiRemove(['token', 'user', 'permissions', '@pendingCall', DRAFTS_STORAGE_KEY]),
+        AsyncStorage.multiRemove(['token', 'user', 'permissions', '@pendingCall', DRAFTS_STORAGE_KEY, START_SCREEN_STORAGE_KEY]),
       ]);
       clearDrafts();
+      // Следующий пользователь на этом телефоне начинает с табеля
+      setStartRoute('Timesheet');
       setIsLoggedIn(false);
     }
   }, []);
@@ -103,8 +108,14 @@ export default function App() {
   const checkAuth = async () => {
     try {
       // Тему восстанавливаем, пока виден экран загрузки, чтобы интерфейс не мигнул другой темой
-      const [token] = await Promise.all([AsyncStorage.getItem('token'), restoreThemePreference(), restoreChatSounds()]);
+      const [token, openChats] = await Promise.all([
+        AsyncStorage.getItem('token'),
+        getOpenChatsOnStart(),
+        restoreThemePreference(),
+        restoreChatSounds(),
+      ]);
       const loggedIn = !!token;
+      setStartRoute(openChats ? 'Messenger' : 'Timesheet');
       setIsLoggedIn(loggedIn);
       if (loggedIn) {
         registerPushNotifications();
@@ -146,12 +157,12 @@ export default function App() {
               <View style={[styles.appContainer, { backgroundColor: theme.background }]}>
                 {isLoggedIn ? (
                   <NavigationContainer ref={navigationRef} theme={navigationTheme}>
-                    <Stack.Navigator screenOptions={{ headerShown: false }}>
+                    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={startRoute}>
                       {/* Вкладки переключаются без анимации, как в мессенджерах */}
                       <Stack.Screen name="Timesheet" options={{ animation: 'none' }}>
                         {props => <TimesheetScreen {...props} onLogout={handleLogout} />}
                       </Stack.Screen>
-                      <Stack.Screen name="Messenger" options={{ animation: 'none' }}>
+                      <Stack.Screen name="Messenger" options={{ animation: 'none' }} initialParams={{ tab: 'chats' }}>
                         {props => <MessengerScreen {...props} onLogout={handleLogout} />}
                       </Stack.Screen>
                       <Stack.Screen name="Profile" options={{ animation: 'none' }}>

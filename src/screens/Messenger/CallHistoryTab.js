@@ -106,7 +106,7 @@ export default function CallHistoryTab() {
             </View>
           </View>
           <TouchableOpacity
-            onPress={() => initiateCall(item.peer.id, name)}
+            onPress={() => initiateCall(item.peer.id, name, item.peer.avatar)}
             hitSlop={8}
             style={s.callButton}
             accessibilityLabel={`Позвонить: ${name}`}

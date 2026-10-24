@@ -10,13 +10,16 @@ const Player = ({ uri }) => {
   return <VideoView player={player} style={styles.video} nativeControls contentFit="contain" />;
 };
 
-/** Полноэкранный просмотр видео из сообщения */
-export const VideoViewer = ({ uri, onClose }) => (
+/** Полноэкранный просмотр видео из сообщения; onShare — «Поделиться» в другие приложения */
+export const VideoViewer = ({ uri, onClose, onShare }) => (
   <Modal visible={Boolean(uri)} animationType="fade" onRequestClose={onClose} supportedOrientations={['portrait', 'landscape']}>
     <View style={styles.container}>
       {uri ? <Player uri={uri} /> : null}
       <View style={styles.header} pointerEvents="box-none">
-        <ViewerHeader onClose={onClose} />
+        <ViewerHeader
+          onClose={onClose}
+          actions={onShare ? [{ key: 'share', icon: 'share-outline', label: 'Поделиться', onPress: onShare }] : []}
+        />
       </View>
     </View>
   </Modal>

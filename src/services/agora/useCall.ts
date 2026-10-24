@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AppState, PermissionsAndroid, Platform, Alert } from 'react-native';
 import { getRecordingPermissionsAsync, requestRecordingPermissionsAsync } from 'expo-audio';
+import { Asset } from 'expo-asset';
 import {
   createAgoraRtcEngine,
   IRtcEngine,
@@ -44,6 +45,21 @@ const notifyServer = (label: string, request: () => Promise<unknown>, attempt = 
   });
 };
 
+/**
+ * Гудок вызова (425 Гц, 1 с звук / 4 с тишина): файл из сборки → путь на диске для Agora.
+ * Готовится один раз; при ошибке звонок идёт без гудков.
+ */
+let ringbackPathPromise: Promise<string | null> | null = null;
+const getRingbackPath = (): Promise<string | null> => {
+  if (!ringbackPathPromise) {
+    ringbackPathPromise = Asset.fromModule(require('../../../assets/sounds/ringback.wav'))
+      .downloadAsync()
+      .then((asset) => (asset.localUri ? decodeURI(asset.localUri.replace(/^file:\/\//, '')) : null))
+      .catch(() => null);
+  }
+  return ringbackPathPromise;
+};
+
 export const useCall = (): UseCallReturn => {
   const [state, setState] = useState<CallState>({
     status: 'idle',
@@ -63,6 +79,8 @@ export const useCall = (): UseCallReturn => {
   // Номер попытки звонка. Отмена, отказ или сброс увеличивают его: ответ сервера на устаревшую
   // попытку (нажали «Отменить», пока шёл запрос) не должен «воскрешать» звонок
   const attemptRef = useRef(0);
+  // Исходящий ждёт ответа: звучат гудки
+  const ringbackRef = useRef(false);
 
   const stopRingingTimeout = () => {
     if (ringingTimeoutRef.current) {
@@ -115,7 +133,29 @@ export const useCall = (): UseCallReturn => {
     }, 3000);
   };
 
+  // Гудки — только у звонящего (loopback): собеседник их не слышит
+  const startRingback = async () => {
+    const filePath = await getRingbackPath();
+    const engine = engineRef.current;
+    if (!filePath || !engine || !ringbackRef.current) return;
+    try {
+      engine.startAudioMixing(filePath, true, -1);
+      engine.adjustAudioMixingPlayoutVolume(70);
+    } catch (error: any) {
+      console.warn('[Agora] Гудки не включились:', error?.message ?? error);
+    }
+  };
+
+  const stopRingback = () => {
+    if (!ringbackRef.current) return;
+    ringbackRef.current = false;
+    try {
+      engineRef.current?.stopAudioMixing();
+    } catch {}
+  };
+
   const destroyEngine = () => {
+    stopRingback();
     if (engineRef.current) {
       if (eventHandlerRef.current) {
         engineRef.current.unregisterEventHandler(eventHandlerRef.current);
@@ -195,11 +235,13 @@ export const useCall = (): UseCallReturn => {
 
     const handler: IRtcEngineEventHandler = {
       onJoinChannelSuccess: (_connection, _elapsed) => {
-        // Мы успешно присоединились к каналу
+        // Исходящий: в канале, собеседник ещё не ответил — гудки
+        if (ringbackRef.current) startRingback();
       },
 
       onUserJoined: (_connection, _remoteUid, _elapsed) => {
         // Второй участник зашёл — звонок активен
+        stopRingback();
         if (ringingTimeoutRef.current) {
           clearTimeout(ringingTimeoutRef.current);
           ringingTimeoutRef.current = null;
@@ -307,6 +349,8 @@ export const useCall = (): UseCallReturn => {
         setState((prev) => ({ ...prev, status: 'ringing', callData, error: null }));
 
         await joinChannel(agora_app_id, token, channel_name, uid);
+        // Флаг после joinChannel: тот пересоздаёт движок и сбрасывает гудки прежнего
+        ringbackRef.current = true;
 
         // Таймаут: страховка если call_cancelled FCM не пришёл.
         // Сбрасывается при любом завершении звонка, поэтому срабатывает только для этого звонка.

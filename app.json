@@ -30,7 +30,8 @@
         "CFBundleDevelopmentRegion": "ru",
         "CFBundleLocalizations": [
           "ru"
-        ]
+        ],
+        "NSPhotoLibraryAddUsageDescription": "Разрешите сохранять фото и видео из чатов в галерею"
       }
     },
     "android": {

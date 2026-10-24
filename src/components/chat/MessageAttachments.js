@@ -10,7 +10,7 @@ const GAP = 2;
  * Фото и видео сообщения: одно — крупно, два — рядом, больше — сетка с «+N» на последней плитке.
  * onOpen(index) открывает полноэкранный просмотр.
  */
-export const MediaGrid = ({ items, onOpen }) => {
+export const MediaGrid = ({ items, onOpen, onLongPress }) => {
   if (!items.length) return null;
 
   const shown = items.slice(0, 4);
@@ -31,6 +31,8 @@ export const MediaGrid = ({ items, onOpen }) => {
           <Pressable
             key={`${item.uri}-${index}`}
             onPress={() => onOpen(index)}
+            onLongPress={onLongPress}
+            delayLongPress={280}
             style={[styles.tile, { width, height }]}
             accessibilityRole="imagebutton"
             accessibilityLabel={item.type === 'video' ? 'Открыть видео' : 'Открыть фото'}
@@ -69,13 +71,15 @@ const DOCUMENT_ICONS = {
 };
 
 /** Документ: иконка по типу, имя и размер. Нажатие — скачать и открыть/поделиться. */
-export const DocumentCard = ({ file, tint, textColor, metaColor, onPress }) => {
+export const DocumentCard = ({ file, tint, textColor, metaColor, onPress, onLongPress }) => {
   const extension = (file.name || '').split('.').pop().toLowerCase();
   const icon = DOCUMENT_ICONS[extension] || 'document';
 
   return (
     <Pressable
       onPress={() => onPress(file)}
+      onLongPress={onLongPress}
+      delayLongPress={280}
       style={styles.document}
       accessibilityRole="button"
       accessibilityLabel={`Открыть файл ${file.name}`}

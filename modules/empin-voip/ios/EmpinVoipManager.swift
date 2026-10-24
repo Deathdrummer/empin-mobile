@@ -21,6 +21,7 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
   private var timeoutTasks: [UUID: DispatchWorkItem] = [:]
   private var hasStarted = false
   private let callObserver = CXCallObserver()
+  private let callController = CXCallController()
 
   public var voipToken: String? {
     UserDefaults.standard.string(forKey: Self.tokenStorageKey)
@@ -43,12 +44,13 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     }
     hasStarted = true
 
-    let configuration = CXProviderConfiguration(localizedName: "ЭМПИН")
+    let configuration = CXProviderConfiguration(localizedName: "Эмпин PRO")
     configuration.supportsVideo = false
     configuration.maximumCallGroups = 1
     configuration.maximumCallsPerCallGroup = 1
     configuration.supportedHandleTypes = [.generic]
-    configuration.includesCallsInRecents = false
+    // Звонки приложения — в журнале «Недавние» телефона, как у Telegram и WhatsApp
+    configuration.includesCallsInRecents = true
 
     let provider = CXProvider(configuration: configuration)
     provider.setDelegate(self, queue: .main)
@@ -84,6 +86,61 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     defer { lock.unlock() }
     let events = loadPendingEventsLocked().filter { ($0["eventId"] as? String) != eventId }
     savePendingEventsLocked(events)
+  }
+
+  /// Исходящий звонок из приложения — системному CallKit: строка в журнале «Недавние»,
+  /// зелёная плашка звонка, завершение с экрана блокировки. Аудиосессию активирует CallKit.
+  public func startOutgoingCall(callId: String, calleeId: String, calleeName: String) {
+    start()
+    guard let provider, callsById[callId] == nil else {
+      return
+    }
+
+    let uuid = UUID()
+    let record = CallRecord(
+      callId: callId,
+      uuid: uuid,
+      callerId: calleeId,
+      callerName: calleeName,
+      callerAvatar: nil,
+      answered: true
+    )
+    callsById[callId] = record
+    callsByUUID[uuid] = record
+
+    let handle = CXHandle(type: .generic, value: calleeId)
+    let action = CXStartCallAction(call: uuid, handle: handle)
+    action.isVideo = false
+
+    callController.request(CXTransaction(action: action)) { [weak self] error in
+      DispatchQueue.main.async {
+        guard let self else {
+          return
+        }
+        if error != nil {
+          self.cleanupCall(record)
+          return
+        }
+        // Имя собеседника — в системном интерфейсе и журнале вызовов
+        let update = CXCallUpdate()
+        update.remoteHandle = handle
+        update.localizedCallerName = calleeName
+        update.hasVideo = false
+        update.supportsDTMF = false
+        update.supportsHolding = false
+        update.supportsGrouping = false
+        update.supportsUngrouping = false
+        provider.reportCall(with: uuid, updated: update)
+      }
+    }
+  }
+
+  /// Собеседник ответил: CallKit начинает отсчёт длительности (она попадёт в журнал)
+  public func reportOutgoingConnected(callId: String) {
+    guard let record = callsById[callId] else {
+      return
+    }
+    provider?.reportOutgoingCall(with: record.uuid, connectedAt: Date())
   }
 
   public func endCall(callId: String, reason: String) {
@@ -265,6 +322,12 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     callsByUUID[record.uuid] = record
     cancelTimeout(for: record.uuid)
     enqueueEvent(type: "answer", record: record)
+    action.fulfill()
+  }
+
+  public func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+    // Исходящий из приложения: соединение уже идёт через Agora
+    provider.reportOutgoingCall(with: action.callUUID, startedConnectingAt: Date())
     action.fulfill()
   }
 

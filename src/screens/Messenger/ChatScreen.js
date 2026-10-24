@@ -3,8 +3,10 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  BackHandler,
   FlatList,
   Keyboard,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -45,7 +47,9 @@ import {
 import { ChatAvatar } from '../../components/chat/ChatAvatar';
 import { ChatBackground } from '../../components/chat/ChatBackground';
 import { MessageBubble, normalizeMedia } from '../../components/chat/MessageBubble';
-import { MessageActionsSheet, QUICK_REACTIONS } from '../../components/chat/MessageActionsSheet';
+import { MessageContextMenu, QUICK_REACTIONS } from '../../components/chat/MessageContextMenu';
+import { messagesText, shareMediaItem, shareMessages } from '../../services/messageShare';
+import ForwardSheet from './ForwardSheet';
 import { TypingDots } from '../../components/chat/TypingDots';
 import { Composer } from '../../components/chat/Composer';
 import { PollCreateModal } from '../../components/chat/PollCreateModal';
@@ -62,6 +66,9 @@ const GROUP_WINDOW_MS = 5 * 60 * 1000;
 const HIGHLIGHT_MS = 1600;
 // Отступ от последнего сообщения до панели ввода
 const LIST_GAP = 18;
+// Android без панели навигации: низ экрана — зона системного жеста «домой». Поле ввода выше неё,
+// иначе свайп вверх с микрофона (фиксация записи) сворачивал приложение
+const ANDROID_GESTURE_GAP = 16;
 
 const isServerId = (id) => typeof id === 'number';
 
@@ -127,10 +134,16 @@ export default function ChatScreen({ navigation, route }) {
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [actionMessage, setActionMessage] = useState(null);
+  // Меню по долгому нажатию: строка ленты и её положение на экране
+  const [menu, setMenu] = useState(null);
+  const actionMessage = useMemo(() => (menu ? { ...menu.item.message, isMine: menu.item.mine } : null), [menu]);
+  const menuMessageId = menu?.item.message.id ?? null;
+  // Выбранные сообщения (режим выбора, как в Telegram) и что пересылаем
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [forwardIds, setForwardIds] = useState(null);
   const [peerTyping, setPeerTyping] = useState(null);
   const [imageViewer, setImageViewer] = useState(null);
-  const [videoUri, setVideoUri] = useState(null);
+  const [video, setVideo] = useState(null);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [newWhileAway, setNewWhileAway] = useState(0);
   const [headerHeight, setHeaderHeight] = useState(insets.top + 56);
@@ -580,7 +593,7 @@ export default function ChatScreen({ navigation, route }) {
   // --- Действия с сообщением ---
 
   const toggleReaction = useCallback(async (message, emoji, hasReacted) => {
-    setActionMessage(null);
+    setMenu(null);
     if (!isServerId(message.id) || !me.userId) return;
     if (!hasReacted) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -617,7 +630,7 @@ export default function ChatScreen({ navigation, route }) {
   }, [burst]);
 
   const deleteMessage = useCallback((message) => {
-    setActionMessage(null);
+    setMenu(null);
     Alert.alert('Удалить сообщение?', isObject ? 'Комментарий удалится и из табеля.' : 'Сообщение удалится у всех участников чата.', [
       { text: 'Отмена', style: 'cancel' },
       {
@@ -638,7 +651,7 @@ export default function ChatScreen({ navigation, route }) {
   }, [messages, chatId, isObject]);
 
   const togglePin = useCallback(async (message) => {
-    setActionMessage(null);
+    setMenu(null);
     const pinned = !message.pinned;
     setMessages((current) => current.map((item) => (item.id === message.id ? { ...item, pinned } : item)));
     try {
@@ -658,7 +671,7 @@ export default function ChatScreen({ navigation, route }) {
     const serverMessage = isServerId(actionMessage.id);
     const list = [];
     if (serverMessage && info?.can_write !== false) {
-      list.push({ key: 'reply', label: 'Ответить', icon: 'arrow-undo-outline', onPress: () => { setReplyTo(actionMessage); setEditing(null); setActionMessage(null); } });
+      list.push({ key: 'reply', label: 'Ответить', icon: 'arrow-undo-outline', onPress: () => { setReplyTo(actionMessage); setEditing(null); setMenu(null); } });
     }
     if (hasText) {
       list.push({
@@ -666,7 +679,7 @@ export default function ChatScreen({ navigation, route }) {
         label: 'Копировать',
         icon: 'copy-outline',
         onPress: async () => {
-          setActionMessage(null);
+          setMenu(null);
           await Clipboard.setStringAsync(actionMessage.message);
           Toast.show({ type: 'success', text1: 'Скопировано', position: 'top', visibilityTime: 1500 });
         },
@@ -680,6 +693,28 @@ export default function ChatScreen({ navigation, route }) {
         onPress: () => togglePin(actionMessage),
       });
     }
+    if (serverMessage) {
+      list.push({
+        key: 'forward',
+        label: 'Переслать',
+        icon: 'arrow-redo-outline',
+        onPress: () => {
+          setMenu(null);
+          setForwardIds([actionMessage.id]);
+        },
+      });
+    }
+    if (hasText || normalizeMedia(actionMessage.media).length || actionMessage.type === 'poll') {
+      list.push({
+        key: 'share',
+        label: 'Поделиться',
+        icon: 'share-outline',
+        onPress: () => {
+          setMenu(null);
+          shareMessages([actionMessage]);
+        },
+      });
+    }
     if (mine && hasText && serverMessage && actionMessage.type !== 'poll' && can('mobile-app-can-edit-comment:site')) {
       list.push({
         key: 'edit',
@@ -689,7 +724,18 @@ export default function ChatScreen({ navigation, route }) {
           setEditing(actionMessage);
           setReplyTo(null);
           setText(actionMessage.message || '');
-          setActionMessage(null);
+          setMenu(null);
+        },
+      });
+    }
+    if (serverMessage) {
+      list.push({
+        key: 'select',
+        label: 'Выбрать',
+        icon: 'checkmark-circle-outline',
+        onPress: () => {
+          setMenu(null);
+          setSelectedIds([actionMessage.id]);
         },
       });
     }
@@ -698,6 +744,91 @@ export default function ChatScreen({ navigation, route }) {
     }
     return list;
   }, [actionMessage, isMine, can, deleteMessage, togglePin, info]);
+
+  const selecting = selectedIds.length > 0;
+  const selectedMessages = useMemo(() => {
+    const ids = new Set(selectedIds);
+    return messages.filter((message) => ids.has(message.id));
+  }, [messages, selectedIds]);
+
+  const toggleSelect = useCallback((message) => {
+    if (!isServerId(message.id) || message.type === 'system') return;
+    Haptics.selectionAsync().catch(() => {});
+    setSelectedIds((current) => (current.includes(message.id)
+      ? current.filter((id) => id !== message.id)
+      : [...current, message.id]));
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds([]), []);
+
+  // «Назад» на Android в режиме выбора снимает выбор, а не закрывает чат
+  useEffect(() => {
+    if (!selecting) return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      clearSelection();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [selecting, clearSelection]);
+
+  const canDeleteSelected = selecting
+    && can('mobile-app-can-delete-comment:site')
+    && selectedMessages.every((message) => isMine(message));
+
+  const copySelected = useCallback(async () => {
+    const value = messagesText(selectedMessages);
+    if (!value) {
+      Toast.show({ type: 'info', text1: 'В выбранных сообщениях нет текста', position: 'top', visibilityTime: 1500 });
+      return;
+    }
+    await Clipboard.setStringAsync(value);
+    clearSelection();
+    Toast.show({ type: 'success', text1: 'Скопировано', position: 'top', visibilityTime: 1500 });
+  }, [selectedMessages, clearSelection]);
+
+  const deleteSelected = useCallback(() => {
+    const targets = selectedMessages;
+    const count = targets.length;
+    Alert.alert(
+      count > 1 ? `Удалить ${count} ${plural(count, 'сообщение', 'сообщения', 'сообщений')}?` : 'Удалить сообщение?',
+      isObject ? 'Комментарии удалятся и из табеля.' : 'Сообщения удалятся у всех участников чата.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: async () => {
+            const ids = new Set(targets.map((message) => message.id));
+            clearSelection();
+            setMessages((current) => current.filter((message) => !ids.has(message.id)));
+            const failed = [];
+            for (const message of targets) {
+              try {
+                await messengerAPI.removeMessage(message.id, chatId);
+              } catch (error) {
+                failed.push(message);
+              }
+            }
+            if (failed.length) {
+              setMessages((current) => mergeMessages(current, failed));
+              Toast.show({ type: 'error', text1: `Не удалось удалить: ${failed.length}`, text2: 'Попробуйте ещё раз.', position: 'top' });
+            }
+          },
+        },
+      ],
+    );
+  }, [selectedMessages, chatId, isObject, clearSelection]);
+
+  // Меню по долгому нажатию: клавиатуру убираем, затем замеряем строку — меню встаёт рядом с сообщением
+  const openMenu = useCallback((item, measure) => {
+    const show = () => measure((anchor) => setMenu({ item, anchor: anchor ?? { x: 0, y: 260, width: 0, height: 80 } }));
+    if (Keyboard.isVisible()) {
+      Keyboard.dismiss();
+      setTimeout(show, 320);
+    } else {
+      show();
+    }
+  }, []);
 
   const openDocument = useCallback(async (file) => {
     try {
@@ -722,11 +853,11 @@ export default function ChatScreen({ navigation, route }) {
         Toast.show({ type: 'info', text1: 'Идёт звонок', text2: 'Видео можно посмотреть после звонка', position: 'top' });
         return;
       }
-      setVideoUri(item.uri);
+      setVideo(item);
       return;
     }
     const images = items.filter((media) => media.type === 'image');
-    setImageViewer({ images: images.map((media) => ({ uri: media.uri })), index: Math.max(0, images.indexOf(item)) });
+    setImageViewer({ images: images.map((media) => ({ uri: media.uri })), items: images, index: Math.max(0, images.indexOf(item)) });
   }, []);
 
   // --- Лента: даты, системные сообщения, группы ---
@@ -830,7 +961,7 @@ export default function ChatScreen({ navigation, route }) {
         chatType={chatType}
         highlighted={item.message.id === highlightId}
         theme={theme}
-        onLongPress={(message) => setActionMessage({ ...message, isMine: item.mine })}
+        onLongPress={(message, measure) => openMenu(item, measure)}
         onReply={(message) => { if (isServerId(message.id) && info?.can_write !== false) { setReplyTo(message); setEditing(null); } }}
         onReactionPress={toggleReaction}
         onOpenMedia={openMedia}
@@ -840,9 +971,29 @@ export default function ChatScreen({ navigation, route }) {
         onVote={vote}
         onQuickReact={quickReact}
         burst={burst?.messageId === item.message.id ? burst : null}
+        selecting={selecting}
+        selected={selecting && selectedIds.includes(item.message.id)}
+        onToggleSelect={toggleSelect}
+        hidden={menuMessageId === item.message.id}
       />
     );
-  }, [theme, me.userId, me.staffId, chatType, highlightId, toggleReaction, quickReact, burst, openMedia, openDocument, jumpToMessage, retry, vote, info]);
+  }, [theme, me.userId, me.staffId, chatType, highlightId, toggleReaction, quickReact, burst, openMedia, openDocument, jumpToMessage, retry, vote, info, openMenu, selecting, selectedIds, toggleSelect, menuMessageId]);
+
+  // Копия сообщения в меню — тот же вид, что в ленте, без жестов
+  const renderMenuPreview = () => (menu ? (
+    <MessageBubble
+      message={menu.item.message}
+      isMine={menu.item.mine}
+      status={menu.item.status}
+      isFirstInGroup={menu.item.isFirstInGroup}
+      isLastInGroup={menu.item.isLastInGroup}
+      myUserId={me.userId}
+      myStaffId={me.staffId}
+      chatType={chatType}
+      theme={theme}
+      preview
+    />
+  ) : null);
 
   // --- Поиск в чате ---
 
@@ -908,6 +1059,7 @@ export default function ChatScreen({ navigation, route }) {
   );
 
   const canWrite = info?.can_write !== false;
+  const bottomGap = Platform.OS === 'android' ? Math.max(insets.bottom, ANDROID_GESTURE_GAP) : insets.bottom;
   const s = screenStyles(theme);
 
   return (
@@ -918,7 +1070,7 @@ export default function ChatScreen({ navigation, route }) {
         {/* Клавиатура как в Telegram: лента и поле ввода едут вместе с ней кадр за кадром; прокрутка вниз
             опускает клавиатуру вслед за пальцем (iOS — keyboardDismissMode, Android — KeyboardGestureArea).
             Нижний отступ экрана (полоска «домой») — за пределами: при открытой клавиатуре зазора нет */}
-        <KeyboardGestureArea style={[s.flex, { marginBottom: insets.bottom }]} interpolator="ios" offset={composerHeight}>
+        <KeyboardGestureArea style={[s.flex, { marginBottom: bottomGap }]} interpolator="ios" offset={composerHeight}>
         <KeyboardAvoidingView style={s.flex} behavior="translate-with-padding">
           <View style={s.flex}>
 
@@ -979,7 +1131,42 @@ export default function ChatScreen({ navigation, route }) {
             {/* Стекло — фоновый слой: сама панель ничего не обрезает (увеличенный микрофон, замок записи) */}
             <View style={s.composerBar} onLayout={(event) => setComposerHeight(event.nativeEvent.layout.height)}>
               <GlassView edge="top" style={StyleSheet.absoluteFill} />
-              {canWrite ? (
+              {selecting ? (
+                <View style={[s.selectionBar, { paddingBottom: 8 }]}>
+                  {canDeleteSelected ? (
+                    <Pressable onPress={deleteSelected} hitSlop={6} style={s.selectionAction} accessibilityLabel="Удалить выбранные">
+                      <Ionicons name="trash-outline" size={24} color={theme.danger} />
+                      <Text style={[s.selectionActionText, { color: theme.danger }]}>Удалить</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable onPress={copySelected} hitSlop={6} style={s.selectionAction} accessibilityLabel="Копировать выбранные">
+                    <Ionicons name="copy-outline" size={24} color={theme.accent} />
+                    <Text style={s.selectionActionText}>Копировать</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      const targets = selectedMessages;
+                      clearSelection();
+                      shareMessages(targets);
+                    }}
+                    hitSlop={6}
+                    style={s.selectionAction}
+                    accessibilityLabel="Поделиться выбранными"
+                  >
+                    <Ionicons name="share-outline" size={24} color={theme.accent} />
+                    <Text style={s.selectionActionText}>Поделиться</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setForwardIds(selectedMessages.map((message) => message.id))}
+                    hitSlop={6}
+                    style={s.selectionAction}
+                    accessibilityLabel="Переслать выбранные"
+                  >
+                    <Ionicons name="arrow-redo-outline" size={24} color={theme.accent} />
+                    <Text style={s.selectionActionText}>Переслать</Text>
+                  </Pressable>
+                </View>
+              ) : canWrite ? (
                 <Composer
                   theme={theme}
                   value={text}
@@ -1005,14 +1192,23 @@ export default function ChatScreen({ navigation, route }) {
         </KeyboardAvoidingView>
         </KeyboardGestureArea>
         {/* Под полем ввода — та же полупрозрачная панель до края экрана; клавиатура её закрывает */}
-        {insets.bottom > 0 ? <GlassView style={[s.bottomInset, { height: insets.bottom }]} /> : null}
+        {bottomGap > 0 ? <GlassView style={[s.bottomInset, { height: bottomGap }]} /> : null}
 
         <GlassView
           edge="bottom"
           style={[s.headerBar, { paddingTop: insets.top }]}
           onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
         >
-          {search.active ? (
+          {selecting ? (
+            <View style={s.header}>
+              <Pressable onPress={clearSelection} hitSlop={10} style={s.back} accessibilityLabel="Отменить выбор">
+                <Ionicons name="close" size={26} color={theme.accent} />
+              </Pressable>
+              <Text style={s.selectionTitle} numberOfLines={1}>
+                {`Выбрано: ${selectedIds.length}`}
+              </Text>
+            </View>
+          ) : search.active ? (
             <View style={s.header}>
               <View style={s.searchBox}>
                 <Ionicons name="search" size={18} color={theme.textMuted} />
@@ -1066,7 +1262,7 @@ export default function ChatScreen({ navigation, route }) {
               </Pressable>
               {isDirect ? (
                 <Pressable
-                  onPress={() => initiateCall(params.staffId ?? info?.participant?.id, title)}
+                  onPress={() => initiateCall(params.staffId ?? info?.participant?.id, title, info?.participant?.avatar)}
                   hitSlop={8}
                   style={s.headerAction}
                   accessibilityLabel={`Позвонить: ${title}`}
@@ -1077,7 +1273,7 @@ export default function ChatScreen({ navigation, route }) {
             </View>
           )}
 
-          {!search.active && currentPinned ? (
+          {!search.active && !selecting && currentPinned ? (
             <Pressable
               style={s.pinned}
               onPress={() => {
@@ -1132,14 +1328,31 @@ export default function ChatScreen({ navigation, route }) {
           ) : null}
         </GlassView>
 
-        <MessageActionsSheet
-          visible={Boolean(actionMessage)}
+        <MessageContextMenu
+          visible={Boolean(menu)}
           message={actionMessage}
+          anchor={menu?.anchor}
+          isMine={Boolean(menu?.item.mine)}
+          sideOffset={!isDirect && menu && !menu.item.mine ? 30 : 0}
           theme={theme}
           myUserId={me.userId}
           actions={actions}
+          renderPreview={renderMenuPreview}
           onReact={(emoji, hasReacted) => toggleReaction(actionMessage, emoji, hasReacted)}
-          onClose={() => setActionMessage(null)}
+          onClose={() => setMenu(null)}
+        />
+
+        <ForwardSheet
+          visible={Boolean(forwardIds)}
+          sourceChatId={chatId}
+          messageIds={forwardIds || []}
+          onClose={() => setForwardIds(null)}
+          onForwarded={(data) => {
+            setForwardIds(null);
+            clearSelection();
+            // Пересланное в этот же чат появится сразу (себе событие не приходит)
+            if ((data?.chat_ids || []).map(Number).includes(Number(chatId))) loadLatest(chatId);
+          }}
         />
 
         <PollCreateModal visible={pollVisible} onClose={() => setPollVisible(false)} onCreate={createPoll} />
@@ -1155,10 +1368,16 @@ export default function ChatScreen({ navigation, route }) {
             <ViewerHeader
               title={(imageViewer?.images?.length ?? 0) > 1 ? `${imageIndex + 1} из ${imageViewer.images.length}` : ''}
               onClose={() => setImageViewer(null)}
+              actions={[{
+                key: 'share',
+                icon: 'share-outline',
+                label: 'Поделиться',
+                onPress: () => imageViewer?.items?.[imageIndex] && shareMediaItem(imageViewer.items[imageIndex]),
+              }]}
             />
           )}
         />
-        <VideoViewer uri={videoUri} onClose={() => setVideoUri(null)} />
+        <VideoViewer uri={video?.uri} onClose={() => setVideo(null)} onShare={() => video && shareMediaItem(video)} />
       </View>
     </AudioPlayerProvider>
   );
@@ -1226,6 +1445,10 @@ const screenStyles = (theme) => StyleSheet.create({
   searchHitTime: { fontSize: 12, color: theme.textMuted },
   searchHitText: { fontSize: 14, color: theme.textSecondary, marginTop: 1 },
   composerBar: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+  selectionBar: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingTop: 8, paddingHorizontal: 8 },
+  selectionAction: { alignItems: 'center', gap: 2, minWidth: 72, paddingVertical: 2 },
+  selectionActionText: { fontSize: 12, color: theme.accentText, fontWeight: '500' },
+  selectionTitle: { flex: 1, fontSize: 17, fontWeight: '600', color: theme.text, marginLeft: 4 },
   bottomInset: { position: 'absolute', left: 0, right: 0, bottom: 0 },
   readOnly: { textAlign: 'center', color: theme.textSecondary, fontSize: 14, paddingHorizontal: 24, paddingVertical: 16 },
   loader: { alignSelf: 'center' },

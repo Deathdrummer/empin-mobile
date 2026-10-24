@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Image,
   Animated,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -215,14 +214,8 @@ export const CallModal = ({
           <Animated.View style={[styles.center, { transform: [{ translateY: slideAnim }] }]}>
             {/* Avatar */}
             <View style={styles.avatarRing}>
-              {participant?.avatar ? (
-                <Image
-                  source={{ uri: participant.avatar }}
-                  style={styles.avatar}
-                />
-              ) : (
-                <Avatar person={person} id={participant?.id} size={128} />
-              )}
+              {/* Фото сотрудника (если есть) или инициалы */}
+              <Avatar person={{ ...person, avatar: participant?.avatar }} id={participant?.id} size={128} />
             </View>
 
             {/* Name */}
@@ -290,11 +283,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(255, 59, 66, 0.45)',
     marginBottom: 24,
-  },
-  avatar: {
-    width: 128,
-    height: 128,
-    borderRadius: 64,
   },
   participantName: {
     fontSize: 30,

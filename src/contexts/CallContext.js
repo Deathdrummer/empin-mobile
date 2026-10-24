@@ -11,6 +11,8 @@ import { subscribeToCalls, unsubscribeFromCalls } from '../services/pusher';
 import { presentMessagePush } from '../services/messagePush';
 import {
   endIosSystemCall,
+  reportIosOutgoingConnected,
+  startIosOutgoingCall,
   startIosVoip,
 } from '../services/iosVoip';
 
@@ -574,7 +576,8 @@ export const CallProvider = ({ children, isLoggedIn }) => {
         // Не ответили: на сервере звонок станет пропущенным, а не отклонённым
         await messengerAPI.endCall(callData.callId).catch(() => {});
         callStateRef.current?.resetToIdle?.();
-      } else if (event.type === 'end' && callStateRef.current?.status === 'active') {
+      } else if (event.type === 'end' && (callStateRef.current?.status === 'active' || callStateRef.current?.callData?.isIncoming === false)) {
+        // Разговор или наш исходящий завершили с системного экрана (плашка звонка, экран блокировки)
         await callStateRef.current?.endCall();
       } else {
         await callStateRef.current?.rejectCall(callData.callId);
@@ -737,10 +740,27 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       || callState.status === 'error';
 
     if (isTerminal && iosSystemCallIdRef.current) {
-      endIosSystemCall(iosSystemCallIdRef.current, callState.status === 'error' ? 'failed' : 'remoteEnded');
+      const reason = { error: 'failed', no_answer: 'unanswered' }[callState.status] ?? 'remoteEnded';
+      endIosSystemCall(iosSystemCallIdRef.current, reason);
       iosSystemCallIdRef.current = null;
     }
   }, [callState.status]);
+
+  // Исходящий звонок — в CallKit: строка в журнале вызовов iPhone, системная плашка звонка.
+  // Собеседник ответил — CallKit начинает отсчёт длительности
+  const outgoingConnectedRef = useRef(null);
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const data = callState.callData;
+    if (!data || data.isIncoming) return;
+    if (callState.status === 'ringing' && iosSystemCallIdRef.current !== data.callId) {
+      iosSystemCallIdRef.current = data.callId;
+      startIosOutgoingCall(data.callId, data.participant?.id ?? data.callId, data.participant?.name);
+    } else if (callState.status === 'active' && iosSystemCallIdRef.current === data.callId && outgoingConnectedRef.current !== data.callId) {
+      outgoingConnectedRef.current = data.callId;
+      reportIosOutgoingConnected(data.callId);
+    }
+  }, [callState.status, callState.callData]);
 
   // Закрытие модала при завершении звонка
   useEffect(() => {

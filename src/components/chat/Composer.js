@@ -210,6 +210,8 @@ export const Composer = ({
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
+    // Жест не отдаём ленте: движение пальца вверх (фиксация записи) иначе забирала прокрутка
+    onPanResponderTerminationRequest: () => false,
     onPanResponderGrant: () => {
       cancelledRef.current = false;
       lockedRef.current = false;

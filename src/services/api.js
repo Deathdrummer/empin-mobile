@@ -447,6 +447,33 @@ export const messengerAPI = {
     return response.data;
   },
 
+  // Переслать сообщения в чаты и сотрудникам (личный чат создаётся сам)
+  forward: async (chatId, messageIds, { chatIds = [], staffIds = [] } = {}) => {
+    const response = await api.post('/messenger/forward', {
+      chat_id: chatId,
+      message_ids: messageIds,
+      target_chat_ids: chatIds,
+      target_staff_ids: staffIds,
+    });
+    return response.data;
+  },
+
+  // Аватарка: квадратный JPEG, уже уменьшенный на телефоне
+  uploadAvatar: async (uri) => {
+    const formData = new FormData();
+    formData.append('avatar', { uri, name: 'avatar.jpg', type: 'image/jpeg' });
+    const response = await api.post('/messenger/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: MESSAGE_SEND_TIMEOUT_MS,
+    });
+    return response.data;
+  },
+
+  deleteAvatar: async () => {
+    const response = await api.delete('/messenger/avatar');
+    return response.data;
+  },
+
   // Настройки мессенджера — общие для всех устройств сотрудника
   getSettings: async () => {
     const response = await api.get('/messenger/settings');

@@ -9,7 +9,7 @@ import { avatarColor } from '../../theme';
 import { formatMessageTime, formatShortDay, fullName, mediaLabel, shortName } from '../../utils/chatFormat';
 import { Avatar } from './Avatar';
 import { PollCard } from './PollCard';
-import { VoiceMessage } from './VoiceMessage';
+import { VoiceMessage, VoiceMessagePreview } from './VoiceMessage';
 import { DocumentCard, MediaGrid } from './MessageAttachments';
 import { ReactionBurst } from './ReactionBurst';
 import { PinIcon } from './PinIcon';
@@ -73,15 +73,30 @@ const JUMBO_APPEAR = ZoomIn.springify().damping(9).stiffness(170);
 const REACTION_APPEAR = ZoomIn.springify().damping(12).stiffness(260);
 
 /** Вложения сообщения в одном формате: старый формат — один объект, новый — массив */
+// Голосовые с Android на старом сервере сохранялись как «видео» — по имени файла это звук
+const AUDIO_NAME = /\.(m4a|aac|mp3|ogg|opus|wav|flac)$/i;
+const safeDecode = (value) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
 export const normalizeMedia = (media) => {
   if (!media) return [];
   const list = Array.isArray(media) ? media : [media];
   return list
     .filter(Boolean)
-    .map((item) => ({
-      ...item,
-      uri: item.localUri || (item.path?.startsWith('http') ? item.path : `${SERVER_URL}${item.path ?? ''}`),
-    }));
+    .map((item) => {
+      const name = item.name ? safeDecode(item.name) : item.name;
+      return {
+        ...item,
+        name,
+        type: item.type === 'video' && AUDIO_NAME.test(name || '') ? 'audio' : item.type,
+        uri: item.localUri || (item.path?.startsWith('http') ? item.path : `${SERVER_URL}${item.path ?? ''}`),
+      };
+    });
 };
 
 const isEdited = (message) => {
@@ -128,6 +143,14 @@ const MessageBubbleComponent = ({
   onVote,
   onQuickReact,
   burst,
+  // Копия сообщения в меню по долгому нажатию: без жестов, анимаций и плееров
+  preview = false,
+  // Режим выбора нескольких сообщений: касание выбирает, слева — отметка
+  selecting = false,
+  selected = false,
+  onToggleSelect,
+  // Сообщение открыто в меню: в ленте его место пустое — копия «поднята» над затемнением
+  hidden = false,
 }) => {
   // В группе и чате объекта у чужих сообщений — автор и аватар, как в Telegram
   const multiAuthor = chatType !== 'direct';
@@ -141,11 +164,14 @@ const MessageBubbleComponent = ({
   const files = media.filter((item) => !['image', 'video', 'audio'].includes(item.type));
   const reactions = useMemo(() => groupReactions(message.reactions, myUserId), [message.reactions, myUserId]);
   const text = (message.message || '').trim();
-  const jumbo = !isPoll && !message.reply_to && !media.length ? jumboEmojiCount(text) : 0;
+  const forwardedFrom = message.forwarded_from?.name;
+  const jumbo = !isPoll && !message.reply_to && !forwardedFrom && !media.length ? jumboEmojiCount(text) : 0;
   const lastTapRef = useRef(0);
+  const rowRef = useRef(null);
+  const still = preview || selecting;
 
   // Проявление только у только что пришедших и отправленных сообщений (флаг ставит экран чата)
-  const appear = useRef(Boolean(message._appear) && !appearedIds.has(message.id)).current;
+  const appear = useRef(Boolean(message._appear) && !appearedIds.has(message.id) && !preview).current;
   useEffect(() => {
     if (message._appear) appearedIds.add(message.id);
   }, [message._appear, message.id]);
@@ -182,13 +208,29 @@ const MessageBubbleComponent = ({
     else corner.borderBottomLeftRadius = 5;
   }
 
+  // Долгое нажатие: положение строки на экране — меню открывается рядом с сообщением
   const handleLongPress = () => {
+    if (preview) return;
+    if (selecting) {
+      onToggleSelect?.(message);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    onLongPress(message);
+    // measure(callback) — экран чата замеряет строку, когда клавиатура уже убрана
+    onLongPress(message, (callback) => {
+      const node = rowRef.current;
+      if (!node?.measureInWindow) callback(null);
+      else node.measureInWindow((x, y, width, height) => callback({ x, y, width, height }));
+    });
   };
 
   // Двойное касание — быстрая реакция, как в Telegram (фото, ответы и опросы ловят касания сами)
   const handlePress = () => {
+    if (preview) return;
+    if (selecting) {
+      onToggleSelect?.(message);
+      return;
+    }
     if (status === 'failed') {
       onRetry(message);
       return;
@@ -230,6 +272,15 @@ const MessageBubbleComponent = ({
         </Text>
       ) : null}
 
+      {forwardedFrom ? (
+        <View style={[styles.forwarded, mediaOnly && styles.authorOnMedia]}>
+          <Ionicons name="arrow-redo" size={13} color={colors.accent} />
+          <Text style={[styles.forwardedText, { color: colors.accent }]} numberOfLines={1}>
+            {`Переслано от ${forwardedFrom}`}
+          </Text>
+        </View>
+      ) : null}
+
       {isPoll ? (
         <PollCard
           message={message}
@@ -242,7 +293,9 @@ const MessageBubbleComponent = ({
 
       {message.reply_to ? (
         <Pressable
-          onPress={() => onQuotePress(message.reply_to.id)}
+          onPress={() => !still && onQuotePress(message.reply_to.id)}
+          onLongPress={handleLongPress}
+          delayLongPress={280}
           style={[styles.quote, { backgroundColor: theme.quoteBackground, borderLeftColor: colors.accent }]}
         >
           <Text style={[styles.quoteName, { color: colors.accent }]} numberOfLines={1}>
@@ -256,12 +309,14 @@ const MessageBubbleComponent = ({
 
       {visual.length ? (
         <View style={!mediaOnly && styles.mediaSpacing}>
-          <MediaGrid items={visual} onOpen={(index) => onOpenMedia(visual, index)} />
+          <MediaGrid items={visual} onOpen={(index) => (still ? handlePress() : onOpenMedia(visual, index))} onLongPress={handleLongPress} />
           {mediaOnly ? meta : null}
         </View>
       ) : null}
 
-      {audio.map((item, index) => (
+      {audio.map((item, index) => (preview ? (
+        <VoiceMessagePreview key={`${item.uri}-${index}`} messageId={message.id} tint={theme.accent} trackColor={isMine ? theme.bubbleOutTrack : theme.separator} />
+      ) : (
         <VoiceMessage
           key={`${item.uri}-${index}`}
           uri={item.uri}
@@ -269,8 +324,10 @@ const MessageBubbleComponent = ({
           tint={theme.accent}
           trackColor={isMine ? theme.bubbleOutTrack : theme.separator}
           metaColor={colors.meta}
+          onLongPress={handleLongPress}
+          disabled={selecting}
         />
-      ))}
+      )))}
 
       {files.map((file, index) => (
         <DocumentCard
@@ -279,7 +336,8 @@ const MessageBubbleComponent = ({
           tint={theme.accent}
           textColor={colors.text}
           metaColor={colors.meta}
-          onPress={onOpenDocument}
+          onPress={(file) => (still ? handlePress() : onOpenDocument(file))}
+          onLongPress={handleLongPress}
         />
       ))}
 
@@ -308,7 +366,10 @@ const MessageBubbleComponent = ({
     </Pressable>
   );
 
-  const swipeable = (
+  // В меню и в режиме выбора свайп «ответить» не нужен
+  const swipeable = still ? (
+    <View style={styles.swipeContainer}>{bubble}</View>
+  ) : (
     <ReanimatedSwipeable
         ref={swipeableRef}
         friction={2}
@@ -339,7 +400,7 @@ const MessageBubbleComponent = ({
         {reactions.map((reaction) => (
           <Animated.View key={reaction.emoji} entering={REACTION_APPEAR}>
             <Pressable
-              onPress={() => onReactionPress(message, reaction.emoji, reaction.mine)}
+              onPress={() => (still ? handlePress() : onReactionPress(message, reaction.emoji, reaction.mine))}
               style={[
                 styles.reaction,
                 {
@@ -357,32 +418,61 @@ const MessageBubbleComponent = ({
     </LayoutAnimationConfig>
   ) : null;
 
-  const burstView = burst ? <ReactionBurst key={burst.key} emoji={burst.emoji} alignRight={isMine} /> : null;
+  const burstView = burst && !preview ? <ReactionBurst key={burst.key} emoji={burst.emoji} alignRight={isMine} /> : null;
 
-  if (showAvatarSlot) {
-    return (
-      <Animated.View entering={appear ? APPEAR : undefined} style={[styles.row, styles.rowWithAvatar, isFirstInGroup && styles.rowGroupStart]}>
-        <View style={styles.avatarSlot}>
-          {isLastInGroup ? <Avatar person={message.from} id={message.from_id} size={30} /> : null}
-        </View>
-        <View style={styles.rowColumn}>
-          {swipeable}
-          {reactionsRow}
-        </View>
-        {burstView}
-      </Animated.View>
-    );
-  }
+  // Режим выбора: отметка слева, касание по всей строке выбирает сообщение (как в Telegram)
+  const selectMark = selecting ? (
+    <View style={styles.selectMark} pointerEvents="none">
+      <View style={[styles.selectCircle, selected
+        ? { backgroundColor: theme.accent, borderColor: theme.accent }
+        : { borderColor: theme.textMuted, backgroundColor: 'rgba(255,255,255,0.6)' }]}
+      >
+        {selected ? <Ionicons name="checkmark" size={15} color={theme.onAccent} /> : null}
+      </View>
+    </View>
+  ) : null;
+  const selectOverlay = selecting ? (
+    <Pressable
+      style={[StyleSheet.absoluteFill, selected && { backgroundColor: theme.dark ? 'rgba(255,255,255,0.06)' : 'rgba(20,21,26,0.06)' }]}
+      onPress={() => onToggleSelect?.(message)}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={selected ? 'Сообщение выбрано' : 'Выбрать сообщение'}
+    />
+  ) : null;
 
-  return (
+  const content = showAvatarSlot ? (
     <Animated.View
       entering={appear ? APPEAR : undefined}
-      style={[styles.row, isMine ? styles.rowMine : styles.rowTheirs, isFirstInGroup && styles.rowGroupStart]}
+      style={[styles.row, styles.rowWithAvatar, isFirstInGroup && styles.rowGroupStart, selecting && styles.rowSelecting]}
+    >
+      <View style={styles.avatarSlot}>
+        {isLastInGroup ? <Avatar person={message.from} id={message.from_id} size={30} /> : null}
+      </View>
+      <View style={styles.rowColumn}>
+        {swipeable}
+        {reactionsRow}
+      </View>
+      {burstView}
+    </Animated.View>
+  ) : (
+    <Animated.View
+      entering={appear ? APPEAR : undefined}
+      style={[styles.row, isMine ? styles.rowMine : styles.rowTheirs, isFirstInGroup && styles.rowGroupStart, selecting && styles.rowSelecting]}
     >
       {swipeable}
       {reactionsRow}
       {burstView}
     </Animated.View>
+  );
+
+  // Обычный View (не анимированный) — его положение на экране замеряется для меню
+  return (
+    <View ref={rowRef} collapsable={false} style={hidden && styles.hidden}>
+      {content}
+      {selectMark}
+      {selectOverlay}
+    </View>
   );
 };
 
@@ -396,6 +486,12 @@ const styles = StyleSheet.create({
   rowWithAvatar: { flexDirection: 'row', alignItems: 'flex-end', paddingLeft: 6 },
   avatarSlot: { width: AVATAR_SLOT, alignItems: 'flex-start', justifyContent: 'flex-end', marginBottom: 1 },
   rowColumn: { flex: 1, alignItems: 'flex-start' },
+  rowSelecting: { paddingLeft: 44 },
+  hidden: { opacity: 0 },
+  selectMark: { position: 'absolute', left: 12, top: 0, bottom: 0, justifyContent: 'center' },
+  selectCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  forwarded: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 },
+  forwardedText: { fontSize: 13, fontWeight: '600', flexShrink: 1 },
   author: { fontSize: 13, fontWeight: '600', marginBottom: 2 },
   authorOnMedia: { paddingHorizontal: 7, paddingTop: 3 },
   authorContext: { fontSize: 11, fontWeight: '400' },
