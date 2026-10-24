@@ -5,6 +5,7 @@ import { normalizeMedia } from '../components/chat/MessageBubble';
 import { shortName } from '../utils/chatFormat';
 import { getUserFacingError } from '../utils/userFacingError';
 import { restoreStatusBar } from '../utils/statusBar';
+import { cachedFileUri } from '../components/ui/CachedImage';
 
 /**
  * «Поделиться» в другие приложения (WhatsApp, Telegram, почта, «Файлы»): текст, фото, видео, документы.
@@ -26,6 +27,16 @@ const downloadMedia = async (media) => {
   return Promise.all(media.map(async (item, index) => {
     if (item.uri.startsWith('file://')) return { ...item, localUri: item.uri };
     const target = new File(dir, safeName(item.name || item.uri.split('/').pop(), index));
+    // Фото, уже показанное в чате, копируется из кэша телефона (с нормальным именем) — без загрузки
+    const cached = item.type === 'image' ? await cachedFileUri(item.uri) : item.uri;
+    if (cached.startsWith('file:')) {
+      try {
+        new File(cached).copy(target);
+        return { ...item, localUri: target.uri };
+      } catch {
+        // Не скопировалось — скачаем
+      }
+    }
     const downloaded = await File.downloadFileAsync(item.uri, target);
     return { ...item, localUri: downloaded.uri };
   }));

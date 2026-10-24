@@ -1,6 +1,7 @@
 import AVFoundation
 import CallKit
 import Foundation
+import Intents
 import PushKit
 
 public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProviderDelegate {
@@ -143,6 +144,50 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     provider?.reportOutgoingCall(with: record.uuid, connectedAt: Date())
   }
 
+  /// Нажатие на звонок приложения в журнале «Недавние» (или «Позвонить» в контакте): iOS открывает
+  /// приложение с INStartCallIntent. В журнал записан идентификатор сотрудника (CXHandle звонка) —
+  /// JS набирает его, как кнопка «Позвонить» в приложении.
+  public func handleUserActivity(_ activity: NSUserActivity) -> Bool {
+    guard let intent = activity.interaction?.intent else {
+      return false
+    }
+
+    let person: INPerson?
+    if let startCall = intent as? INStartCallIntent {
+      person = startCall.contacts?.first
+    } else if let startAudioCall = intent as? INStartAudioCallIntent {
+      person = startAudioCall.contacts?.first
+    } else {
+      return false
+    }
+
+    guard let staffId = person?.personHandle?.value, Int(staffId) != nil else {
+      return false
+    }
+
+    var event: [String: Any] = [
+      "eventId": UUID().uuidString,
+      "type": "redial",
+      "callId": "redial-\(staffId)-\(Int(Date().timeIntervalSince1970))",
+      "callUUID": UUID().uuidString,
+      "callerId": staffId,
+      "callerName": person?.displayName ?? "",
+      "createdAt": Date().timeIntervalSince1970 * 1000
+    ]
+    if event["callerName"] as? String == "" {
+      event["callerName"] = "Сотрудник"
+    }
+
+    lock.lock()
+    var events = loadPendingEventsLocked()
+    events.append(event)
+    savePendingEventsLocked(events)
+    lock.unlock()
+
+    NotificationCenter.default.post(name: Self.callEventNotification, object: nil, userInfo: event)
+    return true
+  }
+
   public func endCall(callId: String, reason: String) {
     guard let record = callsById[callId] else {
       return
@@ -257,7 +302,8 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     )
 
     let update = CXCallUpdate()
-    update.remoteHandle = CXHandle(type: .generic, value: callerId ?? callId)
+    // В журнал «Недавние» — id сотрудника: по нему работает перезвон. Без id — нечисловая метка (перезвона не будет)
+    update.remoteHandle = CXHandle(type: .generic, value: callerId ?? "call-\(callId)")
     update.localizedCallerName = callerName
     update.hasVideo = false
     update.supportsDTMF = false

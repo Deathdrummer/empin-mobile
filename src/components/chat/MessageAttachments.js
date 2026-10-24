@@ -1,7 +1,8 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatFileSize } from '../../utils/chatFormat';
+import { CachedImage } from '../ui/CachedImage';
 
 const GRID_WIDTH = 240;
 const GAP = 2;
@@ -42,7 +43,7 @@ export const MediaGrid = ({ items, onOpen, onLongPress }) => {
                 <Ionicons name="play-circle" size={44} color="rgba(255,255,255,0.92)" />
               </View>
             ) : (
-              <Image source={{ uri: item.uri }} style={{ width, height }} resizeMode="cover" />
+              <CachedImage uri={item.uri} style={{ width, height }} />
             )}
             {isLastWithMore ? (
               <View style={styles.more}>

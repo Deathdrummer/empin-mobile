@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Image, View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { avatarColor } from '../../theme';
 import { initials } from '../../utils/chatFormat';
 import { resolveMediaUri } from '../../utils/mediaUri';
+import { CachedImage } from '../ui/CachedImage';
 
 /**
  * Аватар сотрудника: фото, если оно есть (person.avatar), иначе инициалы на постоянном для него цвете.
@@ -20,7 +21,7 @@ export const Avatar = ({ person, id, size = 48 }) => {
     <View style={[styles.avatar, shape, { backgroundColor: avatarColor(id ?? person?.id) }]}>
       <Text style={[styles.text, { fontSize: Math.round(size * 0.36) }]}>{initials(person)}</Text>
       {uri && !failed ? (
-        <Image source={{ uri }} style={[StyleSheet.absoluteFill, shape]} onError={() => setFailed(true)} />
+        <CachedImage uri={uri} style={[StyleSheet.absoluteFill, shape]} transition={0} onError={() => setFailed(true)} />
       ) : null}
     </View>
   );

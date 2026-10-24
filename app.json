@@ -31,7 +31,11 @@
         "CFBundleLocalizations": [
           "ru"
         ],
-        "NSPhotoLibraryAddUsageDescription": "Разрешите сохранять фото и видео из чатов в галерею"
+        "NSPhotoLibraryAddUsageDescription": "Разрешите сохранять фото и видео из чатов в галерею",
+        "NSUserActivityTypes": [
+          "INStartCallIntent",
+          "INStartAudioCallIntent"
+        ]
       }
     },
     "android": {

@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Pressable, Dimensions, ActivityIndicator } from 'react-native';
+import { CachedImage, cachedFileUri } from '../../../components/ui/CachedImage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import ImageViewing from 'react-native-image-viewing';
@@ -80,11 +81,7 @@ const MediaItem = ({ uri, mimeType, onRemove, index, showControls = true, isLast
         {mediaIsVideo ? (
           <VideoPreview uri={uri} style={styles.mediaImage} showPlayIcon={!showControls} />
         ) : (
-          <Image
-            source={{ uri }}
-            style={styles.mediaImage}
-            resizeMode="cover"
-          />
+          <CachedImage uri={uri} style={styles.mediaImage} />
         )}
       </TouchableOpacity>
       {showControls && onRemove && (
@@ -159,10 +156,10 @@ export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
   // Разделяем медиа на изображения и видео
   const images = mediaArray.filter(media => !isVideo(media));
 
-  // Преобразуем изображения в формат для ImageViewing
-  const imageViewingData = images.map(img => ({ uri: img.uri }));
+  // Фото для ImageViewing: уже показанные в сетке — из кэша телефона (подставляются при открытии)
+  const [imageViewingData, setImageViewingData] = React.useState([]);
 
-  const handleImagePress = (index) => {
+  const handleImagePress = async (index) => {
     const media = mediaArray[index];
     if (isVideo(media)) {
       // Для видео используем старый модальный просмотр
@@ -172,6 +169,8 @@ export const MediaCollage = ({ mediaArray, onRemove, showControls = true }) => {
       // Для фото используем ImageViewing
       // Находим индекс в массиве только изображений
       const imageIndex = images.findIndex(img => img.uri === media.uri);
+      const uris = await Promise.all(images.map(img => cachedFileUri(img.uri)));
+      setImageViewingData(uris.map(uri => ({ uri })));
       setSelectedMediaIndex(imageIndex);
       setImageViewerVisible(true);
     }

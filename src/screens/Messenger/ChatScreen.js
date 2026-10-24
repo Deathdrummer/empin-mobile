@@ -56,6 +56,7 @@ import { PollCreateModal } from '../../components/chat/PollCreateModal';
 import { VideoViewer } from '../../components/chat/VideoViewer';
 import { ViewerHeader } from '../../components/chat/ViewerHeader';
 import { PinIcon } from '../../components/chat/PinIcon';
+import { cachedFileUri } from '../../components/ui/CachedImage';
 import { GlassView } from '../../components/ui/GlassView';
 
 const PAGE_SIZE = 40;
@@ -846,7 +847,7 @@ export default function ChatScreen({ navigation, route }) {
     }
   }, []);
 
-  const openMedia = useCallback((items, index) => {
+  const openMedia = useCallback(async (items, index) => {
     const item = items[index];
     if (item.type === 'video') {
       if (isCallAudioActive()) {
@@ -857,7 +858,9 @@ export default function ChatScreen({ navigation, route }) {
       return;
     }
     const images = items.filter((media) => media.type === 'image');
-    setImageViewer({ images: images.map((media) => ({ uri: media.uri })), items: images, index: Math.max(0, images.indexOf(item)) });
+    // Уже показанные в ленте фото — из кэша телефона, без повторной загрузки
+    const uris = await Promise.all(images.map((media) => cachedFileUri(media.uri)));
+    setImageViewer({ images: uris.map((uri) => ({ uri })), items: images, index: Math.max(0, images.indexOf(item)) });
   }, []);
 
   // --- Лента: даты, системные сообщения, группы ---

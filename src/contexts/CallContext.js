@@ -32,6 +32,9 @@ const RNNotificationCall = Platform.OS === 'android'
 
 const CallContext = createContext(null);
 
+// Перезвон из журнала iPhone: насколько давнее нажатие ещё набирать
+const REDIAL_MAX_AGE_MS = 30 * 1000;
+
 const getCallParticipant = (callData) => {
   const caller = callData?.caller ?? {};
   const name = [caller.sname, caller.fname, caller.mname]
@@ -90,6 +93,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
   const isAnsweringRef = useRef(false);
   // Звонок, показанный через CallKit: его нужно закрыть, если звонок оборвётся в приложении
   const iosSystemCallIdRef = useRef(null);
+  const initiateCallRef = useRef(null);
 
   const [currentUserStaffId, setCurrentUserStaffId] = useState(null);
 
@@ -532,6 +536,18 @@ export const CallProvider = ({ children, isLoggedIn }) => {
     const handleVoipCallEvent = async (event) => {
       if (disposed || !event?.callId) return;
 
+      if (event.type === 'redial') {
+        // Нажали звонок приложения в журнале «Недавние» iPhone — набираем сотрудника, если сейчас нет звонка.
+        // Нажатие старше 30 с (например, пришлось сначала войти в аккаунт) не набираем — это было бы неожиданно
+        const staffId = Number(event.callerId);
+        const status = callStateRef.current?.status;
+        const fresh = Date.now() - event.createdAt < REDIAL_MAX_AGE_MS;
+        if (staffId && fresh && (!status || status === 'idle')) {
+          initiateCallRef.current?.(staffId, event.callerName || 'Сотрудник');
+        }
+        return;
+      }
+
       const callData = getCallDataFromVoipEvent(event);
       const participant = getCallParticipant(callData);
 
@@ -623,6 +639,8 @@ export const CallProvider = ({ children, isLoggedIn }) => {
     setCallModalVisible(true);
     await callState.initiateCall(userId, userName, userAvatar);
   }, [callState]);
+  // Для событий CallKit (перезвон из журнала): обработчик создаётся один раз, функция — всегда свежая
+  initiateCallRef.current = initiateCall;
 
   /**
    * Принятие звонка
@@ -755,7 +773,8 @@ export const CallProvider = ({ children, isLoggedIn }) => {
     if (!data || data.isIncoming) return;
     if (callState.status === 'ringing' && iosSystemCallIdRef.current !== data.callId) {
       iosSystemCallIdRef.current = data.callId;
-      startIosOutgoingCall(data.callId, data.participant?.id ?? data.callId, data.participant?.name);
+      // В журнал пишется id сотрудника — по нему работает перезвон. Без id — не число, перезвон его пропустит
+      startIosOutgoingCall(data.callId, data.participant?.id ?? `call-${data.callId}`, data.participant?.name);
     } else if (callState.status === 'active' && iosSystemCallIdRef.current === data.callId && outgoingConnectedRef.current !== data.callId) {
       outgoingConnectedRef.current = data.callId;
       reportIosOutgoingConnected(data.callId);

@@ -12,7 +12,7 @@ Pod::Spec.new do |s|
   s.swift_version  = '5.9'
 
   s.dependency 'ExpoModulesCore'
-  s.frameworks = 'PushKit', 'CallKit', 'AVFoundation'
+  s.frameworks = 'PushKit', 'CallKit', 'AVFoundation', 'Intents'
   s.source_files = '**/*.{h,m,mm,swift}'
 
   s.pod_target_xcconfig = {
