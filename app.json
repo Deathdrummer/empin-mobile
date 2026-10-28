@@ -106,7 +106,7 @@
       [
         "expo-sensors",
         {
-          "motionPermission": false
+          "motionPermission": "Датчик движения используется для обновления табеля при встряхивании телефона"
         }
       ]
     ],
