@@ -447,13 +447,15 @@ export const messengerAPI = {
     return response.data;
   },
 
-  // Переслать сообщения в чаты и сотрудникам (личный чат создаётся сам)
-  forward: async (chatId, messageIds, { chatIds = [], staffIds = [] } = {}) => {
+  // Переслать сообщения в чаты и сотрудникам (личный чат создаётся сам).
+  // clientKey — ключ попытки: повтор после обрыва связи сервер не перешлёт второй раз
+  forward: async (chatId, messageIds, { chatIds = [], staffIds = [], clientKey } = {}) => {
     const response = await api.post('/messenger/forward', {
       chat_id: chatId,
       message_ids: messageIds,
       target_chat_ids: chatIds,
       target_staff_ids: staffIds,
+      client_key: clientKey,
     });
     return response.data;
   },

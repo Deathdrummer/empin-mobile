@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useRef, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { onCallAudioChange } from '../services/callAudioState';
 
 const AudioPlayerContext = createContext(null);
 
@@ -61,6 +62,18 @@ export const AudioPlayerProvider = ({ children }) => {
       console.error('Failed to save video playback rate', { error: error.message });
     }
   };
+
+  // Начался звонок — играющее голосовое на паузу сразу (до ответа): иначе оно звучало бы поверх разговора,
+  // а пауза уже во время разговора на iOS выключила бы общую аудиосессию вместе со звуком звонка
+  useEffect(() => onCallAudioChange((active) => {
+    const current = currentPlayerRef.current?.player;
+    if (!active || !current?.playing) return;
+    try {
+      current.pause();
+    } catch (error) {
+      console.warn('[Audio] Не удалось поставить на паузу перед звонком:', error?.message ?? error);
+    }
+  }), []);
 
   const registerPlayer = React.useCallback((player, playerId) => {
     // Если уже есть активный плеер с другим ID, останавливаем его

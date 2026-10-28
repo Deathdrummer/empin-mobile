@@ -570,7 +570,8 @@ const styles = (theme) => StyleSheet.create({
     backgroundColor: theme.surfaceAlt,
   },
   searchInput: { flex: 1, fontSize: 16, color: theme.text, paddingVertical: 0 },
-  foldersScroll: { flexGrow: 0 },
+  // flexShrink: 0 — иначе на маленьком экране длинный список чатов сжимает строку вкладок (ScrollView по умолчанию сжимается)
+  foldersScroll: { flexGrow: 0, flexShrink: 0 },
   folders: { gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
   chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.surfaceAlt },
   chipText: { fontSize: 14, color: theme.textSecondary, fontWeight: '500' },

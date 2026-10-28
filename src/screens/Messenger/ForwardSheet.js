@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   StyleSheet,
@@ -35,6 +36,12 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
   const [sending, setSending] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState([]);
+  // Ключ попытки: повтор после ошибки (ответ не дошёл) с тем же выбором сервер не перешлёт второй раз;
+  // другой выбор получателей — новая пересылка
+  const clientKey = useMemo(
+    () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    [visible, selected],
+  );
 
   useEffect(() => {
     if (!visible) return undefined;
@@ -101,6 +108,7 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
       const data = await messengerAPI.forward(sourceChatId, messageIds, {
         chatIds: selected.filter((item) => item.kind === 'chat').map((item) => item.chat.chat_id),
         staffIds: selected.filter((item) => item.kind === 'staff').map((item) => item.person.id),
+        clientKey,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       const count = data?.chat_ids?.length ?? selected.length;
@@ -165,47 +173,50 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
           <View style={s.headerSpacer} />
         </View>
 
-        <View style={s.search}>
-          <Ionicons name="search" size={18} color={theme.textMuted} />
-          <TextInput
-            style={s.searchInput}
-            placeholder="Поиск чата или сотрудника"
-            placeholderTextColor={theme.textMuted}
-            value={query}
-            onChangeText={setQuery}
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-          />
-        </View>
-
-        {loading ? (
-          <ActivityIndicator style={s.loader} color={theme.accent} />
-        ) : (
-          <FlatList
-            data={items}
-            keyExtractor={(item) => item.key}
-            renderItem={renderItem}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            ListEmptyComponent={<Text style={s.empty}>{query.trim() ? 'Ничего не нашли' : 'Чатов пока нет — найдите сотрудника поиском'}</Text>}
-          />
-        )}
-
-        {selected.length ? (
-          <View style={[s.footer, { borderTopColor: theme.separator }]}>
-            <Text style={s.footerText} numberOfLines={1}>
-              {selected.map((item) => (item.kind === 'chat' ? item.chat.title : fullName(item.person))).join(', ')}
-            </Text>
-            <Pressable
-              onPress={send}
-              disabled={sending}
-              style={({ pressed }) => [s.send, { backgroundColor: pressed ? theme.accentPressed : theme.accent }]}
-              accessibilityLabel="Отправить"
-            >
-              {sending ? <ActivityIndicator color={theme.onAccent} /> : <Ionicons name="arrow-up" size={22} color={theme.onAccent} />}
-            </Pressable>
+        {/* Поиск с открытой клавиатурой: список и кнопка «Отправить» остаются над ней */}
+        <KeyboardAvoidingView style={s.flex} behavior="padding">
+          <View style={s.search}>
+            <Ionicons name="search" size={18} color={theme.textMuted} />
+            <TextInput
+              style={s.searchInput}
+              placeholder="Поиск чата или сотрудника"
+              placeholderTextColor={theme.textMuted}
+              value={query}
+              onChangeText={setQuery}
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+            />
           </View>
-        ) : null}
+
+          {loading ? (
+            <ActivityIndicator style={s.loader} color={theme.accent} />
+          ) : (
+            <FlatList
+              data={items}
+              keyExtractor={(item) => item.key}
+              renderItem={renderItem}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              ListEmptyComponent={<Text style={s.empty}>{query.trim() ? 'Ничего не нашли' : 'Чатов пока нет — найдите сотрудника поиском'}</Text>}
+            />
+          )}
+
+          {selected.length ? (
+            <View style={[s.footer, { borderTopColor: theme.separator }]}>
+              <Text style={s.footerText} numberOfLines={1}>
+                {selected.map((item) => (item.kind === 'chat' ? item.chat.title : fullName(item.person))).join(', ')}
+              </Text>
+              <Pressable
+                onPress={send}
+                disabled={sending}
+                style={({ pressed }) => [s.send, { backgroundColor: pressed ? theme.accentPressed : theme.accent }]}
+                accessibilityLabel="Отправить"
+              >
+                {sending ? <ActivityIndicator color={theme.onAccent} /> : <Ionicons name="arrow-up" size={22} color={theme.onAccent} />}
+              </Pressable>
+            </View>
+          ) : null}
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );
@@ -213,6 +224,7 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
 
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
+  flex: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -4,7 +4,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -75,8 +74,9 @@ export function StaffPicker({ visible, title, multiple = false, excludeIds = [],
 
   const s = styles(theme);
 
+  // Поиск с открытой клавиатурой: список кончается над ней, последние сотрудники досягаемы
   return (
-    <View style={s.flex}>
+    <KeyboardAvoidingView style={s.flex} behavior="padding">
       <View style={s.header}>
         <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Закрыть">
           <Text style={s.headerAction}>Отмена</Text>
@@ -157,7 +157,7 @@ export function StaffPicker({ visible, title, multiple = false, excludeIds = [],
           }}
         />
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -234,7 +234,7 @@ export default function NewChatModal({ visible, onClose, onOpenChat, onCall, onG
         ) : null}
 
         {step === 'title' ? (
-          <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView style={s.flex} behavior="padding">
             <View style={s.header}>
               <TouchableOpacity onPress={() => setStep('members')} hitSlop={12}>
                 <Text style={s.headerAction}>Назад</Text>
@@ -314,7 +314,8 @@ const styles = (theme) => StyleSheet.create({
     backgroundColor: theme.surfaceAlt,
   },
   searchInput: { flex: 1, fontSize: 16, color: theme.text, paddingVertical: 0 },
-  selectedScroll: { flexGrow: 0 },
+  // flexShrink: 0 — иначе на маленьком экране список сотрудников сжимает строку выбранных
+  selectedScroll: { flexGrow: 0, flexShrink: 0 },
   selected: { gap: 8, paddingHorizontal: 16, paddingBottom: 8 },
   selectedChip: {
     flexDirection: 'row',

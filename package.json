@@ -8,6 +8,7 @@
     "usb": "adb -s 1099937419060018 reverse tcp:8081 tcp:8081 & adb -s R9YRB034CMN reverse tcp:8081 tcp:8081",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "test": "node --test \"src/**/*.test.mjs\"",
     "web": "expo start --web",
     "postinstall": "patch-package",
     "dev": "adb -s 1099937419060018 shell pm clear ru.deathdrumer.empinmobile & adb -s R9YRB034CMN shell pm clear ru.deathdrumer.empinmobile & eas build --platform android --profile development",

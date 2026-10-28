@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Toast from 'react-native-toast-message';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
-import { isCallAudioActive } from '../../services/callAudioState';
+import { isCallAudioActive, onCallAudioChange } from '../../services/callAudioState';
 import { formatDuration, fullName, shortName } from '../../utils/chatFormat';
 import { AttachmentSheet, takePhoto } from './AttachmentSheet';
 import { Avatar } from './Avatar';
@@ -61,6 +61,7 @@ export const Composer = ({
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [cancelling, setCancelling] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [interrupted, setInterrupted] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const lastTypingRef = useRef(0);
   const startedAtRef = useRef(0);
@@ -69,6 +70,8 @@ export const Composer = ({
   const releaseRequestedRef = useRef(false);
   const cancelledRef = useRef(false);
   const lockedRef = useRef(false);
+  const interruptedRef = useRef(false);
+  const stoppedSecondsRef = useRef(0);
   const pulse = useRef(new Animated.Value(1)).current;
 
   const canSend = value.trim().length > 0 || attachments.length > 0 || context?.type === 'edit';
@@ -76,14 +79,22 @@ export const Composer = ({
   useEffect(() => () => clearInterval(timerRef.current), []);
 
   useEffect(() => {
-    if (!recording) return undefined;
+    if (!recording || interrupted) return undefined;
     const loop = Animated.loop(Animated.sequence([
       Animated.timing(pulse, { toValue: 0.25, duration: 600, useNativeDriver: true }),
       Animated.timing(pulse, { toValue: 1, duration: 600, useNativeDriver: true }),
     ]));
     loop.start();
-    return () => loop.stop();
-  }, [recording, pulse]);
+    return () => {
+      loop.stop();
+      pulse.setValue(1);
+    };
+  }, [recording, interrupted, pulse]);
+
+  // Начался звонок (входящий или исходящий) — запись останавливается сразу, пока звонок не занял микрофон
+  useEffect(() => onCallAudioChange((active) => {
+    if (active) latest.current.interruptForCall();
+  }), []);
 
   const handleChangeText = (text) => {
     onChangeText(text);
@@ -132,8 +143,10 @@ export const Composer = ({
 
   // --- Голосовые ---
 
-  const restorePlaybackMode = () =>
-    setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+  // Во время звонка аудиорежим не трогаем: на iOS смена режима сбрасывает режим разговора (.voiceChat)
+  const restorePlaybackMode = () => (isCallAudioActive()
+    ? Promise.resolve()
+    : setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {}));
 
   const startRecording = async () => {
     if (isCallAudioActive()) {
@@ -153,6 +166,8 @@ export const Composer = ({
     // На iOS без этого режима expo-audio отказывается записывать (RecordingDisabledException)
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
     await recorder.prepareToRecordAsync();
+    // Звонок мог начаться, пока готовили запись
+    if (isCallAudioActive()) return false;
     recorder.record();
     startedAtRef.current = Date.now();
     setRecordSeconds(0);
@@ -164,22 +179,58 @@ export const Composer = ({
     return true;
   };
 
+  /**
+   * Звонок во время записи: останавливаем сразу, до того как он займёт микрофон и аудиосессию.
+   * Записанное не теряется — остаётся с кнопками «Удалить» / «Отправить», как зафиксированная запись.
+   */
+  const interruptForCall = async () => {
+    if (!startedAtRef.current || interruptedRef.current) return;
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+    // Длительность — у самого рекордера: на Android запись встаёт на паузу раньше, когда звонок забирает аудиофокус
+    let recordedMillis = 0;
+    try {
+      recordedMillis = recorder.getStatus()?.durationMillis ?? 0;
+    } catch {
+      // Статус недоступен — считаем по часам
+    }
+    stoppedSecondsRef.current = recordedMillis > 0 ? recordedMillis / 1000 : (Date.now() - startedAtRef.current) / 1000;
+    setRecordSeconds(stoppedSecondsRef.current);
+    interruptedRef.current = true;
+    lockedRef.current = true;
+    setInterrupted(true);
+    setLocked(true);
+    setCancelling(false);
+    try {
+      await recorder.stop();
+    } catch {
+      // Система уже остановила запись (прерывание аудиосессии звонком)
+    }
+  };
+
   const finishRecording = async (send) => {
     clearInterval(timerRef.current);
     timerRef.current = null;
-    const seconds = startedAtRef.current ? (Date.now() - startedAtRef.current) / 1000 : 0;
+    const wasInterrupted = interruptedRef.current;
+    const seconds = wasInterrupted
+      ? stoppedSecondsRef.current
+      : startedAtRef.current ? (Date.now() - startedAtRef.current) / 1000 : 0;
     startedAtRef.current = 0;
+    interruptedRef.current = false;
     setRecording(false);
+    setInterrupted(false);
     setCancelling(false);
     setLocked(false);
     lockedRef.current = false;
 
-    try {
-      await recorder.stop();
-    } catch (error) {
-      // Известная ошибка expo-audio на Android: запись уже остановлена
-      if (!String(error?.message).includes('IllegalStateException')) {
-        console.warn('[Voice] Не удалось остановить запись:', error?.message ?? error);
+    if (!wasInterrupted) {
+      try {
+        await recorder.stop();
+      } catch (error) {
+        // Известная ошибка expo-audio на Android: запись уже остановлена
+        if (!String(error?.message).includes('IllegalStateException')) {
+          console.warn('[Voice] Не удалось остановить запись:', error?.message ?? error);
+        }
       }
     }
     await restorePlaybackMode();
@@ -206,7 +257,7 @@ export const Composer = ({
 
   // Жест создаётся один раз: актуальные функции (с текущими onSendVoice, чатом, цитатой) берём из ссылки
   const latest = useRef({});
-  latest.current = { startRecording, release, restorePlaybackMode };
+  latest.current = { startRecording, release, restorePlaybackMode, interruptForCall };
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -245,7 +296,10 @@ export const Composer = ({
       if (!cancelledRef.current && !lockedRef.current) latest.current.release(true);
     },
     onPanResponderTerminate: () => {
-      if (!cancelledRef.current && !lockedRef.current) latest.current.release(false);
+      if (cancelledRef.current || lockedRef.current) return;
+      // Жест отобрал экран звонка — записанное сохраняем, а не выбрасываем
+      if (isCallAudioActive()) latest.current.interruptForCall();
+      else latest.current.release(false);
     },
   })).current;
 
@@ -320,8 +374,14 @@ export const Composer = ({
             ) : null}
             <Animated.View style={[s.recordDot, { opacity: pulse }]} />
             <Text style={s.recordTime}>{formatDuration(recordSeconds)}</Text>
-            <Text style={[s.recordHint, cancelling && { color: theme.danger }]} numberOfLines={1}>
-              {locked ? 'Запись идёт' : cancelling ? 'Отпустите — отмена' : '‹ Влево — отмена'}
+            <Text
+              style={[s.recordHint, cancelling && { color: theme.danger }]}
+              numberOfLines={1}
+              // На узком экране надпись уменьшается, а не обрезается («Прервано звонком»)
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
+            >
+              {interrupted ? 'Прервано звонком' : locked ? 'Запись идёт' : cancelling ? 'Отпустите — отмена' : '‹ Влево — отмена'}
             </Text>
           </View>
         ) : (

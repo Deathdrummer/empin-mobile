@@ -2,7 +2,6 @@ import React from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -17,7 +16,9 @@ import { STATUS_BAR_HIDDEN } from '../../utils/statusBar';
 
 /**
  * Нижняя шторка со списком: заголовок, крестик, тап по затемнению закрывает.
- * keyboard — внутри есть поле ввода: шторка поднимается над клавиатурой.
+ * keyboard — внутри есть поле ввода: шторка поднимается над клавиатурой. На обеих платформах —
+ * по событиям клавиатуры: на Android от края до края (edge-to-edge, Android 15+) окно Modal
+ * под клавиатуру не сжимается, и шторка оказывалась под ней целиком.
  */
 export const Sheet = ({ visible, onClose, title, children, keyboard = false }) => {
   const theme = useTheme();
@@ -30,14 +31,10 @@ export const Sheet = ({ visible, onClose, title, children, keyboard = false }) =
       transparent
       animationType="slide"
       onRequestClose={onClose}
-      statusBarTranslucent={!keyboard}
+      statusBarTranslucent
     >
       <StatusBar hidden={STATUS_BAR_HIDDEN} />
-      <KeyboardAvoidingView
-        style={s.root}
-        enabled={keyboard && Platform.OS === 'ios'}
-        behavior="padding"
-      >
+      <KeyboardAvoidingView style={s.root} enabled={keyboard} behavior="padding">
         <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Закрыть" />
         <View style={[s.sheet, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <View style={s.grabber} />

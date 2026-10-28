@@ -13,7 +13,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import Toast from 'react-native-toast-message';
-import { isCallAudioActive } from '../../../services/callAudioState';
+import { isCallAudioActive, onCallAudioChange } from '../../../services/callAudioState';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Can } from '../../../components/Can';
@@ -170,6 +170,17 @@ export const ChatSection = ({
   const inputRef = React.useRef(null);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recordingTimerRef = React.useRef(null);
+  // Звонок остановил запись раньше, чем отпустили кнопку: записанное отправится при отпускании
+  const interruptedByCallRef = React.useRef(false);
+
+  // Начался звонок — запись останавливается сразу, пока звонок не занял микрофон и аудиосессию
+  React.useEffect(() => onCallAudioChange((active) => {
+    if (!active || !audioRecorder.isRecording) return;
+    clearInterval(recordingTimerRef.current);
+    recordingTimerRef.current = null;
+    interruptedByCallRef.current = true;
+    audioRecorder.stop().catch(() => {});
+  }), [audioRecorder]);
 
   // Функция для поиска родительского комментария
   const findParentComment = (replyToId) => {
@@ -570,6 +581,9 @@ export const ChatSection = ({
       // На iOS без этого режима expo-audio отказывается записывать (RecordingDisabledException)
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
+      // Звонок мог начаться, пока готовили запись
+      if (isCallAudioActive()) return;
+      interruptedByCallRef.current = false;
       audioRecorder.record();
       setIsRecording(true);
       setRecordingDuration(0);
@@ -605,26 +619,35 @@ export const ChatSection = ({
         recordingTimerRef.current = null;
       }
 
+      // Запись уже остановил звонок — отправляем записанное без повторной остановки
+      const interruptedByCall = interruptedByCallRef.current;
+      interruptedByCallRef.current = false;
+
       // Проверяем, что запись действительно идёт
-      if (!audioRecorder.isRecording) {
+      if (!interruptedByCall && !audioRecorder.isRecording) {
         setIsRecording(false);
         setRecordingDuration(0);
         return;
       }
 
       // Останавливаем запись с защитой от IllegalStateException
-      try {
-        await audioRecorder.stop();
-      } catch (stopError) {
-        // Игнорируем IllegalStateException, если запись уже остановлена
-        if (stopError.message?.includes('IllegalStateException')) {
-          // known expo-audio bug on Android — ignore
-        } else {
-          throw stopError;
+      if (!interruptedByCall) {
+        try {
+          await audioRecorder.stop();
+        } catch (stopError) {
+          // Игнорируем IllegalStateException, если запись уже остановлена
+          if (stopError.message?.includes('IllegalStateException')) {
+            // known expo-audio bug on Android — ignore
+          } else {
+            throw stopError;
+          }
         }
       }
-      // Обратно в режим воспроизведения: иначе голосовые играли бы в слуховой динамик
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      // Обратно в режим воспроизведения: иначе голосовые играли бы в слуховой динамик.
+      // Во время звонка не трогаем: на iOS смена режима сбрасывает режим разговора
+      if (!isCallAudioActive()) {
+        await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+      }
 
       setIsRecording(false);
       setRecordingDuration(0);

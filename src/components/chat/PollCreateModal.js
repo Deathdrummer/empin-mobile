@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -61,7 +60,7 @@ export const PollCreateModal = ({ visible, onClose, onCreate }) => {
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={s.container} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={s.flex} behavior="padding">
           <View style={s.header}>
             <TouchableOpacity onPress={onClose} hitSlop={12}>
               <Text style={s.headerAction}>Отмена</Text>
