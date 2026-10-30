@@ -34,7 +34,7 @@ import { AudioPlayerProvider } from '../../contexts/AudioPlayerContext';
 import { useCallContext } from '../../contexts/CallContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAfterModalClose } from '../../hooks/useAfterModalClose';
-import { useTheme } from '../../theme';
+import { useTheme, withAlpha } from '../../theme';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
   formatDateSeparator,
@@ -59,6 +59,7 @@ import { ViewerHeader } from '../../components/chat/ViewerHeader';
 import { PinIcon } from '../../components/chat/PinIcon';
 import { cachedFileUri } from '../../components/ui/CachedImage';
 import { GlassView } from '../../components/ui/GlassView';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const PAGE_SIZE = 40;
 const SYNC_INTERVAL_MS = 20000;
@@ -1068,6 +1069,9 @@ export default function ChatScreen({ navigation, route }) {
   const canWrite = info?.can_write !== false;
   const bottomGap = Platform.OS === 'android' ? Math.max(insets.bottom, ANDROID_GESTURE_GAP) : insets.bottom;
   const s = screenStyles(theme);
+  // Затухание фона чата под «стеклянными» элементами шапки и низа
+  const fadeColor = withAlpha(theme.chatBackground, 0.85);
+  const fadeClear = withAlpha(theme.chatBackground, 0);
 
   return (
     <AudioPlayerProvider>
@@ -1135,11 +1139,12 @@ export default function ChatScreen({ navigation, route }) {
               </Pressable>
             ) : null}
 
-            {/* Стекло — фоновый слой: сама панель ничего не обрезает (увеличенный микрофон, замок записи) */}
-            <View style={s.composerBar} onLayout={(event) => setComposerHeight(event.nativeEvent.layout.height)}>
-              <GlassView edge="top" style={StyleSheet.absoluteFill} />
+            {/* Низ как в Telegram: без сплошной полосы — отдельные «стеклянные» элементы над лентой;
+                мягкое затухание фона под ними, чтобы уходящие вниз сообщения не спорили с кнопками */}
+            <View style={s.composerBar} pointerEvents="box-none" onLayout={(event) => setComposerHeight(event.nativeEvent.layout.height)}>
+              <LinearGradient pointerEvents="none" colors={[fadeClear, fadeColor]} style={s.composerFade} />
               {selecting ? (
-                <View style={[s.selectionBar, { paddingBottom: 8 }]}>
+                <GlassView lite style={[s.glassCard, s.selectionBar]}>
                   {canDeleteSelected ? (
                     <Pressable onPress={deleteSelected} hitSlop={6} style={s.selectionAction} accessibilityLabel="Удалить выбранные">
                       <Ionicons name="trash-outline" size={24} color={theme.danger} />
@@ -1172,7 +1177,7 @@ export default function ChatScreen({ navigation, route }) {
                     <Ionicons name="arrow-redo-outline" size={24} color={theme.accent} />
                     <Text style={s.selectionActionText}>Переслать</Text>
                   </Pressable>
-                </View>
+                </GlassView>
               ) : canWrite ? (
                 <Composer
                   theme={theme}
@@ -1189,35 +1194,45 @@ export default function ChatScreen({ navigation, route }) {
                   onTyping={notifyTyping}
                   mentionCandidates={mentionCandidates}
                   onCreatePoll={isGroup ? () => setPollVisible(true) : null}
-                  transparent
+                  floating
                 />
               ) : (
-                <Text style={s.readOnly}>Писать в чат объекта может сотрудник с правом комментировать в табеле</Text>
+                <GlassView lite style={s.glassCard}>
+                  <Text style={s.readOnly}>Писать в чат объекта может сотрудник с правом комментировать в табеле</Text>
+                </GlassView>
               )}
             </View>
           </View>
         </KeyboardAvoidingView>
         </KeyboardGestureArea>
         {/* Под полем ввода — та же полупрозрачная панель до края экрана; клавиатура её закрывает */}
-        {bottomGap > 0 ? <GlassView style={[s.bottomInset, { height: bottomGap }]} /> : null}
+        {/* Под полем ввода до края экрана — продолжение затухания; клавиатура его закрывает */}
+        {bottomGap > 0 ? <View pointerEvents="none" style={[s.bottomInset, { height: bottomGap, backgroundColor: fadeColor }]} /> : null}
 
-        <GlassView
-          edge="bottom"
-          style={[s.headerBar, { paddingTop: insets.top }]}
+        {/* Шапка как в Telegram: без сплошной полосы — отдельные «стеклянные» кнопки и капсулы над лентой.
+            Промежутки между ними пропускают касания к ленте (box-none). */}
+        <View
+          pointerEvents="box-none"
+          style={[s.headerBar, { paddingTop: insets.top + 6 }]}
           onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
         >
+          <LinearGradient pointerEvents="none" colors={[fadeColor, fadeClear]} style={StyleSheet.absoluteFill} />
           {selecting ? (
-            <View style={s.header}>
-              <Pressable onPress={clearSelection} hitSlop={10} style={s.back} accessibilityLabel="Отменить выбор">
-                <Ionicons name="close" size={26} color={theme.accent} />
-              </Pressable>
-              <Text style={s.selectionTitle} numberOfLines={1}>
-                {`Выбрано: ${selectedIds.length}`}
-              </Text>
+            <View style={s.header} pointerEvents="box-none">
+              <GlassView lite style={s.glassCircle}>
+                <Pressable onPress={clearSelection} hitSlop={8} style={s.glassButton} accessibilityLabel="Отменить выбор">
+                  <Ionicons name="close" size={24} color={theme.accent} />
+                </Pressable>
+              </GlassView>
+              <GlassView lite style={[s.glassCapsule, s.headerTitleCapsule]}>
+                <Text style={s.selectionTitle} numberOfLines={1}>
+                  {`Выбрано: ${selectedIds.length}`}
+                </Text>
+              </GlassView>
             </View>
           ) : search.active ? (
-            <View style={s.header}>
-              <View style={s.searchBox}>
+            <View style={s.header} pointerEvents="box-none">
+              <GlassView lite style={[s.glassCapsule, s.searchBox]}>
                 <Ionicons name="search" size={18} color={theme.textMuted} />
                 <TextInput
                   style={s.searchInput}
@@ -1228,90 +1243,100 @@ export default function ChatScreen({ navigation, route }) {
                   autoFocus
                   returnKeyType="search"
                 />
-              </View>
-              <Pressable onPress={closeSearch} hitSlop={10}>
-                <Text style={s.searchCancel}>Отмена</Text>
-              </Pressable>
+              </GlassView>
+              <GlassView lite style={s.glassCapsule}>
+                <Pressable onPress={closeSearch} hitSlop={8} style={s.glassTextButton}>
+                  <Text style={s.searchCancel}>Отмена</Text>
+                </Pressable>
+              </GlassView>
             </View>
           ) : (
-            <View style={s.header}>
-              <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={s.back} accessibilityLabel="Назад">
-                <Ionicons name="chevron-back" size={28} color={theme.accent} />
-              </Pressable>
-              <Pressable
-                style={s.headerMain}
-                onPress={() => chatId && navigation.navigate('ChatInfo', { chatId, chatType, title })}
-                accessibilityLabel={`${title}, сведения о чате`}
-              >
-                <ChatAvatar chat={headerChat} size={38} />
-                <View style={s.headerBody}>
-                  <Text style={s.headerName} numberOfLines={1}>{title}</Text>
-                  {subtitle ? (
-                    <View style={s.headerStatusRow}>
-                      {peerTyping ? <TypingDots color={theme.accent} /> : null}
-                      <Text style={[s.headerStatus, { color: subtitle.accent ? theme.accent : theme.textSecondary }]} numberOfLines={1}>
-                        {subtitle.text}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setSearch({ active: true, query: '', loading: false, results: [] });
-                }}
-                hitSlop={8}
-                style={s.headerAction}
-                accessibilityLabel="Поиск в чате"
-              >
-                <Ionicons name="search-outline" size={22} color={theme.accent} />
-              </Pressable>
-              {isDirect ? (
-                <Pressable
-                  onPress={() => initiateCall(params.staffId ?? info?.participant?.id, title, info?.participant?.avatar)}
-                  hitSlop={8}
-                  style={s.headerAction}
-                  accessibilityLabel={`Позвонить: ${title}`}
-                >
-                  <Ionicons name="call-outline" size={23} color={theme.accent} />
+            <View style={s.header} pointerEvents="box-none">
+              <GlassView lite style={s.glassCircle}>
+                <Pressable onPress={() => navigation.goBack()} hitSlop={8} style={s.glassButton} accessibilityLabel="Назад">
+                  <Ionicons name="chevron-back" size={26} color={theme.accent} style={s.backIcon} />
                 </Pressable>
-              ) : null}
+              </GlassView>
+              <GlassView lite style={[s.glassCapsule, s.headerTitleCapsule]}>
+                <Pressable
+                  style={s.headerMain}
+                  onPress={() => chatId && navigation.navigate('ChatInfo', { chatId, chatType, title })}
+                  accessibilityLabel={`${title}, сведения о чате`}
+                >
+                  <ChatAvatar chat={headerChat} size={34} />
+                  <View style={s.headerBody}>
+                    <Text style={s.headerName} numberOfLines={1}>{title}</Text>
+                    {subtitle ? (
+                      <View style={s.headerStatusRow}>
+                        {peerTyping ? <TypingDots color={theme.accent} /> : null}
+                        <Text style={[s.headerStatus, { color: subtitle.accent ? theme.accent : theme.textSecondary }]} numberOfLines={1}>
+                          {subtitle.text}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </Pressable>
+              </GlassView>
+              <GlassView lite style={[s.glassCapsule, s.headerActions]}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setSearch({ active: true, query: '', loading: false, results: [] });
+                  }}
+                  hitSlop={6}
+                  style={s.headerAction}
+                  accessibilityLabel="Поиск в чате"
+                >
+                  <Ionicons name="search-outline" size={22} color={theme.accent} />
+                </Pressable>
+                {isDirect ? (
+                  <Pressable
+                    onPress={() => initiateCall(params.staffId ?? info?.participant?.id, title, info?.participant?.avatar)}
+                    hitSlop={6}
+                    style={s.headerAction}
+                    accessibilityLabel={`Позвонить: ${title}`}
+                  >
+                    <Ionicons name="call-outline" size={22} color={theme.accent} />
+                  </Pressable>
+                ) : null}
+              </GlassView>
             </View>
           )}
 
           {!search.active && !selecting && currentPinned ? (
-            <Pressable
-              style={s.pinned}
-              onPress={() => {
-                jumpToMessage(currentPinned.id);
-                setPinnedIndex((index) => index + 1);
-              }}
-              accessibilityLabel="Перейти к закреплённому сообщению"
-            >
-              <View style={s.pinnedBars}>
-                {pinned.slice(0, 4).map((item, index) => (
-                  <View
-                    key={item.id}
-                    style={[s.pinnedBar, { backgroundColor: index === pinnedIndex % pinned.length ? theme.accent : theme.separator }]}
-                  />
-                ))}
-              </View>
-              <View style={s.pinnedBody}>
-                <Text style={s.pinnedTitle} numberOfLines={1}>
-                  {pinned.length > 1 ? `Закреплённое сообщение ${(pinnedIndex % pinned.length) + 1} из ${pinned.length}` : 'Закреплённое сообщение'}
-                </Text>
-                <Text style={s.pinnedText} numberOfLines={1}>
-                  {currentPinned.from_name ? `${currentPinned.from_name}: ` : ''}
-                  {currentPinned.text || mediaLabel(currentPinned.type) || 'Сообщение'}
-                </Text>
-              </View>
-              <PinIcon size={18} color={theme.textMuted} style={s.pinnedIcon} />
-            </Pressable>
+            <GlassView lite style={s.glassCard}>
+              <Pressable
+                style={s.pinned}
+                onPress={() => {
+                  jumpToMessage(currentPinned.id);
+                  setPinnedIndex((index) => index + 1);
+                }}
+                accessibilityLabel="Перейти к закреплённому сообщению"
+              >
+                <View style={s.pinnedBars}>
+                  {pinned.slice(0, 4).map((item, index) => (
+                    <View
+                      key={item.id}
+                      style={[s.pinnedBar, { backgroundColor: index === pinnedIndex % pinned.length ? theme.accent : theme.separator }]}
+                    />
+                  ))}
+                </View>
+                <View style={s.pinnedBody}>
+                  <Text style={s.pinnedTitle} numberOfLines={1}>
+                    {pinned.length > 1 ? `Закреплённое сообщение ${(pinnedIndex % pinned.length) + 1} из ${pinned.length}` : 'Закреплённое сообщение'}
+                  </Text>
+                  <Text style={s.pinnedText} numberOfLines={1}>
+                    {currentPinned.from_name ? `${currentPinned.from_name}: ` : ''}
+                    {currentPinned.text || mediaLabel(currentPinned.type) || 'Сообщение'}
+                  </Text>
+                </View>
+                <PinIcon size={18} color={theme.textMuted} style={s.pinnedIcon} />
+              </Pressable>
+            </GlassView>
           ) : null}
 
           {search.active && search.query.trim().length >= 2 ? (
-            <View style={s.searchResults}>
+            <GlassView lite style={[s.glassCard, s.searchResults]}>
               {search.loading ? <ActivityIndicator style={s.searchLoader} color={theme.accent} /> : null}
               {!search.loading && !search.results.length ? <Text style={s.searchEmpty}>Ничего не нашли</Text> : null}
               {search.results.slice(0, 8).map((hit) => (
@@ -1331,9 +1356,9 @@ export default function ChatScreen({ navigation, route }) {
                   <Text style={s.searchHitText} numberOfLines={2}>{hit.text}</Text>
                 </Pressable>
               ))}
-            </View>
+            </GlassView>
           ) : null}
-        </GlassView>
+        </View>
 
         <MessageContextMenu
           visible={Boolean(menu) && !menu.closing}
@@ -1400,21 +1425,28 @@ const styles = StyleSheet.create({
 const screenStyles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.chatBackground },
   flex: { flex: 1 },
-  headerBar: { position: 'absolute', top: 0, left: 0, right: 0 },
+  headerBar: { position: 'absolute', top: 0, left: 0, right: 0, paddingBottom: 8 },
+  // «Стеклянные» элементы шапки и низа (как в Telegram): круг 44 и капсулы той же высоты
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    minHeight: 56,
+    gap: 8,
+    paddingHorizontal: 10,
   },
-  back: { width: 34, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  glassCircle: { width: 44, height: 44, borderRadius: 22 },
+  glassButton: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // Шеврон визуально смещён вправо — центрируем по кругу
+  backIcon: { marginLeft: -2 },
+  glassCapsule: { height: 44, borderRadius: 22, flexDirection: 'row', alignItems: 'center' },
+  glassTextButton: { height: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  glassCard: { marginHorizontal: 10, marginTop: 8, borderRadius: 18 },
+  headerTitleCapsule: { flex: 1, paddingLeft: 5, paddingRight: 14 },
+  headerMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, height: 44 },
   headerBody: { flex: 1, justifyContent: 'center' },
-  headerName: { fontSize: 17, fontWeight: '600', color: theme.text },
-  headerStatusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 1 },
-  headerStatus: { fontSize: 13, flexShrink: 1 },
+  headerName: { fontSize: 16, fontWeight: '600', color: theme.text },
+  headerStatusRow: { flexDirection: 'row', alignItems: 'center' },
+  headerStatus: { fontSize: 12.5, flexShrink: 1 },
+  headerActions: { paddingHorizontal: 2 },
   headerAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
   pinned: {
     flexDirection: 'row',
@@ -1422,8 +1454,6 @@ const screenStyles = (theme) => StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.glassBorder,
   },
   pinnedBars: { gap: 2, alignSelf: 'stretch', justifyContent: 'center' },
   pinnedBar: { width: 3, flex: 1, maxHeight: 34, borderRadius: 2 },
@@ -1433,18 +1463,12 @@ const screenStyles = (theme) => StyleSheet.create({
   pinnedIcon: { marginLeft: 4 },
   searchBox: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
-    marginLeft: 8,
-    paddingHorizontal: 12,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: theme.inputBackground,
+    paddingHorizontal: 14,
   },
   searchInput: { flex: 1, fontSize: 16, color: theme.text, paddingVertical: 0 },
-  searchCancel: { fontSize: 16, color: theme.accent, paddingHorizontal: 8 },
-  searchResults: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.glassBorder, maxHeight: 420 },
+  searchCancel: { fontSize: 16, color: theme.accent, paddingHorizontal: 6 },
+  searchResults: { maxHeight: 420 },
   searchLoader: { marginVertical: 14 },
   searchEmpty: { textAlign: 'center', color: theme.textSecondary, fontSize: 15, paddingVertical: 16 },
   searchHit: { paddingHorizontal: 16, paddingVertical: 9 },
@@ -1453,12 +1477,23 @@ const screenStyles = (theme) => StyleSheet.create({
   searchHitTime: { fontSize: 12, color: theme.textMuted },
   searchHitText: { fontSize: 14, color: theme.textSecondary, marginTop: 1 },
   composerBar: { position: 'absolute', left: 0, right: 0, bottom: 0 },
-  selectionBar: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingTop: 8, paddingHorizontal: 8 },
+  // Затухание под нижними элементами: начинается чуть выше них
+  composerFade: { position: 'absolute', left: 0, right: 0, top: -28, bottom: 0 },
+  selectionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginTop: 0,
+    marginBottom: 6,
+    borderRadius: 24,
+  },
   selectionAction: { alignItems: 'center', gap: 2, minWidth: 72, paddingVertical: 2 },
   selectionActionText: { fontSize: 12, color: theme.accentText, fontWeight: '500' },
-  selectionTitle: { flex: 1, fontSize: 17, fontWeight: '600', color: theme.text, marginLeft: 4 },
+  selectionTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: theme.text, marginLeft: 14 },
   bottomInset: { position: 'absolute', left: 0, right: 0, bottom: 0 },
-  readOnly: { textAlign: 'center', color: theme.textSecondary, fontSize: 14, paddingHorizontal: 24, paddingVertical: 16 },
+  readOnly: { textAlign: 'center', color: theme.textSecondary, fontSize: 14, paddingHorizontal: 20, paddingVertical: 12 },
   loader: { alignSelf: 'center' },
   olderLoader: { marginVertical: 12 },
   empty: { alignItems: 'center', paddingVertical: 40, transform: [{ scaleY: -1 }] },

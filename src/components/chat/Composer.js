@@ -21,6 +21,10 @@ import { allowHapticsDuringRecording } from '../../services/iosVoip';
 import { formatDuration, fullName, shortName } from '../../utils/chatFormat';
 import { AttachmentSheet, takePhoto } from './AttachmentSheet';
 import { Avatar } from './Avatar';
+import { GlassView } from '../ui/GlassView';
+
+// Подложка элемента в «плавающем» режиме — отдельное стекло (как в Telegram), иначе обычный View
+const GlassSurface = (props) => <GlassView lite {...props} />;
 
 const TYPING_THROTTLE_MS = 3000;
 const CANCEL_DISTANCE = 90;
@@ -44,6 +48,7 @@ const isImageAsset = (asset) => asset.type === 'image' || asset.mimeType?.starts
  * Микрофон: удерживать — запись, отпустить — отправить, сдвинуть влево — отмена,
  * вверх — запись фиксируется (как в Telegram): дальше «Удалить» или «Отправить».
  * В группе «@» показывает участников для упоминания; onCreatePoll добавляет «Опрос» во вложения.
+ * floating — без своей панели: скрепка, поле, запись, ответ и подсказки — отдельные «стеклянные» элементы над лентой.
  */
 export const Composer = ({
   theme,
@@ -57,8 +62,9 @@ export const Composer = ({
   allowAttachments = true,
   mentionCandidates = null,
   onCreatePoll = null,
-  transparent = false,
+  floating = false,
 }) => {
+  const Surface = floating ? GlassSurface : View;
   const [attachments, setAttachments] = useState([]);
   const mentionIdsRef = useRef(new Map());
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -333,9 +339,9 @@ export const Composer = ({
   const s = styles(theme);
 
   return (
-    <View style={[s.container, transparent && s.containerTransparent]}>
+    <View style={[s.container, floating && s.containerFloating]} pointerEvents="box-none">
       {suggestions.length ? (
-        <View style={s.suggestions}>
+        <Surface style={[s.suggestions, !floating && s.suggestionsPanel]}>
           {suggestions.map((person, index) => (
             <Pressable
               key={person.id}
@@ -351,11 +357,11 @@ export const Composer = ({
               <Text style={s.suggestionTag}>{`@${shortName(person)}`}</Text>
             </Pressable>
           ))}
-        </View>
+        </Surface>
       ) : null}
 
       {context ? (
-        <View style={s.context}>
+        <Surface style={[s.context, floating && s.floatingCard]}>
           <Ionicons name={context.type === 'edit' ? 'create-outline' : 'arrow-undo'} size={20} color={theme.accent} />
           <View style={[s.contextBody, { borderLeftColor: theme.accent }]}>
             <Text style={s.contextTitle} numberOfLines={1}>{context.title}</Text>
@@ -364,11 +370,12 @@ export const Composer = ({
           <Pressable onPress={onCancelContext} hitSlop={10} accessibilityLabel="Отменить">
             <Ionicons name="close" size={22} color={theme.textSecondary} />
           </Pressable>
-        </View>
+        </Surface>
       ) : null}
 
       {attachments.length ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.attachments}>
+        <Surface style={floating && s.floatingAttachments}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.attachments, floating && s.attachmentsFloating]}>
           {attachments.map((asset, index) => (
             <View key={`${asset.uri}-${index}`} style={s.attachment}>
               {isImageAsset(asset) ? (
@@ -387,11 +394,12 @@ export const Composer = ({
             </View>
           ))}
         </ScrollView>
+        </Surface>
       ) : null}
 
-      <View style={s.row}>
+      <View style={s.row} pointerEvents="box-none">
         {recording ? (
-          <View style={s.recording}>
+          <Surface style={[s.recording, floating && s.recordingFloating]}>
             {locked ? (
               <Pressable onPress={() => release(false)} hitSlop={TRASH_HIT_SLOP} style={s.recordDelete} accessibilityLabel="Удалить запись">
                 <Ionicons name="trash-outline" size={25} color={theme.danger} />
@@ -408,15 +416,17 @@ export const Composer = ({
             >
               {interrupted ? 'Прервано звонком' : locked ? 'Запись идёт' : cancelling ? 'Отпустите — отмена' : '‹ Влево — отмена'}
             </Text>
-          </View>
+          </Surface>
         ) : (
           <>
             {allowAttachments && context?.type !== 'edit' ? (
-              <Pressable onPress={() => setSheetVisible(true)} hitSlop={8} style={s.iconButton} accessibilityLabel="Прикрепить">
-                <Ionicons name="attach" size={27} color={theme.textSecondary} style={s.attachIcon} />
-              </Pressable>
+              <Surface style={floating && s.attachCircle}>
+                <Pressable onPress={() => setSheetVisible(true)} hitSlop={8} style={s.iconButton} accessibilityLabel="Прикрепить">
+                  <Ionicons name="attach" size={27} color={theme.textSecondary} style={s.attachIcon} />
+                </Pressable>
+              </Surface>
             ) : null}
-            <View style={s.inputWrap}>
+            <Surface style={[s.inputWrap, !floating && s.inputBackground]}>
               <TextInput
                 style={s.input}
                 value={value}
@@ -432,7 +442,7 @@ export const Composer = ({
                   <Ionicons name="camera-outline" size={23} color={theme.textSecondary} />
                 </Pressable>
               ) : null}
-            </View>
+            </Surface>
           </>
         )}
 
@@ -489,17 +499,17 @@ const styles = (theme) => StyleSheet.create({
     borderTopColor: theme.separator,
     paddingBottom: 6,
   },
-  // Поверх полупрозрачной панели: свой фон и граница не нужны
-  containerTransparent: { backgroundColor: 'transparent', borderTopWidth: 0 },
-  suggestions: {
-    marginHorizontal: 8,
-    marginTop: 8,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: theme.sheet,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.separator,
-  },
+  // Плавающий режим: своей панели нет — фон и граница у каждого элемента свои (стекло)
+  containerFloating: { backgroundColor: 'transparent', borderTopWidth: 0 },
+  floatingCard: { marginHorizontal: 8, marginTop: 8, paddingVertical: 8, borderRadius: 18 },
+  floatingAttachments: { marginHorizontal: 8, marginTop: 8, borderRadius: 18 },
+  attachmentsFloating: { paddingHorizontal: 8, paddingVertical: 8 },
+  recordingFloating: { borderRadius: 20 },
+  attachCircle: { width: 40, height: 40, borderRadius: 20 },
+
+  suggestions: { marginHorizontal: 8, marginTop: 8, borderRadius: 14, overflow: 'hidden' },
+  // Фон — только у обычной панели; в плавающем режиме фон даёт стекло (свой фон перекрыл бы его)
+  suggestionsPanel: { backgroundColor: theme.sheet, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.separator },
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8 },
   suggestionName: { flex: 1, fontSize: 15, color: theme.text },
   suggestionTag: { fontSize: 13, color: theme.textMuted },
@@ -525,7 +535,7 @@ const styles = (theme) => StyleSheet.create({
     justifyContent: 'center',
   },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 8, paddingTop: 8 },
-  iconButton: { width: 38, height: 40, alignItems: 'center', justifyContent: 'center' },
+  iconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   attachIcon: { transform: [{ rotate: '45deg' }] },
   inputWrap: {
     flex: 1,
@@ -533,9 +543,9 @@ const styles = (theme) => StyleSheet.create({
     maxHeight: 130,
     justifyContent: 'center',
     borderRadius: 20,
-    backgroundColor: theme.inputBackground,
     paddingHorizontal: 14,
   },
+  inputBackground: { backgroundColor: theme.inputBackground },
   input: { fontSize: 16, color: theme.text, paddingTop: 9, paddingBottom: 9, maxHeight: 128 },
   // marginRight — круглые кнопки справа чуть дальше от края (скругление экрана iPhone)
   action: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 4 },

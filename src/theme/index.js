@@ -269,6 +269,14 @@ export const avatarColor = (id) => {
   return AVATAR_COLORS[index];
 };
 
+/** Цвет темы (#RRGGBB) с прозрачностью — для затуханий и подложек */
+export const withAlpha = (hex, alpha) => {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+  if (!match) return hex;
+  const [, r, g, b] = match;
+  return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, ${alpha})`;
+};
+
 export const radius = {
   bubble: 18,
   card: 14,
