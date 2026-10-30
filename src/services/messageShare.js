@@ -3,6 +3,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import Toast from 'react-native-toast-message';
 import { normalizeMedia } from '../components/chat/MessageBubble';
 import { shortName } from '../utils/chatFormat';
+import { plainText } from '../utils/richText';
 import { getUserFacingError } from '../utils/userFacingError';
 import { restoreStatusBar } from '../utils/statusBar';
 import { cachedFileUri } from '../components/ui/CachedImage';
@@ -50,7 +51,7 @@ export const messagesText = (messages, { withAuthors = messages.length > 1 } = {
   .map((message) => {
     const text = message.type === 'poll' && message.poll
       ? [`Опрос: ${message.poll.question}`, ...(message.poll.options || []).map((option) => `— ${option.text ?? option}`)].join('\n')
-      : (message.message || '').trim();
+      : plainText(message.message || '').trim();
     if (!text) return null;
     return withAuthors && message.from ? `${shortName(message.from)}:\n${text}` : text;
   })

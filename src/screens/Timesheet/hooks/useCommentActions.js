@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Toast from 'react-native-toast-message';
 import { timesheetAPI } from '../../../services/api';
+import { needsPreparation, prepareMediaForUpload } from '../../../services/mediaPrepare';
 import { refreshPermissions } from '../../../utils/permissions';
 import { getUserFacingError } from '../../../utils/userFacingError';
 
@@ -36,7 +37,11 @@ export const useCommentActions = (loadDays, minIndex, maxIndex) => {
       const replyToId = replyingToComment ? replyingToComment.id : null;
       const messageText = commentText.trim();
 
-      await timesheetAPI.addComment(timesheetContractId, messageText, replyToId, selectedMediaArray);
+      // Видео сжимается и получает кадр-превью, большие фото уменьшаются — как в мессенджере
+      const media = needsPreparation(selectedMediaArray)
+        ? await prepareMediaForUpload(selectedMediaArray)
+        : selectedMediaArray;
+      await timesheetAPI.addComment(timesheetContractId, messageText, replyToId, media);
 
       setCommentText('');
       setReplyingToComment(null);

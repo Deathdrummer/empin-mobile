@@ -21,8 +21,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
-import { Directory, File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+import { openDocument } from '../../services/openDocument';
+import { needsPreparation, prepareMediaForUpload } from '../../services/mediaPrepare';
 import ImageViewing from 'react-native-image-viewing';
 import Toast from 'react-native-toast-message';
 import { messengerAPI } from '../../services/api';
@@ -34,6 +34,8 @@ import { AudioPlayerProvider } from '../../contexts/AudioPlayerContext';
 import { useCallContext } from '../../contexts/CallContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAfterModalClose } from '../../hooks/useAfterModalClose';
+import { plainText } from '../../utils/richText';
+import { isReadByOthers, readersOf } from '../../utils/readReceipts';
 import { useTheme, withAlpha } from '../../theme';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
@@ -51,6 +53,7 @@ import { MessageBubble, normalizeMedia } from '../../components/chat/MessageBubb
 import { MessageContextMenu, QUICK_REACTIONS } from '../../components/chat/MessageContextMenu';
 import { messagesText, shareMediaItem, shareMessages } from '../../services/messageShare';
 import ForwardSheet from './ForwardSheet';
+import ReadersSheet from './ReadersSheet';
 import { TypingDots } from '../../components/chat/TypingDots';
 import { Composer } from '../../components/chat/Composer';
 import { PollCreateModal } from '../../components/chat/PollCreateModal';
@@ -67,6 +70,10 @@ const INFO_INTERVAL_MS = 30000;
 const TYPING_VISIBLE_MS = 5000;
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 const HIGHLIGHT_MS = 1600;
+// «Удалить у меня» — не больше стольких сообщений за запрос
+const HIDE_BATCH = 100;
+// Больше стольких непрочитанных — чат открывается на первом из них, а не внизу
+const UNREAD_OPEN_AT_DIVIDER = 6;
 // Отступ от последнего сообщения до панели ввода
 const LIST_GAP = 18;
 // Android без панели навигации: низ экрана — зона системного жеста «домой». Поле ввода выше неё,
@@ -97,7 +104,16 @@ const assetToMedia = (asset) => {
   else if (asset.type === 'video' || mime.startsWith('video/')) type = 'video';
   else if (mime.startsWith('audio/')) type = 'audio';
   else if (/pdf|word|excel|sheet|presentation|text/.test(mime)) type = 'document';
-  return { type, localUri: asset.uri, name: asset.name || asset.fileName || 'Файл', size: asset.size || asset.fileSize };
+  return {
+    type,
+    localUri: asset.uri,
+    name: asset.name || asset.fileName || 'Файл',
+    size: asset.size || asset.fileSize,
+    // Голосовое: «волна» и длительность видны сразу, до ответа сервера; видео — кадр-превью
+    waveform: asset.waveform,
+    duration: asset.durationSeconds,
+    localThumbnail: asset.thumbnailUri,
+  };
 };
 
 /** Голос в опросе сразу на экране, до ответа сервера */
@@ -129,6 +145,9 @@ export default function ChatScreen({ navigation, route }) {
   const [messages, setMessages] = useState([]);
   const [peerLastReadId, setPeerLastReadId] = useState(null);
   const [membersRead, setMembersRead] = useState({});
+  const [membersSince, setMembersSince] = useState({});
+  // «Прочитали» у своего сообщения (группа, объект)
+  const [readersMessage, setReadersMessage] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [hasMoreNewer, setHasMoreNewer] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -167,6 +186,13 @@ export default function ChatScreen({ navigation, route }) {
   const [pinnedIndex, setPinnedIndex] = useState(0);
   const [pollVisible, setPollVisible] = useState(false);
   const [search, setSearch] = useState({ active: false, query: '', loading: false, results: [] });
+  // Непрочитанное при открытии (как в Telegram): разделитель «Непрочитанные сообщения» перед первым из них
+  // и кнопка «@» — к сообщениям, где меня упомянули
+  const [unreadMark, setUnreadMark] = useState(null);
+  const [mentionIds, setMentionIds] = useState([]);
+  // Первая страница при открытии несёт сведения о непрочитанном; пока чат открывается, «прочитано» не ставится
+  const openingUnreadRef = useRef(undefined);
+  const holdReadRef = useRef(true);
 
   const listRef = useRef(null);
   const messagesRef = useRef([]);
@@ -179,6 +205,8 @@ export default function ChatScreen({ navigation, route }) {
   const detachedRef = useRef(false);
   const textRef = useRef('');
   const pendingJumpRef = useRef(null);
+  // Удалённые на этом экране (у меня или у всех)
+  const goneIdsRef = useRef(new Set());
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -212,6 +240,15 @@ export default function ChatScreen({ navigation, route }) {
   const applyPage = useCallback((data) => {
     setPeerLastReadId(data.peer_last_read_id ?? null);
     if (data.members_read) setMembersRead(data.members_read);
+    if (data.members_since) setMembersSince(data.members_since);
+    // Сведения о непрочитанном берутся один раз — с первой страницы открытия (дальше чат их сам и прочитает)
+    if (openingUnreadRef.current === undefined && data.unread !== undefined) {
+      openingUnreadRef.current = data.unread;
+      if (data.unread?.count) {
+        setUnreadMark({ firstId: data.unread.first_id, count: data.unread.count });
+        setMentionIds(data.unread.mention_ids || []);
+      }
+    }
   }, []);
 
   const loadLatest = useCallback(async (targetChatId, { replace = false } = {}) => {
@@ -221,7 +258,8 @@ export default function ChatScreen({ navigation, route }) {
     syncingRef.current = true;
     try {
       const data = await messengerAPI.getMessagesPage(targetChatId, { limit: PAGE_SIZE });
-      const page = data.messages || [];
+      // Страница могла уйти до того, как сервер принял удаление, — удалённое не возвращаем
+      const page = (data.messages || []).filter((message) => !goneIdsRef.current.has(Number(message.id)));
       // Телефон долго был без связи, и новых больше страницы: между известными и свежими сообщениями
       // была бы дыра. Показываем свежую страницу заново, а более старые догрузит прокрутка вверх
       const newestKnown = messagesRef.current.reduce(
@@ -245,6 +283,7 @@ export default function ChatScreen({ navigation, route }) {
         const kept = current.filter((message) => !isServerId(message.id) || message.id < minPageId || pageIds.has(message.id));
         return mergeMessages(kept, page);
       });
+      return data;
     } catch (error) {
       console.warn('[Chat] Не удалось обновить сообщения:', error?.message ?? error);
       if (replace) {
@@ -261,15 +300,18 @@ export default function ChatScreen({ navigation, route }) {
     }
   }, [applyPage]);
 
-  /** Окно истории вокруг сообщения: переход из поиска, к закреплённому или к цитате */
-  const loadAround = useCallback(async (targetChatId, messageId) => {
+  /**
+   * Окно истории вокруг сообщения: переход из поиска, к закреплённому или к цитате.
+   * unreadJump — открытие чата на первом непрочитанном: вверху экрана разделитель, без подсветки
+   */
+  const loadAround = useCallback(async (targetChatId, messageId, { unreadJump = false } = {}) => {
     try {
       const data = await messengerAPI.getMessagesPage(targetChatId, { limit: PAGE_SIZE, aroundId: messageId });
       applyPage(data);
       setHasMore(Boolean(data.has_more));
       setHasMoreNewer(Boolean(data.has_more_newer));
       detachedRef.current = Boolean(data.has_more_newer);
-      pendingJumpRef.current = messageId;
+      pendingJumpRef.current = { id: messageId, mode: unreadJump ? 'unread' : 'highlight' };
       setMessages((current) => mergeMessages(current.filter((message) => !isServerId(message.id)), data.messages || []));
     } catch (error) {
       Toast.show({ type: 'error', text1: 'Не удалось открыть сообщение', text2: getUserFacingError(error, 'Попробуйте ещё раз.'), position: 'top' });
@@ -305,9 +347,32 @@ export default function ChatScreen({ navigation, route }) {
         loadInfo(id);
         const draft = await getDraft(id);
         if (!cancelled && draft && !textRef.current) setText(draft);
-        if (params.focusMessageId) await loadAround(id, params.focusMessageId);
-        else await loadLatest(id, { replace: true });
+        if (params.focusMessageId) {
+          await loadAround(id, params.focusMessageId);
+        } else {
+          const page = await loadLatest(id, { replace: true });
+          if (cancelled) return;
+          // Как в Telegram: много непрочитанных — чат открывается на первом из них (разделитель вверху экрана)
+          const unread = openingUnreadRef.current;
+          if (unread?.first_id && unread.count > UNREAD_OPEN_AT_DIVIDER) {
+            scrolledAwayRef.current = true;
+            setShowScrollDown(true);
+            if ((page?.messages || []).some((message) => message.id === unread.first_id)) {
+              pendingJumpRef.current = { id: unread.first_id, mode: 'unread' };
+              setMessages((current) => [...current]);
+            } else {
+              await loadAround(id, unread.first_id, { unreadJump: true });
+            }
+          } else {
+            // Непрочитанное помещается на экране — упоминания уже перед глазами
+            setMentionIds([]);
+            holdReadRef.current = false;
+            markRead(page?.messages || []);
+          }
+        }
+        holdReadRef.current = false;
       } catch (error) {
+        holdReadRef.current = false;
         if (cancelled) return;
         setInitialLoading(false);
         Toast.show({
@@ -388,8 +453,28 @@ export default function ChatScreen({ navigation, route }) {
   }, [chatId, me.staffId]);
 
   useEffect(() => {
-    if (!scrolledAwayRef.current) markRead(messages);
+    if (!scrolledAwayRef.current && !holdReadRef.current) markRead(messages);
   }, [messages, markRead]);
+
+  // Как в Telegram: показанное на экране — прочитано, увиденное упоминание гаснет на кнопке «@»
+  // (не только когда долистал до конца). Пока чат открывается на непрочитанном — ждём прокрутки к нему.
+  const handleViewable = useCallback((viewableItems) => {
+    if (holdReadRef.current || pendingJumpRef.current) return;
+    const seen = viewableItems
+      .filter(({ item }) => item?.type === 'message' && isServerId(item.message.id))
+      .map(({ item }) => item.message.id);
+    if (!seen.length) return;
+    const newestSeen = Math.max(...seen);
+    markRead(messagesRef.current.filter((message) => isServerId(message.id) && message.id <= newestSeen));
+    setMentionIds((current) => (current.some((id) => seen.includes(id)) ? current.filter((id) => !seen.includes(id)) : current));
+  }, [markRead]);
+  const handleViewableRef = useRef(handleViewable);
+  useEffect(() => {
+    handleViewableRef.current = handleViewable;
+  }, [handleViewable]);
+  // FlatList не принимает смену этих свойств на лету — постоянные объекты
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60, minimumViewTime: 300 }).current;
+  const onViewableItemsChanged = useRef(({ viewableItems }) => handleViewableRef.current(viewableItems)).current;
 
   // --- Экран в фокусе: активный чат, уведомления этого чата, запасная синхронизация ---
 
@@ -431,6 +516,18 @@ export default function ChatScreen({ navigation, route }) {
 
   // --- Реальное время ---
 
+  // Убрать сообщения из ленты (удалены «у меня»); закреплённое пропадает и из плашки
+  const dropMessages = useCallback((messageIds) => {
+    const ids = new Set(messageIds.map(Number));
+    if (!ids.size) return;
+    ids.forEach((id) => goneIdsRef.current.add(id));
+    setMessages((current) => current.filter((message) => !ids.has(Number(message.id))));
+    setInfo((current) => (current?.pinned_messages?.some((item) => ids.has(Number(item.id)))
+      ? { ...current, pinned_messages: current.pinned_messages.filter((item) => !ids.has(Number(item.id))) }
+      : current));
+    setSelectedIds((current) => (current.some((id) => ids.has(Number(id))) ? current.filter((id) => !ids.has(Number(id))) : current));
+  }, []);
+
   useEffect(() => {
     if (!chatId) return undefined;
     return subscribeMessengerEvents((name, data) => {
@@ -443,6 +540,11 @@ export default function ChatScreen({ navigation, route }) {
         }
         if (name === 'message.created') {
           setPeerTyping(null);
+          // Упомянули меня, пока я листаю историю, — сообщение на кнопке «@»
+          const mentionsMe = (data.message.mentions || []).map(Number).includes(Number(me.staffId));
+          if (mentionsMe && (scrolledAwayRef.current || detachedRef.current)) {
+            setMentionIds((current) => (current.includes(data.message.id) ? current : [...current, data.message.id]));
+          }
           // В окне старой истории новое сообщение не вставляем — иначе была бы дыра; показываем счётчик
           if (detachedRef.current) {
             setNewWhileAway((count) => count + 1);
@@ -456,8 +558,11 @@ export default function ChatScreen({ navigation, route }) {
           : mergeMessages(current, [incoming])));
       } else if (name === 'message.deleted') {
         setMessages((current) => current.filter((message) => message.id !== data.message_id));
+      } else if (name === 'messages.hidden') {
+        // «Удалить у меня» на другом моём устройстве
+        dropMessages(data.message_ids || []);
       } else if (name === 'chat.read') {
-        if (isGroup) setMembersRead((current) => ({ ...current, [data.reader_id]: Math.max(current[data.reader_id] ?? 0, data.last_read_id ?? 0) }));
+        if (isGroup || isObject) setMembersRead((current) => ({ ...current, [data.reader_id]: Math.max(current[data.reader_id] ?? 0, data.last_read_id ?? 0) }));
         else setPeerLastReadId((current) => Math.max(current ?? 0, data.last_read_id ?? 0));
       } else if (name === 'chat.typing') {
         setPeerTyping({ name: data.name, until: Date.now() + TYPING_VISIBLE_MS });
@@ -471,7 +576,7 @@ export default function ChatScreen({ navigation, route }) {
         loadInfo(chatId);
       }
     });
-  }, [chatId, loadLatest, loadInfo, isGroup]);
+  }, [chatId, loadLatest, loadInfo, isGroup, isObject, me.staffId, dropMessages]);
 
   // «печатает…» гаснет само
   useEffect(() => {
@@ -498,14 +603,34 @@ export default function ChatScreen({ navigation, route }) {
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [chatId, loadLatest]);
 
-  const sendPayload = useCallback(async (localId, payload) => {
+  const sendPayload = useCallback(async (localId, initialPayload) => {
+    let payload = initialPayload;
+    // Прогресс на плитке отправляемого фото/видео: «Сжатие 45%», затем «Отправка 70%»
+    const setProgress = (progress) => setMessages((current) => current.map((message) => (
+      message.id === localId ? { ...message, _progress: progress } : message)));
     try {
-      const saved = await messengerAPI.addMessage(chatId, payload.text, payload.replyToId, payload.files, { mentionIds: payload.mentionIds });
+      if (!payload.prepared && needsPreparation(payload.files)) {
+        const files = await prepareMediaForUpload(payload.files, setProgress);
+        payload = { ...payload, files, prepared: true };
+        // Сжатое запоминается: повтор после ошибки не пережимает заново; плитка видео получает кадр
+        setMessages((current) => current.map((message) => (message.id === localId
+          ? { ...message, _payload: payload, media: files.map(assetToMedia) }
+          : message)));
+      }
+      const hasUpload = payload.files?.length > 0;
+      const saved = await messengerAPI.addMessage(chatId, payload.text, payload.replyToId, payload.files, {
+        mentionIds: payload.mentionIds,
+        onUploadProgress: hasUpload
+          ? (event) => event.total && setProgress({ stage: 'upload', value: event.loaded / event.total })
+          : undefined,
+      });
       setMessages((current) => mergeMessages(current.filter((message) => message.id !== localId), [saved]));
       // Звук — когда сообщение дошло до сервера, как в Telegram
       playMessageSent();
     } catch (error) {
-      setMessages((current) => current.map((message) => (message.id === localId ? { ...message, _status: 'failed' } : message)));
+      setMessages((current) => current.map((message) => (message.id === localId
+        ? { ...message, _status: 'failed', _progress: undefined, _payload: payload }
+        : message)));
       Toast.show({
         type: 'error',
         text1: 'Сообщение не отправлено',
@@ -642,25 +767,74 @@ export default function ChatScreen({ navigation, route }) {
     return () => clearTimeout(timer);
   }, [burst]);
 
-  const deleteMessage = useCallback((message) => {
-    Alert.alert('Удалить сообщение?', isObject ? 'Комментарий удалится и из табеля.' : 'Сообщение удалится у всех участников чата.', [
+  // Удаление, как в Telegram: «у меня» — любое сообщение (у остальных останется),
+  // «у всех» — только свои и при праве удалять. Возвращает сообщения, которые удалить не удалось.
+  const removeForEveryone = useCallback(async (targets) => {
+    const failed = [];
+    for (const message of targets) {
+      try {
+        await messengerAPI.removeMessage(message.id, chatId);
+      } catch (error) {
+        failed.push(message);
+      }
+    }
+    return failed;
+  }, [chatId]);
+
+  const hideForMe = useCallback(async (targets) => {
+    const failed = [];
+    for (let start = 0; start < targets.length; start += HIDE_BATCH) {
+      const batch = targets.slice(start, start + HIDE_BATCH);
+      try {
+        await messengerAPI.hideMessages(chatId, batch.map((message) => message.id));
+      } catch (error) {
+        failed.push(...batch);
+      }
+    }
+    return failed;
+  }, [chatId]);
+
+  const confirmDelete = useCallback((targets, onConfirm) => {
+    const count = targets.length;
+    if (!count) return;
+    const several = count > 1;
+    const forEveryone = can('mobile-app-can-delete-comment:site') && targets.every((message) => isMine(message));
+
+    const run = (remove) => async () => {
+      onConfirm?.();
+      dropMessages(targets.map((message) => message.id));
+      const failed = await remove(targets);
+      if (failed.length) {
+        failed.forEach((message) => goneIdsRef.current.delete(Number(message.id)));
+        setMessages((current) => mergeMessages(current, failed));
+        loadInfo(chatId);
+        Toast.show({
+          type: 'error',
+          text1: several ? `Не удалось удалить: ${failed.length}` : 'Не удалось удалить',
+          text2: 'Попробуйте ещё раз.',
+          position: 'top',
+        });
+      }
+    };
+
+    const title = several ? `Удалить ${count} ${plural(count, 'сообщение', 'сообщения', 'сообщений')}?` : 'Удалить сообщение?';
+    if (!forEveryone) {
+      Alert.alert(title, several
+        ? 'Сообщения пропадут только у вас — у остальных участников останутся.'
+        : 'Сообщение пропадёт только у вас — у остальных участников останется.', [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Удалить у меня', style: 'destructive', onPress: run(hideForMe) },
+      ]);
+      return;
+    }
+    Alert.alert(title, isObject
+      ? '«У всех» — комментарий удалится и из табеля. «У меня» — пропадёт только у вас.'
+      : '«У всех» — пропадёт у всех участников чата. «У меня» — только у вас.', [
       { text: 'Отмена', style: 'cancel' },
-      {
-        text: 'Удалить',
-        style: 'destructive',
-        onPress: async () => {
-          const before = messages;
-          setMessages((current) => current.filter((item) => item.id !== message.id));
-          try {
-            await messengerAPI.removeMessage(message.id, chatId);
-          } catch (error) {
-            setMessages(before);
-            Toast.show({ type: 'error', text1: 'Не удалось удалить', text2: getUserFacingError(error, 'Попробуйте ещё раз.'), position: 'top' });
-          }
-        },
-      },
+      { text: 'Удалить у меня', onPress: run(hideForMe) },
+      { text: 'Удалить у всех', style: 'destructive', onPress: run(removeForEveryone) },
     ]);
-  }, [messages, chatId, isObject]);
+  }, [can, isMine, isObject, chatId, dropMessages, loadInfo, hideForMe, removeForEveryone]);
 
   const togglePin = useCallback(async (message) => {
     setMenu(null);
@@ -692,7 +866,8 @@ export default function ChatScreen({ navigation, route }) {
         icon: 'copy-outline',
         onPress: async () => {
           setMenu(null);
-          await Clipboard.setStringAsync(actionMessage.message);
+          // Копируется текст без маркеров **…** — как видит его человек
+          await Clipboard.setStringAsync(plainText(actionMessage.message));
           Toast.show({ type: 'success', text1: 'Скопировано', position: 'top', visibilityTime: 1500 });
         },
       });
@@ -745,11 +920,22 @@ export default function ChatScreen({ navigation, route }) {
         },
       });
     }
-    if (mine && serverMessage && can('mobile-app-can-delete-comment:site')) {
-      list.push({ key: 'delete', label: 'Удалить', icon: 'trash-outline', destructive: true, onPress: () => closeMenuThen(() => deleteMessage(actionMessage)) });
+    if (mine && serverMessage && (isGroup || isObject)) {
+      const { read, unread } = readersOf(actionMessage, info?.members, membersRead, membersSince, me.staffId);
+      const total = read.length + unread.length;
+      // Как в Telegram — первой строкой меню
+      list.unshift({
+        key: 'readers',
+        label: read.length ? `Прочитали: ${read.length} из ${total}` : 'Ещё никто не прочитал',
+        icon: 'checkmark-done-outline',
+        onPress: () => closeMenuThen(() => setReadersMessage(actionMessage)),
+      });
+    }
+    if (serverMessage) {
+      list.push({ key: 'delete', label: 'Удалить', icon: 'trash-outline', destructive: true, onPress: () => closeMenuThen(() => confirmDelete([actionMessage])) });
     }
     return list;
-  }, [actionMessage, isMine, can, deleteMessage, togglePin, info, closeMenuThen]);
+  }, [actionMessage, isMine, can, confirmDelete, togglePin, info, closeMenuThen, isGroup, isObject, membersRead, membersSince, me.staffId]);
 
   const selecting = selectedIds.length > 0;
   const selectedMessages = useMemo(() => {
@@ -777,10 +963,6 @@ export default function ChatScreen({ navigation, route }) {
     return () => subscription.remove();
   }, [selecting, clearSelection]);
 
-  const canDeleteSelected = selecting
-    && can('mobile-app-can-delete-comment:site')
-    && selectedMessages.every((message) => isMine(message));
-
   const copySelected = useCallback(async () => {
     const value = messagesText(selectedMessages);
     if (!value) {
@@ -792,38 +974,10 @@ export default function ChatScreen({ navigation, route }) {
     Toast.show({ type: 'success', text1: 'Скопировано', position: 'top', visibilityTime: 1500 });
   }, [selectedMessages, clearSelection]);
 
-  const deleteSelected = useCallback(() => {
-    const targets = selectedMessages;
-    const count = targets.length;
-    Alert.alert(
-      count > 1 ? `Удалить ${count} ${plural(count, 'сообщение', 'сообщения', 'сообщений')}?` : 'Удалить сообщение?',
-      isObject ? 'Комментарии удалятся и из табеля.' : 'Сообщения удалятся у всех участников чата.',
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Удалить',
-          style: 'destructive',
-          onPress: async () => {
-            const ids = new Set(targets.map((message) => message.id));
-            clearSelection();
-            setMessages((current) => current.filter((message) => !ids.has(message.id)));
-            const failed = [];
-            for (const message of targets) {
-              try {
-                await messengerAPI.removeMessage(message.id, chatId);
-              } catch (error) {
-                failed.push(message);
-              }
-            }
-            if (failed.length) {
-              setMessages((current) => mergeMessages(current, failed));
-              Toast.show({ type: 'error', text1: `Не удалось удалить: ${failed.length}`, text2: 'Попробуйте ещё раз.', position: 'top' });
-            }
-          },
-        },
-      ],
-    );
-  }, [selectedMessages, chatId, isObject, clearSelection]);
+  const deleteSelected = useCallback(
+    () => confirmDelete(selectedMessages, clearSelection),
+    [confirmDelete, selectedMessages, clearSelection],
+  );
 
   // Меню по долгому нажатию: клавиатуру убираем, затем замеряем строку — меню встаёт рядом с сообщением
   const openMenu = useCallback((item, measure) => {
@@ -836,21 +990,6 @@ export default function ChatScreen({ navigation, route }) {
     }
   }, []);
 
-  const openDocument = useCallback(async (file) => {
-    try {
-      Toast.show({ type: 'info', text1: 'Загрузка файла', text2: file.name, position: 'top', visibilityTime: 1500 });
-      const downloadDir = new Directory(Paths.cache, 'downloads');
-      if (!downloadDir.exists) downloadDir.create();
-      const target = new File(downloadDir, file.name || file.uri.split('/').pop());
-      if (target.exists) target.delete();
-      const downloaded = await File.downloadFileAsync(file.uri, target);
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(downloaded.uri);
-      }
-    } catch (error) {
-      Toast.show({ type: 'error', text1: 'Не удалось открыть файл', text2: getUserFacingError(error, 'Попробуйте ещё раз.'), position: 'top' });
-    }
-  }, []);
 
   const openMedia = useCallback(async (items, index) => {
     const item = items[index];
@@ -872,13 +1011,15 @@ export default function ChatScreen({ navigation, route }) {
 
   const items = useMemo(() => {
     const result = [];
-    const othersRead = Math.max(0, ...Object.values(membersRead || {}).map((value) => Number(value) || 0));
 
     messages.forEach((message, index) => {
       const previous = messages[index - 1];
       const next = messages[index + 1];
       const newDay = !previous || !isSameDay(previous.created_at, message.created_at);
       if (newDay) result.push({ type: 'date', key: `date-${message.created_at}`, label: formatDateSeparator(message.created_at) });
+      // «Непрочитанные сообщения» — перед первым непрочитанным, пока чат открыт (как в Telegram)
+      const firstUnread = unreadMark?.firstId === message.id;
+      if (firstUnread) result.push({ type: 'unread', key: 'unread-divider' });
 
       if (message.type === 'system') {
         result.push({ type: 'system', key: `system-${message.id}`, message });
@@ -894,8 +1035,9 @@ export default function ChatScreen({ navigation, route }) {
       let status;
       if (mine) {
         if (message._status) status = message._status;
-        else if (!isServerId(message.id) || isObject) status = 'sent';
-        else if (isGroup) status = othersRead >= message.id ? 'read' : 'sent';
+        else if (!isServerId(message.id)) status = 'sent';
+        // Группа и объект: прочитал хоть кто-то, кто был в чате, когда сообщение отправили
+        else if (isGroup || isObject) status = isReadByOthers(message, membersRead, membersSince) ? 'read' : 'sent';
         else status = peerLastReadId != null && peerLastReadId >= message.id ? 'read' : 'sent';
       }
 
@@ -905,12 +1047,13 @@ export default function ChatScreen({ navigation, route }) {
         message,
         mine,
         status,
-        isFirstInGroup: !sameAuthor(previous, message) || newDay,
-        isLastInGroup: !sameAuthor(message, next),
+        // Разделитель разрывает группу сообщений одного автора
+        isFirstInGroup: !sameAuthor(previous, message) || newDay || firstUnread,
+        isLastInGroup: !sameAuthor(message, next) || unreadMark?.firstId === next?.id,
       });
     });
     return result.reverse();
-  }, [messages, isMine, peerLastReadId, membersRead, isGroup, isObject]);
+  }, [messages, isMine, peerLastReadId, membersRead, membersSince, isGroup, isObject, unreadMark]);
 
   const jumpToMessage = useCallback(async (messageId) => {
     const index = items.findIndex((item) => item.type === 'message' && item.message.id === messageId);
@@ -922,6 +1065,14 @@ export default function ChatScreen({ navigation, route }) {
     if (chatId) await loadAround(chatId, messageId);
   }, [items, chatId, loadAround]);
 
+  const jumpToNextMention = useCallback(() => {
+    const [next, ...rest] = mentionIds;
+    if (!next) return;
+    Haptics.selectionAsync().catch(() => {});
+    setMentionIds(rest);
+    jumpToMessage(next);
+  }, [mentionIds, jumpToMessage]);
+
   // Переход к сообщению из «Сведений о чате» (закреплённые): экран уже открыт, меняются только параметры
   const focusAtRef = useRef(params.focusAt);
   useEffect(() => {
@@ -931,16 +1082,23 @@ export default function ChatScreen({ navigation, route }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.focusAt]);
 
-  // После загрузки окна истории — прокрутка к нужному сообщению и подсветка
+  // После загрузки окна истории — прокрутка к нужному сообщению и подсветка;
+  // открытие на непрочитанном — разделитель у верхнего края, без подсветки
   useEffect(() => {
     const target = pendingJumpRef.current;
     if (!target) return;
-    const index = items.findIndex((item) => item.type === 'message' && item.message.id === target);
+    const unreadMode = target.mode === 'unread';
+    const index = unreadMode
+      ? items.findIndex((item) => item.type === 'unread')
+      : items.findIndex((item) => item.type === 'message' && item.message.id === target.id);
     if (index === -1) return;
     pendingJumpRef.current = null;
-    setHighlightId(target);
-    requestAnimationFrame(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false }));
-  }, [items]);
+    if (!unreadMode) setHighlightId(target.id);
+    // Лента перевёрнута: viewPosition 1 — верх экрана; отступ — под шапку
+    requestAnimationFrame(() => listRef.current?.scrollToIndex(unreadMode
+      ? { index, viewPosition: 1, viewOffset: headerHeight + 8, animated: false }
+      : { index, viewPosition: 0.5, animated: false }));
+  }, [items, headerHeight]);
 
   const renderItem = useCallback(({ item }) => {
     if (item.type === 'date') {
@@ -954,6 +1112,13 @@ export default function ChatScreen({ navigation, route }) {
       return (
         <View style={styles.dateRow}>
           <Text style={[styles.systemChip, { backgroundColor: theme.dateChip, color: theme.dateChipText }]}>{item.message.message}</Text>
+        </View>
+      );
+    }
+    if (item.type === 'unread') {
+      return (
+        <View style={[styles.unreadDivider, { backgroundColor: theme.dateChip }]}>
+          <Text style={[styles.unreadDividerText, { color: theme.dateChipText }]}>Непрочитанные сообщения</Text>
         </View>
       );
     }
@@ -1051,13 +1216,21 @@ export default function ChatScreen({ navigation, route }) {
   const pinned = info?.pinned_messages || [];
   const currentPinned = pinned.length ? pinned[pinnedIndex % pinned.length] : null;
 
+  // «Прочитали» обновляется на открытом листе, пока приходят прочтения
+  const readers = useMemo(
+    () => (readersMessage
+      ? readersOf(readersMessage, info?.members, membersRead, membersSince, me.staffId)
+      : { read: [], unread: [] }),
+    [readersMessage, info?.members, membersRead, membersSince, me.staffId],
+  );
+
   const composerContext = editing
-    ? { type: 'edit', title: 'Редактирование', text: editing.message }
+    ? { type: 'edit', title: 'Редактирование', text: plainText(editing.message) }
     : replyTo
       ? {
         type: 'reply',
         title: `Ответ: ${isMine(replyTo) ? 'себе' : fullName(replyTo.from)}`,
-        text: replyTo.message || mediaLabel(normalizeMedia(replyTo.media)[0]?.type) || (replyTo.type === 'poll' ? 'Опрос' : ''),
+        text: plainText(replyTo.message) || mediaLabel(normalizeMedia(replyTo.media)[0]?.type) || (replyTo.type === 'poll' ? 'Опрос' : ''),
       }
       : null;
 
@@ -1108,11 +1281,15 @@ export default function ChatScreen({ navigation, route }) {
                     setShowScrollDown(away);
                     if (!away) {
                       setNewWhileAway(0);
+                      // Долистал до конца — упоминания увидены
+                      setMentionIds([]);
                       markRead(messages);
                     }
                   }
                 }}
                 scrollEventThrottle={64}
+                viewabilityConfig={viewabilityConfig}
+                onViewableItemsChanged={onViewableItemsChanged}
                 onScrollToIndexFailed={(failure) => {
                   listRef.current?.scrollToOffset({ offset: failure.averageItemLength * failure.index, animated: false });
                 }}
@@ -1127,6 +1304,20 @@ export default function ChatScreen({ navigation, route }) {
                 )}
               />
             )}
+
+            {mentionIds.length ? (
+              // «@» над стрелкой вниз — к следующему сообщению, где меня упомянули (как в Telegram)
+              <Pressable
+                style={[s.scrollDown, { bottom: composerHeight + 12 + (showScrollDown || hasMoreNewer ? 52 : 0) }]}
+                onPress={jumpToNextMention}
+                accessibilityLabel={`Упоминания: ${mentionIds.length}`}
+              >
+                <Text style={s.mentionAt}>@</Text>
+                <View style={s.scrollDownBadge}>
+                  <Text style={s.scrollDownBadgeText}>{mentionIds.length}</Text>
+                </View>
+              </Pressable>
+            ) : null}
 
             {showScrollDown || hasMoreNewer ? (
               <Pressable style={[s.scrollDown, { bottom: composerHeight + 12 }]} onPress={backToLatest} accessibilityLabel="К последним сообщениям">
@@ -1145,12 +1336,10 @@ export default function ChatScreen({ navigation, route }) {
               <LinearGradient pointerEvents="none" colors={[fadeClear, fadeColor]} style={s.composerFade} />
               {selecting ? (
                 <GlassView lite style={[s.glassCard, s.selectionBar]}>
-                  {canDeleteSelected ? (
-                    <Pressable onPress={deleteSelected} hitSlop={6} style={s.selectionAction} accessibilityLabel="Удалить выбранные">
-                      <Ionicons name="trash-outline" size={24} color={theme.danger} />
-                      <Text style={[s.selectionActionText, { color: theme.danger }]}>Удалить</Text>
-                    </Pressable>
-                  ) : null}
+                  <Pressable onPress={deleteSelected} hitSlop={6} style={s.selectionAction} accessibilityLabel="Удалить выбранные">
+                    <Ionicons name="trash-outline" size={24} color={theme.danger} />
+                    <Text style={[s.selectionActionText, { color: theme.danger }]}>Удалить</Text>
+                  </Pressable>
                   <Pressable onPress={copySelected} hitSlop={6} style={s.selectionAction} accessibilityLabel="Копировать выбранные">
                     <Ionicons name="copy-outline" size={24} color={theme.accent} />
                     <Text style={s.selectionActionText}>Копировать</Text>
@@ -1327,7 +1516,7 @@ export default function ChatScreen({ navigation, route }) {
                   </Text>
                   <Text style={s.pinnedText} numberOfLines={1}>
                     {currentPinned.from_name ? `${currentPinned.from_name}: ` : ''}
-                    {currentPinned.text || mediaLabel(currentPinned.type) || 'Сообщение'}
+                    {plainText(currentPinned.text) || mediaLabel(currentPinned.type) || 'Сообщение'}
                   </Text>
                 </View>
                 <PinIcon size={18} color={theme.textMuted} style={s.pinnedIcon} />
@@ -1353,7 +1542,7 @@ export default function ChatScreen({ navigation, route }) {
                     <Text style={s.searchHitName} numberOfLines={1}>{hit.from_name}</Text>
                     <Text style={s.searchHitTime}>{formatListTime(hit.created_at)}</Text>
                   </View>
-                  <Text style={s.searchHitText} numberOfLines={2}>{hit.text}</Text>
+                  <Text style={s.searchHitText} numberOfLines={2}>{plainText(hit.text)}</Text>
                 </Pressable>
               ))}
             </GlassView>
@@ -1388,6 +1577,14 @@ export default function ChatScreen({ navigation, route }) {
           }}
         />
 
+        <ReadersSheet
+          visible={Boolean(readersMessage)}
+          message={readersMessage}
+          read={readers.read}
+          unread={readers.unread}
+          onClose={() => setReadersMessage(null)}
+        />
+
         <PollCreateModal visible={pollVisible} onClose={() => setPollVisible(false)} onCreate={createPoll} />
 
         <ImageViewing
@@ -1420,6 +1617,9 @@ const styles = StyleSheet.create({
   dateRow: { alignItems: 'center', marginVertical: 8, paddingHorizontal: 24 },
   dateChip: { fontSize: 13, fontWeight: '500', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, overflow: 'hidden' },
   systemChip: { fontSize: 13, textAlign: 'center', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, overflow: 'hidden' },
+  // Во всю ширину, как в Telegram
+  unreadDivider: { marginVertical: 8, paddingVertical: 5, alignItems: 'center' },
+  unreadDividerText: { fontSize: 13, fontWeight: '600' },
 });
 
 const screenStyles = (theme) => StyleSheet.create({
@@ -1526,4 +1726,5 @@ const screenStyles = (theme) => StyleSheet.create({
     justifyContent: 'center',
   },
   scrollDownBadgeText: { color: theme.onAccent, fontSize: 11, fontWeight: '700' },
+  mentionAt: { fontSize: 21, fontWeight: '600', color: theme.accent, marginTop: -2 },
 });

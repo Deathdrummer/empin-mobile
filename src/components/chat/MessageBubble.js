@@ -13,6 +13,8 @@ import { VoiceMessage, VoiceMessagePreview } from './VoiceMessage';
 import { DocumentCard, MediaGrid } from './MessageAttachments';
 import { ReactionBurst } from './ReactionBurst';
 import { PinIcon } from './PinIcon';
+import { RichText } from './RichText';
+import { plainText } from '../../utils/richText';
 
 const AVATAR_SLOT = 34;
 
@@ -20,12 +22,6 @@ const AVATAR_SLOT = 34;
 // в конце строки «висят» за её краем и не учитываются при переносе
 const NBSP = '\u00A0';
 const metaPadding = (pinned, isMine) => NBSP.repeat(1 + (pinned ? 5 : 0) + (isMine ? 7 : 0));
-
-// «@Самсонов А.» — упоминание в тексте
-const MENTION_PATTERN = /(@[A-Za-zА-Яа-яЁё-]+(?:\s[A-ZА-ЯЁ]\.)?)/g;
-
-/** Текст с подсвеченными упоминаниями */
-const textParts = (text) => text.split(MENTION_PATTERN).filter((part) => part !== '');
 
 // Эмодзи без регулярных выражений с \p{…}: диапазоны символов, соединители и модификаторы
 const isEmojiBase = (code) => (code >= 0x1f000 && code <= 0x1faff) || (code >= 0x2600 && code <= 0x27bf)
@@ -95,6 +91,8 @@ export const normalizeMedia = (media) => {
         name,
         type: item.type === 'video' && AUDIO_NAME.test(name || '') ? 'audio' : item.type,
         uri: item.localUri || (item.path?.startsWith('http') ? item.path : `${SERVER_URL}${item.path ?? ''}`),
+        // Кадр-превью видео (снимается на телефоне отправителя)
+        thumbnailUri: item.localThumbnail || (item.thumbnail ? (item.thumbnail.startsWith('http') ? item.thumbnail : `${SERVER_URL}${item.thumbnail}`) : undefined),
       };
     });
 };
@@ -302,25 +300,40 @@ const MessageBubbleComponent = ({
             {fullName(message.reply_to.from)}
           </Text>
           <Text style={[styles.quoteText, { color: colors.text }]} numberOfLines={2}>
-            {message.reply_to.message || mediaLabel(message.reply_to.type)}
+            {plainText(message.reply_to.message) || mediaLabel(message.reply_to.type)}
           </Text>
         </Pressable>
       ) : null}
 
       {visual.length ? (
         <View style={!mediaOnly && styles.mediaSpacing}>
-          <MediaGrid items={visual} onOpen={(index) => (still ? handlePress() : onOpenMedia(visual, index))} onLongPress={handleLongPress} />
+          <MediaGrid
+            items={visual}
+            onOpen={(index) => (still ? handlePress() : onOpenMedia(visual, index))}
+            onLongPress={handleLongPress}
+            progress={message._status === 'sending' ? message._progress : null}
+          />
           {mediaOnly ? meta : null}
         </View>
       ) : null}
 
       {audio.map((item, index) => (preview ? (
-        <VoiceMessagePreview key={`${item.uri}-${index}`} messageId={message.id} tint={theme.accent} trackColor={isMine ? theme.bubbleOutTrack : theme.separator} />
+        <VoiceMessagePreview
+          key={`${item.uri}-${index}`}
+          messageId={message.id}
+          waveform={item.waveform}
+          durationSeconds={item.duration}
+          tint={theme.accent}
+          trackColor={isMine ? theme.bubbleOutTrack : theme.separator}
+          metaColor={colors.meta}
+        />
       ) : (
         <VoiceMessage
           key={`${item.uri}-${index}`}
           uri={item.uri}
           messageId={message.id}
+          waveform={item.waveform}
+          durationSeconds={item.duration}
           tint={theme.accent}
           trackColor={isMine ? theme.bubbleOutTrack : theme.separator}
           metaColor={colors.meta}
@@ -351,15 +364,16 @@ const MessageBubbleComponent = ({
       ) : null}
 
       {text && !jumbo ? (
-        <Text style={[styles.text, { color: colors.text }]} selectable={false}>
-          {text.includes('@')
-            ? textParts(text).map((part, index) => (part.startsWith('@')
-              ? <Text key={index} style={[styles.mention, { color: colors.accent }]}>{part}</Text>
-              : part))
-            : text}
+        <RichText
+          text={text}
+          style={[styles.text, { color: colors.text }]}
+          accentColor={colors.accent}
+          codeBackground={theme.quoteBackground}
+          interactive={!still}
+        >
           {/* Невидимый хвост резервирует место под время и галочки на последней строке */}
           <Text style={styles.metaSpacer}>{`  ${metaText}${metaPadding(message.pinned, isMine)}`}</Text>
-        </Text>
+        </RichText>
       ) : null}
 
       {!mediaOnly ? meta : null}

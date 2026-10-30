@@ -27,6 +27,7 @@ import { ChatAvatar } from '../../components/chat/ChatAvatar';
 import { PinIcon } from '../../components/chat/PinIcon';
 import { formatLastSeen, fullName, mediaLabel, plural } from '../../utils/chatFormat';
 import { getUserFacingError } from '../../utils/userFacingError';
+import { plainText } from '../../utils/richText';
 import { StaffPicker } from './NewChatModal';
 
 /**
@@ -211,6 +212,23 @@ export default function ChatInfoScreen({ navigation, route }) {
             </View>
           </View>
 
+          {/* Как в Telegram: всё, чем делились в чате, — одним разделом */}
+          <View style={s.card}>
+            <Pressable
+              style={({ pressed }) => [s.row, pressed && { backgroundColor: theme.surfacePressed }]}
+              onPress={() => navigation.navigate('ChatMedia', { chatId, chatType, title })}
+            >
+              <View style={[s.rowIcon, { backgroundColor: '#3B82F6' }]}>
+                <Ionicons name="images" size={17} color="#FFFFFF" />
+              </View>
+              <View style={s.rowBody}>
+                <Text style={s.rowTitle}>Медиа, файлы и ссылки</Text>
+                <Text style={s.rowSub}>Фото, видео, документы, голосовые</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+            </Pressable>
+          </View>
+
           {(info.pinned_messages || []).length ? (
             <>
               <Text style={s.sectionTitle}>Закреплённые сообщения</Text>
@@ -224,7 +242,7 @@ export default function ChatInfoScreen({ navigation, route }) {
                     <PinIcon size={18} color={theme.accent} style={s.pinIcon} />
                     <View style={s.rowBody}>
                       {message.from_name ? <Text style={s.rowSub}>{message.from_name}</Text> : null}
-                      <Text style={s.rowTitle} numberOfLines={2}>{message.text || mediaLabel(message.type) || 'Сообщение'}</Text>
+                      <Text style={s.rowTitle} numberOfLines={2}>{plainText(message.text) || mediaLabel(message.type) || 'Сообщение'}</Text>
                     </View>
                   </Pressable>
                 ))}

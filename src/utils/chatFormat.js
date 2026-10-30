@@ -5,6 +5,10 @@ const MONTHS_GENITIVE = [
   'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
   'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
 ];
+const MONTHS_NOMINATIVE = [
+  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+];
 const WEEK_DAYS_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
 
 const pad = (value) => String(value).padStart(2, '0');
@@ -63,6 +67,12 @@ export const formatDateSeparator = (value, now = new Date()) => {
   if (ago === 1) return 'Вчера';
   const label = `${date.getDate()} ${MONTHS_GENITIVE[date.getMonth()]}`;
   return date.getFullYear() === now.getFullYear() ? label : `${label} ${date.getFullYear()}`;
+};
+
+/** Заголовок месяца в разделе «Медиа, файлы и ссылки»: «Октябрь 2026» */
+export const formatMonthTitle = (value) => {
+  const date = toDate(value);
+  return date ? `${MONTHS_NOMINATIVE[date.getMonth()]} ${date.getFullYear()}` : '';
 };
 
 export const isSameDay = (a, b) => {

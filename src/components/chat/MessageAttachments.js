@@ -1,7 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { formatFileSize } from '../../utils/chatFormat';
+import { formatDuration, formatFileSize } from '../../utils/chatFormat';
 import { CachedImage } from '../ui/CachedImage';
 
 const GRID_WIDTH = 240;
@@ -11,7 +11,7 @@ const GAP = 2;
  * Фото и видео сообщения: одно — крупно, два — рядом, больше — сетка с «+N» на последней плитке.
  * onOpen(index) открывает полноэкранный просмотр.
  */
-export const MediaGrid = ({ items, onOpen, onLongPress }) => {
+export const MediaGrid = ({ items, onOpen, onLongPress, progress }) => {
   if (!items.length) return null;
 
   const shown = items.slice(0, 4);
@@ -40,11 +40,25 @@ export const MediaGrid = ({ items, onOpen, onLongPress }) => {
           >
             {item.type === 'video' ? (
               <View style={[styles.videoTile, { width, height }]}>
+                {/* Кадр-превью, если отправитель его снял; иначе тёмная плитка */}
+                {item.thumbnailUri ? <CachedImage uri={item.thumbnailUri} style={StyleSheet.absoluteFill} /> : null}
                 <Ionicons name="play-circle" size={44} color="rgba(255,255,255,0.92)" />
+                {item.duration ? (
+                  <Text style={styles.videoDuration}>{formatDuration(item.duration)}</Text>
+                ) : null}
               </View>
             ) : (
               <CachedImage uri={item.uri} style={{ width, height }} />
             )}
+            {progress ? (
+              // Отправка: «Сжатие 45%» / «Отправка 70%» поверх плитки
+              <View style={styles.progress}>
+                <ActivityIndicator color="#FFFFFF" />
+                <Text style={styles.progressText}>
+                  {`${progress.stage === 'compress' ? 'Сжатие' : 'Отправка'} ${Math.round((progress.value || 0) * 100)}%`}
+                </Text>
+              </View>
+            ) : null}
             {isLastWithMore ? (
               <View style={styles.more}>
                 <Text style={styles.moreText}>+{hidden}</Text>
@@ -102,8 +116,14 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP, borderRadius: 14, overflow: 'hidden' },
   tile: { overflow: 'hidden', backgroundColor: '#2A2A30' },
   videoTile: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#1C1C21' },
+  videoDuration: {
+    position: 'absolute', left: 6, bottom: 6, color: '#FFFFFF', fontSize: 12, fontWeight: '600',
+    paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.5)',
+  },
   more: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
   moreText: { color: '#FFFFFF', fontSize: 24, fontWeight: '600' },
+  progress: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  progressText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' },
   document: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4, minWidth: 200, maxWidth: 260 },
   documentIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   documentBody: { flex: 1 },

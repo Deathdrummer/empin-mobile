@@ -15,6 +15,7 @@ import MessengerScreen from './src/screens/MessengerScreen';
 import ChatScreen from './src/screens/Messenger/ChatScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import ChatInfoScreen from './src/screens/Messenger/ChatInfoScreen';
+import ChatMediaScreen from './src/screens/Messenger/ChatMediaScreen';
 import { clearDrafts, DRAFTS_STORAGE_KEY } from './src/services/drafts';
 import { authAPI, setUnauthorizedCallback } from './src/services/api';
 import { disconnectPusher } from './src/services/pusher';
@@ -172,6 +173,7 @@ export default function App() {
                         {props => <ChatScreen {...props} onLogout={handleLogout} />}
                       </Stack.Screen>
                       <Stack.Screen name="ChatInfo" component={ChatInfoScreen} />
+                      <Stack.Screen name="ChatMedia" component={ChatMediaScreen} />
                     </Stack.Navigator>
                   </NavigationContainer>
                 ) : (

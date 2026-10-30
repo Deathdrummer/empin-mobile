@@ -5,6 +5,7 @@ import {
   Image,
   Linking,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,6 +19,8 @@ import Toast from 'react-native-toast-message';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { isCallAudioActive, onCallAudioChange } from '../../services/callAudioState';
 import { allowHapticsDuringRecording } from '../../services/iosVoip';
+import { buildWaveform, levelFromDb } from '../../utils/waveform';
+import { toggleFormat } from '../../utils/richText';
 import { formatDuration, fullName, shortName } from '../../utils/chatFormat';
 import { AttachmentSheet, takePhoto } from './AttachmentSheet';
 import { Avatar } from './Avatar';
@@ -32,6 +35,8 @@ const CANCEL_DISTANCE = 90;
 const LOCK_DISTANCE = 70;
 // Короче — не отправляется и ничего не показывает (случайное касание микрофона)
 const MIN_VOICE_SECONDS = 1.2;
+const RECORDING_OPTIONS = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
+const LEVEL_TICK_MS = 100;
 // Касание микрофона засчитывается и чуть левее кнопки (к полю ввода), корзины записи — правее значка
 const MIC_HIT_SLOP = { top: 10, bottom: 10, left: 12, right: 8 };
 const TRASH_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 14 };
@@ -39,6 +44,16 @@ const MAX_SUGGESTIONS = 5;
 
 // Набирается упоминание: «… @Сам» в конце текста
 const MENTION_QUERY = /(^|\s)@([^\s@]*)$/;
+
+const MONOSPACE = Platform.select({ ios: 'Menlo', default: 'monospace' });
+// Панель над полем, пока в нём выделен текст (как «Форматирование» в Telegram)
+const FORMATS = [
+  { token: '**', title: 'Ж', label: 'Жирный', style: { fontWeight: '800' } },
+  { token: '__', title: 'К', label: 'Курсив', style: { fontStyle: 'italic', fontWeight: '600' } },
+  { token: '~~', title: 'З', label: 'Зачёркнутый', style: { textDecorationLine: 'line-through', fontWeight: '600' } },
+  { token: '`', title: 'Моно', label: 'Моноширинный', style: { fontFamily: MONOSPACE, fontSize: 14 } },
+  { token: '||', title: 'Скрыть', label: 'Скрытый текст', style: { fontSize: 14 } },
+];
 
 const isVideoAsset = (asset) => asset.type === 'video' || asset.mimeType?.startsWith('video/');
 const isImageAsset = (asset) => asset.type === 'image' || asset.mimeType?.startsWith('image/');
@@ -73,7 +88,10 @@ export const Composer = ({
   const [cancelling, setCancelling] = useState(false);
   const [locked, setLocked] = useState(false);
   const [interrupted, setInterrupted] = useState(false);
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  // Замер громкости — для «волны» голосового и ореола вокруг микрофона
+  const recorder = useAudioRecorder(RECORDING_OPTIONS);
+  const levelsRef = useRef([]);
+  const level = useRef(new Animated.Value(0)).current;
   const lastTypingRef = useRef(0);
   const startedAtRef = useRef(0);
   const timerRef = useRef(null);
@@ -84,6 +102,9 @@ export const Composer = ({
   const interruptedRef = useRef(false);
   const stoppedSecondsRef = useRef(0);
   const pulse = useRef(new Animated.Value(1)).current;
+  const inputRef = useRef(null);
+  const selectionRef = useRef({ start: 0, end: 0 });
+  const [hasSelection, setHasSelection] = useState(false);
 
   const canSend = value.trim().length > 0 || attachments.length > 0 || context?.type === 'edit';
 
@@ -128,6 +149,24 @@ export const Composer = ({
     setAttachments([]);
     lastTypingRef.current = 0;
     await onSend(text, files, { mentionIds });
+  };
+
+  // --- Форматирование выделенного ---
+
+  const handleSelectionChange = ({ nativeEvent }) => {
+    selectionRef.current = nativeEvent.selection;
+    setHasSelection(nativeEvent.selection.end !== nativeEvent.selection.start);
+  };
+
+  const applyFormat = (token) => {
+    const { start, end } = selectionRef.current;
+    const next = toggleFormat(value, start, end, token);
+    if (next.text === value) return;
+    onChangeText(next.text);
+    selectionRef.current = { start: next.start, end: next.end };
+    Haptics.selectionAsync().catch(() => {});
+    // Новый текст попадает в поле на следующем кадре — выделение ставим после него, чтобы оформить ещё
+    requestAnimationFrame(() => inputRef.current?.setSelection?.(next.start, next.end));
   };
 
   // --- Упоминания ---
@@ -200,11 +239,21 @@ export const Composer = ({
     }
     recorder.record();
     startedAtRef.current = Date.now();
+    levelsRef.current = [];
     setRecordSeconds(0);
     setRecording(true);
     timerRef.current = setInterval(() => {
       setRecordSeconds((Date.now() - startedAtRef.current) / 1000);
-    }, 250);
+      // Громкость каждые 100 мс: столбики «волны» и ореол, который дышит в такт голосу
+      let current = 0;
+      try {
+        current = levelFromDb(recorder.getStatus()?.metering);
+      } catch {
+        // Статус недоступен — тишина
+      }
+      levelsRef.current.push(current);
+      Animated.timing(level, { toValue: current, duration: LEVEL_TICK_MS, useNativeDriver: true }).start();
+    }, LEVEL_TICK_MS);
     // Первый отклик — сильный: запись пошла. Быстрое касание (палец уже отпущен) — без отклика
     if (!releaseRequestedRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     return true;
@@ -243,9 +292,21 @@ export const Composer = ({
     clearInterval(timerRef.current);
     timerRef.current = null;
     const wasInterrupted = interruptedRef.current;
+    // Длительность — у самого рекордера (до остановки: после неё статус сброшен): запись на телефоне
+    // начинается чуть позже нажатия, и по часам голосовое вышло бы длиннее файла
+    let recordedMillis = 0;
+    if (!wasInterrupted) {
+      try {
+        recordedMillis = recorder.getStatus()?.durationMillis ?? 0;
+      } catch {
+        // Статус недоступен — считаем по часам
+      }
+    }
     const seconds = wasInterrupted
       ? stoppedSecondsRef.current
-      : startedAtRef.current ? (Date.now() - startedAtRef.current) / 1000 : 0;
+      : recordedMillis > 0
+        ? recordedMillis / 1000
+        : startedAtRef.current ? (Date.now() - startedAtRef.current) / 1000 : 0;
     startedAtRef.current = 0;
     interruptedRef.current = false;
     setRecording(false);
@@ -273,7 +334,13 @@ export const Composer = ({
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    onSendVoice({ uri: recorder.uri, name: 'Голосовое сообщение.m4a', mimeType: 'audio/mp4', durationSeconds: seconds });
+    onSendVoice({
+      uri: recorder.uri,
+      name: 'Голосовое сообщение.m4a',
+      mimeType: 'audio/mp4',
+      durationSeconds: seconds,
+      waveform: buildWaveform(levelsRef.current),
+    });
   };
 
   const release = async (send) => {
@@ -428,9 +495,12 @@ export const Composer = ({
             ) : null}
             <Surface style={[s.inputWrap, !floating && s.inputBackground]}>
               <TextInput
+                ref={inputRef}
                 style={s.input}
                 value={value}
                 onChangeText={handleChangeText}
+                onSelectionChange={handleSelectionChange}
+                onBlur={() => setHasSelection(false)}
                 placeholder="Сообщение"
                 placeholderTextColor={theme.textMuted}
                 multiline
@@ -466,10 +536,17 @@ export const Composer = ({
           <View
             {...panResponder.panHandlers}
             hitSlop={MIC_HIT_SLOP}
-            style={[s.action, { backgroundColor: theme.accent }, recording && s.actionRecording]}
+            style={[s.action, recording && s.actionRecording]}
             accessibilityRole="button"
             accessibilityLabel="Удерживайте, чтобы записать голосовое"
           >
+            {recording ? (
+              <Animated.View
+                pointerEvents="none"
+                style={[s.micHalo, { backgroundColor: theme.accent, transform: [{ scale: level.interpolate({ inputRange: [0, 1], outputRange: [1, 1.75] }) }] }]}
+              />
+            ) : null}
+            <View pointerEvents="none" style={[s.micCircle, { backgroundColor: theme.accent }]} />
             <Ionicons name="mic" size={recording ? 28 : 22} color={theme.onAccent} />
             {recording ? (
               <View style={[s.lockHint, { backgroundColor: theme.sheet, borderColor: theme.separator }]} pointerEvents="none">
@@ -480,6 +557,24 @@ export const Composer = ({
           </View>
         )}
       </View>
+
+      {/* Под полем, над клавиатурой: над выделенным текстом встаёт системное меню «Копировать / Вставить» */}
+      {hasSelection && !recording && value.trim() ? (
+        <Surface style={[s.formatBar, !floating && s.suggestionsPanel]}>
+          {FORMATS.map((format) => (
+            <Pressable
+              key={format.token}
+              onPress={() => applyFormat(format.token)}
+              hitSlop={4}
+              style={({ pressed }) => [s.formatButton, pressed && { backgroundColor: theme.surfacePressed }]}
+              accessibilityRole="button"
+              accessibilityLabel={format.label}
+            >
+              <Text style={[s.formatText, format.style]}>{format.title}</Text>
+            </Pressable>
+          ))}
+        </Surface>
+      ) : null}
 
       <AttachmentSheet
         visible={sheetVisible}
@@ -513,6 +608,18 @@ const styles = (theme) => StyleSheet.create({
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8 },
   suggestionName: { flex: 1, fontSize: 15, color: theme.text },
   suggestionTag: { fontSize: 13, color: theme.textMuted },
+  formatBar: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    marginHorizontal: 8,
+    marginTop: 6,
+    padding: 4,
+    gap: 2,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  formatButton: { minWidth: 44, height: 36, paddingHorizontal: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  formatText: { fontSize: 16, color: theme.text },
   cameraButton: { position: 'absolute', right: 8, bottom: 8 },
   context: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingTop: 8 },
   contextBody: { flex: 1, borderLeftWidth: 3, paddingLeft: 8 },
@@ -556,6 +663,9 @@ const styles = (theme) => StyleSheet.create({
   recordHint: { flex: 1, fontSize: 14, color: theme.textSecondary, textAlign: 'center' },
   recordDelete: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   // «Замок» над микрофоном при удержании: подсказка, что вверх — зафиксировать запись
+  // Ореол позади кнопки записи (как в Telegram) и сама кнопка — круги во всю кнопку
+  micHalo: { ...StyleSheet.absoluteFillObject, borderRadius: 999, opacity: 0.22 },
+  micCircle: { ...StyleSheet.absoluteFillObject, borderRadius: 999 },
   lockHint: {
     position: 'absolute',
     bottom: 72,

@@ -96,6 +96,7 @@ export const subscribeToCalls = async (staffId, handlers) => {
         case 'message.created':
         case 'message.updated':
         case 'message.deleted':
+        case 'messages.hidden':
         case 'chat.read':
         case 'chat.typing':
         case 'chat.pinned':

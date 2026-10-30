@@ -56,7 +56,7 @@ export const useMessengerSync = (isLoggedIn) => {
     const unsubscribe = subscribeMessengerEvents((name, data) => {
       // Открытый чат сам отмечает прочитанное и обновляет счётчик
       if (name === 'message.created' && Number(data?.chat_id) !== getActiveChatId()) refreshSoon();
-      if (name === 'message.deleted' || name === 'chat.updated') refreshSoon();
+      if (name === 'message.deleted' || name === 'messages.hidden' || name === 'chat.updated') refreshSoon();
     });
     // Уведомление о сообщении, пришедшее при открытом приложении: значок на «Чатах» обновляется,
     // даже если соединение Pusher после возврата из фона ещё не восстановилось

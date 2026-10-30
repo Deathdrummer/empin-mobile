@@ -14,6 +14,28 @@ export const SERVER_URL = API_BASE_URL.replace('/api', '');
 const MESSAGE_REFRESH_TIMEOUT_MS = 15000;
 const MESSAGE_SEND_TIMEOUT_MS = 30000;
 
+/**
+ * Сведения о вложениях тем же порядком, что media[]: «волна» и длительность голосового, размеры видео,
+ * кадр-превью видео (media_thumb[i]). Старый сервер их просто не читает.
+ */
+const appendMediaExtras = (formData, mediaArray) => {
+  mediaArray.forEach((media, index) => {
+    const meta = {};
+    if (media.waveform?.length) meta.waveform = media.waveform;
+    // У голосового — секунды; у видео из галереи/камеры expo-image-picker даёт миллисекунды
+    const duration = media.durationSeconds ?? (media.type === 'video' && media.duration ? media.duration / 1000 : undefined);
+    if (duration) meta.duration = duration;
+    if (media.width && media.height) {
+      meta.width = media.width;
+      meta.height = media.height;
+    }
+    formData.append('media_meta[]', JSON.stringify(meta));
+    if (media.thumbnailUri) {
+      formData.append(`media_thumb[${index}]`, { uri: media.thumbnailUri, name: 'thumb.jpg', type: 'image/jpeg' });
+    }
+  });
+};
+
 // Создаем экземпляр axios
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -268,6 +290,7 @@ export const timesheetAPI = {
         // Используем media[] для отправки массива
         formData.append('media[]', mediaFile);
       });
+      appendMediaExtras(formData, mediaArray);
 
       const response = await api.post('/timesheet/comment', formData, {
         headers: {
@@ -393,6 +416,15 @@ export const messengerAPI = {
   },
 
   // Поиск по сообщениям во всех чатах (или в одном chatId), группам и объектам
+  // «Медиа, файлы и ссылки» чата: kind — media | files | voice | links; страницы от новых к старым
+  getChatMedia: async (chatId, kind, beforeId, limit = 60) => {
+    const response = await api.get('/messenger/chat/media', {
+      params: { chat_id: chatId, kind, before_id: beforeId || undefined, limit },
+      timeout: MESSAGE_REFRESH_TIMEOUT_MS,
+    });
+    return response.data;
+  },
+
   search: async (query, chatId = null) => {
     const response = await api.get('/messenger/search', {
       params: { q: query, chat_id: chatId || undefined },
@@ -499,7 +531,8 @@ export const messengerAPI = {
     await api.post('/messenger/chat/typing', { chat_id: chatId });
   },
 
-  addMessage: async (chatId, message, replyToId = null, mediaArray = [], { mentionIds = [] } = {}) => {
+  // onUploadProgress({ loaded, total }) — прогресс загрузки вложений (плитка «Отправка 70%»)
+  addMessage: async (chatId, message, replyToId = null, mediaArray = [], { mentionIds = [], onUploadProgress } = {}) => {
     // Если есть медиа, используем FormData
     if (mediaArray && mediaArray.length > 0) {
       const formData = new FormData();
@@ -568,11 +601,13 @@ export const messengerAPI = {
         // Используем media[] для отправки массива
         formData.append('media[]', mediaFile);
       });
+      appendMediaExtras(formData, mediaArray);
 
       const response = await api.post('/messenger/message', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+        onUploadProgress,
       });
       return response.data;
     }
@@ -595,6 +630,12 @@ export const messengerAPI = {
 
   removeMessage: async (id, chatId = null) => {
     const response = await api.delete(`/messenger/message/${id}`, { params: { chat_id: chatId || undefined } });
+    return response.data;
+  },
+
+  // «Удалить у меня»: сообщения пропадают только у этого сотрудника (не больше 100 за запрос)
+  hideMessages: async (chatId, messageIds) => {
+    const response = await api.post('/messenger/message/hide', { chat_id: chatId, message_ids: messageIds });
     return response.data;
   },
 

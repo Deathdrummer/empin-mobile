@@ -15,6 +15,7 @@ import * as Sharing from 'expo-sharing';
 import Toast from 'react-native-toast-message';
 import { isCallAudioActive, onCallAudioChange } from '../../../services/callAudioState';
 import { allowHapticsDuringRecording } from '../../../services/iosVoip';
+import { buildWaveform, levelFromDb } from '../../../utils/waveform';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Can } from '../../../components/Can';
@@ -31,12 +32,15 @@ import { isPermissionError, showPermissionSettingsAlert } from '../../../utils/p
 import { formatDateTime, formatEditTime } from '../../../utils/dateTime';
 import { useTheme, useThemedStyles } from '../../../theme';
 import { restoreStatusBar } from '../../../utils/statusBar';
+import { RichText } from '../../../components/chat/RichText';
+import { plainText } from '../../../utils/richText';
 
 // Константы для расчета позиции меню
 const EMOJI_PICKER_HEIGHT = 60; // Высота блока реакций
 const CONTEXT_MENU_HEIGHT = 240; // Приблизительная высота контекстного меню
 // Голосовое короче — случайное касание: не отправляется (как в мессенджере)
 const MIN_VOICE_SECONDS = 1.2;
+const RECORDING_OPTIONS = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true };
 const SCREEN_PADDING = 20; // Отступ от края экрана
 const EMOJI_OFFSET = 60; // EmojiPicker находится на 60px выше комментария
 const MENU_OFFSET = 10; // CommentContextMenu находится на 10px ниже комментария
@@ -171,7 +175,9 @@ export const ChatSection = ({
   const { can } = usePermissions();
   const { showActionSheetWithOptions } = useActionSheet();
   const inputRef = React.useRef(null);
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  // Замер громкости — «волна» голосового (видна в чате объекта, как в мессенджере)
+  const audioRecorder = useAudioRecorder(RECORDING_OPTIONS);
+  const levelsRef = React.useRef([]);
   const recordingTimerRef = React.useRef(null);
   // Звонок остановил запись раньше, чем отпустили кнопку: записанное отправится при отпускании
   const interruptedByCallRef = React.useRef(false);
@@ -616,10 +622,17 @@ export const ChatSection = ({
       setIsRecording(true);
       setRecordingDuration(0);
 
-      // Запускаем таймер для отображения длительности
+      // Таймер: длительность на экране и громкость каждые 100 мс для «волны»
+      levelsRef.current = [];
       recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
-      }, 1000);
+        const seconds = Math.floor((Date.now() - recordingStartedAtRef.current) / 1000);
+        setRecordingDuration(seconds);
+        try {
+          levelsRef.current.push(levelFromDb(audioRecorder.getStatus()?.metering));
+        } catch {
+          levelsRef.current.push(0);
+        }
+      }, 100);
 
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     } catch (error) {
@@ -708,6 +721,8 @@ export const ChatSection = ({
         uri: audioUri,
         name: 'Голосовое сообщение.m4a',
         mimeType: 'audio/mp4',
+        durationSeconds: duration,
+        waveform: buildWaveform(levelsRef.current),
       };
 
       // Автоматически отправляем аудио
@@ -829,16 +844,19 @@ export const ChatSection = ({
                         {formatShortName(parentComment.from)}
                       </Text>
                       <Text style={[styles.replyQuoteText, comment.self && styles.replyQuoteTextSelf]} numberOfLines={1}>
-                        {hasText ? parentComment.message : 'Вложение'}
+                        {hasText ? plainText(parentComment.message) : 'Вложение'}
                       </Text>
                     </View>
                   );
                 })()}
                 {comment.message && comment.message.trim() && (
-                  <Text style={[
-                    styles.chatText,
-                    comment.self && styles.chatTextSelf
-                  ]}>{comment.message}</Text>
+                  // Ссылки, телефоны и форматирование — как в чатах
+                  <RichText
+                    text={comment.message}
+                    style={[styles.chatText, comment.self && styles.chatTextSelf]}
+                    accentColor={theme.accentText}
+                    codeBackground={theme.quoteBackground}
+                  />
                 )}
                 {comment.media && comment.media.length > 0 && (() => {
                   const mappedMedia = comment.media.map(m => ({

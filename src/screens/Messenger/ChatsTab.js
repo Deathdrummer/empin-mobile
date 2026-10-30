@@ -30,6 +30,7 @@ import { TypingDots } from '../../components/chat/TypingDots';
 import { PinIcon } from '../../components/chat/PinIcon';
 import { formatListTime, fullName, plural } from '../../utils/chatFormat';
 import NewChatModal from './NewChatModal';
+import { plainText } from '../../utils/richText';
 
 // Запасное обновление, если Pusher недоступен: события реального времени обновляют список сразу
 const FALLBACK_REFRESH_MS = 30000;
@@ -277,7 +278,7 @@ export default function ChatsTab() {
       return (
         <Text style={s.previewText} numberOfLines={1}>
           <Text style={{ color: theme.accent }}>Черновик: </Text>
-          {draft.replace(/\s+/g, ' ')}
+          {plainText(draft).replace(/\s+/g, ' ')}
         </Text>
       );
     }
