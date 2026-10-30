@@ -30,6 +30,7 @@ declare class EmpinVoipNativeModule extends NativeModule<EmpinVoipEvents> {
   endCallAsync(callId: string, reason: string): Promise<void>;
   startOutgoingCallAsync(callId: string, calleeId: string, calleeName: string): Promise<void>;
   reportOutgoingConnectedAsync(callId: string): Promise<void>;
+  allowHapticsDuringRecordingAsync(): Promise<void>;
 }
 
 export default requireOptionalNativeModule<EmpinVoipNativeModule>('EmpinVoip');

@@ -33,6 +33,7 @@ import { isCallAudioActive } from '../../services/callAudioState';
 import { AudioPlayerProvider } from '../../contexts/AudioPlayerContext';
 import { useCallContext } from '../../contexts/CallContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAfterModalClose } from '../../hooks/useAfterModalClose';
 import { useTheme } from '../../theme';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
@@ -138,6 +139,16 @@ export default function ChatScreen({ navigation, route }) {
   // Меню по долгому нажатию: строка ленты и её положение на экране
   const [menu, setMenu] = useState(null);
   const actionMessage = useMemo(() => (menu ? { ...menu.item.message, isMine: menu.item.mine } : null), [menu]);
+  // Пересылка, «Поделиться», подтверждение удаления — после закрытия меню (иначе на iOS зависание, см. хук).
+  // Пока меню закрывается, оно остаётся в дереве с visible=false — так iOS сообщит о закрытии.
+  const { closeThen, onDismiss: onMenuDismiss } = useAfterModalClose();
+  const closeMenuThen = useCallback((action) => closeThen(
+    () => setMenu((current) => (current ? { ...current, closing: true } : current)),
+    () => {
+      setMenu(null);
+      action();
+    },
+  ), [closeThen]);
   const menuMessageId = menu?.item.message.id ?? null;
   // Выбранные сообщения (режим выбора, как в Telegram) и что пересылаем
   const [selectedIds, setSelectedIds] = useState([]);
@@ -631,7 +642,6 @@ export default function ChatScreen({ navigation, route }) {
   }, [burst]);
 
   const deleteMessage = useCallback((message) => {
-    setMenu(null);
     Alert.alert('Удалить сообщение?', isObject ? 'Комментарий удалится и из табеля.' : 'Сообщение удалится у всех участников чата.', [
       { text: 'Отмена', style: 'cancel' },
       {
@@ -699,10 +709,7 @@ export default function ChatScreen({ navigation, route }) {
         key: 'forward',
         label: 'Переслать',
         icon: 'arrow-redo-outline',
-        onPress: () => {
-          setMenu(null);
-          setForwardIds([actionMessage.id]);
-        },
+        onPress: () => closeMenuThen(() => setForwardIds([actionMessage.id])),
       });
     }
     if (hasText || normalizeMedia(actionMessage.media).length || actionMessage.type === 'poll') {
@@ -710,10 +717,7 @@ export default function ChatScreen({ navigation, route }) {
         key: 'share',
         label: 'Поделиться',
         icon: 'share-outline',
-        onPress: () => {
-          setMenu(null);
-          shareMessages([actionMessage]);
-        },
+        onPress: () => closeMenuThen(() => shareMessages([actionMessage])),
       });
     }
     if (mine && hasText && serverMessage && actionMessage.type !== 'poll' && can('mobile-app-can-edit-comment:site')) {
@@ -741,10 +745,10 @@ export default function ChatScreen({ navigation, route }) {
       });
     }
     if (mine && serverMessage && can('mobile-app-can-delete-comment:site')) {
-      list.push({ key: 'delete', label: 'Удалить', icon: 'trash-outline', destructive: true, onPress: () => deleteMessage(actionMessage) });
+      list.push({ key: 'delete', label: 'Удалить', icon: 'trash-outline', destructive: true, onPress: () => closeMenuThen(() => deleteMessage(actionMessage)) });
     }
     return list;
-  }, [actionMessage, isMine, can, deleteMessage, togglePin, info]);
+  }, [actionMessage, isMine, can, deleteMessage, togglePin, info, closeMenuThen]);
 
   const selecting = selectedIds.length > 0;
   const selectedMessages = useMemo(() => {
@@ -1332,7 +1336,8 @@ export default function ChatScreen({ navigation, route }) {
         </GlassView>
 
         <MessageContextMenu
-          visible={Boolean(menu)}
+          visible={Boolean(menu) && !menu.closing}
+          onDismiss={onMenuDismiss}
           message={actionMessage}
           anchor={menu?.anchor}
           isMine={Boolean(menu?.item.mine)}

@@ -162,7 +162,7 @@ export function StaffPicker({ visible, title, multiple = false, excludeIds = [],
 }
 
 /** Новый чат или новая группа: выбор сотрудника, для группы — участники и название */
-export default function NewChatModal({ visible, onClose, onOpenChat, onCall, onGroupCreated }) {
+export default function NewChatModal({ visible, onClose, onOpenChat, onCall, onGroupCreated, onDismiss }) {
   const theme = useTheme();
   const [step, setStep] = useState('chat');
   const [members, setMembers] = useState([]);
@@ -194,7 +194,7 @@ export default function NewChatModal({ visible, onClose, onOpenChat, onCall, onG
   const s = styles(theme);
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose} onDismiss={onDismiss}>
       <SafeAreaView style={s.container} edges={['top', 'bottom']}>
         {step === 'chat' ? (
           <StaffPicker

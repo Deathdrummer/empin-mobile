@@ -22,6 +22,7 @@ import { messengerAPI } from '../../services/api';
 import { setTotalUnread, subscribeMessengerEvents } from '../../services/messengerStore';
 import { useDrafts } from '../../services/drafts';
 import { useCallContext } from '../../contexts/CallContext';
+import { useAfterModalClose } from '../../hooks/useAfterModalClose';
 import { useTheme } from '../../theme';
 import { useTabBarHeight } from '../../components/TabBar';
 import { ChatAvatar } from '../../components/chat/ChatAvatar';
@@ -71,6 +72,7 @@ export default function ChatsTab() {
   const [query, setQuery] = useState('');
   const [folder, setFolder] = useState('all');
   const [newChatVisible, setNewChatVisible] = useState(false);
+  const { closeThen: closeNewChatThen, onDismiss: onNewChatDismiss } = useAfterModalClose();
   const [typing, setTyping] = useState({});
   const [search, setSearch] = useState({ loading: false, chats: [], messages: [] });
   const loadingRef = useRef(false);
@@ -538,10 +540,12 @@ export default function ChatsTab() {
         onClose={() => setNewChatVisible(false)}
         onOpenChat={(person) => openChat({ chatType: 'direct', staffId: person.id, staffName: fullName(person) })}
         onGroupCreated={(group) => openChat({ chatType: 'group', chatId: group.chatId, title: group.title })}
-        onCall={(person) => {
-          setNewChatVisible(false);
-          initiateCall(person.id, fullName(person), person.avatar);
-        }}
+        // Экран звонка — после закрытия окна (на iOS иначе он не появится, см. useAfterModalClose)
+        onCall={(person) => closeNewChatThen(
+          () => setNewChatVisible(false),
+          () => initiateCall(person.id, fullName(person), person.avatar),
+        )}
+        onDismiss={onNewChatDismiss}
       />
     </View>
   );

@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import Toast from 'react-native-toast-message';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { isCallAudioActive, onCallAudioChange } from '../../services/callAudioState';
+import { allowHapticsDuringRecording } from '../../services/iosVoip';
 import { formatDuration, fullName, shortName } from '../../utils/chatFormat';
 import { AttachmentSheet, takePhoto } from './AttachmentSheet';
 import { Avatar } from './Avatar';
@@ -25,7 +26,11 @@ const TYPING_THROTTLE_MS = 3000;
 const CANCEL_DISTANCE = 90;
 // Вверх на столько — запись фиксируется, палец можно отпустить
 const LOCK_DISTANCE = 70;
-const MIN_VOICE_SECONDS = 0.8;
+// Короче — не отправляется и ничего не показывает (случайное касание микрофона)
+const MIN_VOICE_SECONDS = 1.2;
+// Касание микрофона засчитывается и чуть левее кнопки (к полю ввода), корзины записи — правее значка
+const MIC_HIT_SLOP = { top: 10, bottom: 10, left: 12, right: 8 };
+const TRASH_HIT_SLOP = { top: 10, bottom: 10, left: 10, right: 14 };
 const MAX_SUGGESTIONS = 5;
 
 // Набирается упоминание: «… @Сам» в конце текста
@@ -148,6 +153,15 @@ export const Composer = ({
     ? Promise.resolve()
     : setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {}));
 
+  // Подготовленная, но не начатая запись: stop() освобождает её (на Android — с исключением, оно ожидаемо)
+  const discardPrepared = async () => {
+    try {
+      await recorder.stop();
+    } catch {
+      // Запись не начиналась — исключение ожидаемо
+    }
+  };
+
   const startRecording = async () => {
     if (isCallAudioActive()) {
       Toast.show({ type: 'info', text1: 'Идёт звонок', text2: 'Голосовое можно записать после звонка', position: 'top' });
@@ -163,11 +177,21 @@ export const Composer = ({
       return false;
     }
 
+    // Палец уже отпущен (быстрое касание) — не записываем вовсе: без отклика, мигания и сообщений
+    if (releaseRequestedRef.current) return false;
+
     // На iOS без этого режима expo-audio отказывается записывать (RecordingDisabledException)
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
     await recorder.prepareToRecordAsync();
-    // Звонок мог начаться, пока готовили запись
-    if (isCallAudioActive()) return false;
+    // iOS глушит виброотклики во время записи — иначе отклик фиксации не почувствовать
+    await allowHapticsDuringRecording();
+    // Пока готовили запись, палец отпустили или начался звонок — подготовленную запись освобождаем:
+    // иначе следующая подготовка на Android падает («already been prepared») и голосовые не пишутся
+    if (releaseRequestedRef.current || isCallAudioActive()) {
+      await discardPrepared();
+      await restorePlaybackMode();
+      return false;
+    }
     recorder.record();
     startedAtRef.current = Date.now();
     setRecordSeconds(0);
@@ -175,7 +199,8 @@ export const Composer = ({
     timerRef.current = setInterval(() => {
       setRecordSeconds((Date.now() - startedAtRef.current) / 1000);
     }, 250);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    // Первый отклик — сильный: запись пошла. Быстрое касание (палец уже отпущен) — без отклика
+    if (!releaseRequestedRef.current) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     return true;
   };
 
@@ -236,10 +261,7 @@ export const Composer = ({
     await restorePlaybackMode();
 
     if (!send) return;
-    if (seconds < MIN_VOICE_SECONDS) {
-      Toast.show({ type: 'info', text1: 'Слишком коротко', text2: 'Удерживайте микрофон, пока говорите', position: 'top' });
-      return;
-    }
+    if (seconds < MIN_VOICE_SECONDS) return;
     if (!recorder.uri) {
       Toast.show({ type: 'error', text1: 'Не удалось записать', text2: 'Попробуйте ещё раз', position: 'top' });
       return;
@@ -257,7 +279,7 @@ export const Composer = ({
 
   // Жест создаётся один раз: актуальные функции (с текущими onSendVoice, чатом, цитатой) берём из ссылки
   const latest = useRef({});
-  latest.current = { startRecording, release, restorePlaybackMode, interruptForCall };
+  latest.current = { startRecording, release, restorePlaybackMode, interruptForCall, discardPrepared };
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
@@ -269,6 +291,8 @@ export const Composer = ({
       releaseRequestedRef.current = false;
       startingRef.current = latest.current.startRecording().catch((error) => {
         console.warn('[Voice] Не удалось начать запись:', error?.message ?? error);
+        // Рекордер мог остаться подготовленным — освобождаем, чтобы следующее нажатие сработало
+        latest.current.discardPrepared();
         latest.current.restorePlaybackMode();
         Toast.show({ type: 'error', text1: 'Не удалось начать запись', text2: 'Попробуйте ещё раз', position: 'top' });
         return false;
@@ -281,7 +305,8 @@ export const Composer = ({
         lockedRef.current = true;
         setLocked(true);
         setCancelling(false);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+        // Второй отклик — слабее первого: запись зафиксирована
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
         return;
       }
       const willCancel = gesture.dx < -CANCEL_DISTANCE;
@@ -368,8 +393,8 @@ export const Composer = ({
         {recording ? (
           <View style={s.recording}>
             {locked ? (
-              <Pressable onPress={() => release(false)} hitSlop={10} style={s.recordDelete} accessibilityLabel="Удалить запись">
-                <Ionicons name="trash-outline" size={22} color={theme.danger} />
+              <Pressable onPress={() => release(false)} hitSlop={TRASH_HIT_SLOP} style={s.recordDelete} accessibilityLabel="Удалить запись">
+                <Ionicons name="trash-outline" size={25} color={theme.danger} />
               </Pressable>
             ) : null}
             <Animated.View style={[s.recordDot, { opacity: pulse }]} />
@@ -430,6 +455,7 @@ export const Composer = ({
         ) : (
           <View
             {...panResponder.panHandlers}
+            hitSlop={MIC_HIT_SLOP}
             style={[s.action, { backgroundColor: theme.accent }, recording && s.actionRecording]}
             accessibilityRole="button"
             accessibilityLabel="Удерживайте, чтобы записать голосовое"
@@ -511,13 +537,14 @@ const styles = (theme) => StyleSheet.create({
     paddingHorizontal: 14,
   },
   input: { fontSize: 16, color: theme.text, paddingTop: 9, paddingBottom: 9, maxHeight: 128 },
-  action: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  // marginRight — круглые кнопки справа чуть дальше от края (скругление экрана iPhone)
+  action: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
   actionRecording: { width: 56, height: 56, borderRadius: 28, marginTop: -16 },
   recording: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, height: 40, paddingHorizontal: 12 },
   recordDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.danger },
   recordTime: { fontSize: 16, color: theme.text, fontVariant: ['tabular-nums'], minWidth: 44 },
   recordHint: { flex: 1, fontSize: 14, color: theme.textSecondary, textAlign: 'center' },
-  recordDelete: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  recordDelete: { width: 40, height: 40, alignItems: 'flex-start', justifyContent: 'center' },
   // «Замок» над микрофоном при удержании: подсказка, что вверх — зафиксировать запись
   lockHint: {
     position: 'absolute',

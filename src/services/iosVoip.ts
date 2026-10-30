@@ -91,6 +91,12 @@ export const startIosOutgoingCall = async (
   await EmpinVoip.startOutgoingCallAsync(String(callId), String(calleeId), calleeName || 'Собеседник').catch(() => {});
 };
 
+/** iOS глушит виброотклики, пока идёт запись с микрофона, — разрешаем (для отклика фиксации голосового) */
+export const allowHapticsDuringRecording = async (): Promise<void> => {
+  if (!isIosVoipAvailable() || !EmpinVoip) return;
+  await EmpinVoip.allowHapticsDuringRecordingAsync().catch(() => {});
+};
+
 export const reportIosOutgoingConnected = async (callId: string | number | null | undefined): Promise<void> => {
   if (!callId || !isIosVoipAvailable() || !EmpinVoip) return;
   await EmpinVoip.reportOutgoingConnectedAsync(String(callId)).catch(() => {});

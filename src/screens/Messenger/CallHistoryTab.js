@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   RefreshControl,
   SectionList,
@@ -10,10 +11,13 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { messengerAPI } from '../../services/api';
 import { useCallContext } from '../../contexts/CallContext';
+import { useAfterModalClose } from '../../hooks/useAfterModalClose';
+import { StaffPicker } from './NewChatModal';
 import { useTheme } from '../../theme';
 import { Avatar } from '../../components/chat/Avatar';
 import { useTabBarHeight } from '../../components/TabBar';
@@ -47,6 +51,14 @@ export default function CallHistoryTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [myStaffId, setMyStaffId] = useState(null);
   const [onlyMissed, setOnlyMissed] = useState(false);
+  // «Новый звонок» — сотрудник, которому ещё не звонили (как кнопка в журнале звонков Telegram)
+  const [picking, setPicking] = useState(false);
+  const { closeThen, onDismiss: onPickerDismiss } = useAfterModalClose();
+  // Экран звонка — после закрытия окна выбора: на iOS иначе он не появится (см. useAfterModalClose)
+  const callPicked = (person) => closeThen(
+    () => setPicking(false),
+    () => initiateCall(person.id, fullName(person), person.avatar),
+  );
 
   const load = useCallback(async () => {
     try {
@@ -122,6 +134,14 @@ export default function CallHistoryTab() {
     <View style={s.container}>
       <View style={s.header}>
         <Text style={s.title}>Звонки</Text>
+        <TouchableOpacity
+          onPress={() => setPicking(true)}
+          hitSlop={10}
+          style={s.headerButton}
+          accessibilityLabel="Новый звонок"
+        >
+          <MaterialCommunityIcons name="phone-plus-outline" size={25} color={theme.accent} />
+        </TouchableOpacity>
       </View>
 
       <View style={s.filters}>
@@ -164,18 +184,37 @@ export default function CallHistoryTab() {
             <View style={s.empty}>
               <Ionicons name="call-outline" size={56} color={theme.textMuted} />
               <Text style={s.emptyTitle}>{onlyMissed ? 'Пропущенных нет' : 'Звонков пока не было'}</Text>
-              {!onlyMissed ? <Text style={s.emptyText}>Позвонить можно из чата или списка сотрудников</Text> : null}
+              {!onlyMissed ? <Text style={s.emptyText}>Позвонить можно кнопкой вверху, из чата или списка сотрудников</Text> : null}
             </View>
           )}
         />
       )}
+
+      <Modal
+        visible={picking}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setPicking(false)}
+        onDismiss={onPickerDismiss}
+      >
+        <SafeAreaView style={s.container} edges={['top', 'bottom']}>
+          <StaffPicker
+            visible={picking}
+            title="Новый звонок"
+            onClose={() => setPicking(false)}
+            onPick={callPicked}
+            onCall={callPicked}
+          />
+        </SafeAreaView>
+      </Modal>
     </View>
   );
 }
 
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },
-  header: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  headerButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 30, fontWeight: '700', color: theme.text, letterSpacing: 0.2 },
   filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
   chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.surfaceAlt },

@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-const EDGE = 16;
+// Как на экране звонка: на iPhone 17 Pro Max (большое скругление углов) крестик при 16 казался прижатым к углу
+const EDGE = 24;
 
 /**
  * Шапка полноэкранного просмотра фото и видео: счётчик и кнопки с отступом от безопасной зоны —
@@ -19,7 +20,7 @@ export const ViewerHeader = ({ title, onClose, actions = [] }) => {
       style={[
         styles.root,
         {
-          paddingTop: Math.max(insets.top, 12) + 8,
+          paddingTop: Math.max(insets.top, 12) + 12,
           paddingLeft: insets.left + EDGE,
           paddingRight: insets.right + EDGE,
         },

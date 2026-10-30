@@ -3,14 +3,27 @@ import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWind
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
+import Animated, { Easing, FadeIn, FadeOut, withTiming } from 'react-native-reanimated';
 import { PinIcon } from './PinIcon';
 import { ACTION_HEIGHT, REACTIONS_HEIGHT, layoutMessageMenu } from './messageMenuLayout';
 
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '✅'];
 
-const REACTIONS_APPEAR = ZoomIn.springify().damping(15).stiffness(260);
-const MENU_APPEAR = ZoomIn.springify().damping(17).stiffness(240);
+// Появление как в Telegram: из точки у сообщения до итогового размера, с плавным замедлением — без пружины,
+// перелёта больше итогового размера и «пульсации». Точку роста задаёт transformOrigin у каждого блока.
+const growFromPoint = (duration) => () => {
+  'worklet';
+  return {
+    initialValues: { opacity: 0, transform: [{ scale: 0.05 }] },
+    animations: {
+      // Проявляется быстрее, чем растёт: рост из точки остаётся заметным
+      opacity: withTiming(1, { duration: Math.round(duration * 0.45) }),
+      transform: [{ scale: withTiming(1, { duration, easing: Easing.out(Easing.cubic) }) }],
+    },
+  };
+};
+const REACTIONS_APPEAR = growFromPoint(240);
+const MENU_APPEAR = growFromPoint(260);
 
 /**
  * Меню сообщения по долгому нажатию, как в Telegram и WhatsApp: сообщение остаётся на своём месте
@@ -21,6 +34,7 @@ const MENU_APPEAR = ZoomIn.springify().damping(17).stiffness(240);
  * anchor — положение строки сообщения на экране { y, height } (measureInWindow),
  * renderPreview — копия сообщения для показа поверх затемнения,
  * actions — [{ key, label, icon, destructive?, onPress }]; icon 'pin' / 'pin-off' — значок закрепления.
+ * onDismiss — меню закрылось полностью (iOS): после этого можно открывать новые окна.
  */
 export const MessageContextMenu = ({
   visible,
@@ -34,6 +48,7 @@ export const MessageContextMenu = ({
   renderPreview,
   onReact,
   onClose,
+  onDismiss,
 }) => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -49,9 +64,11 @@ export const MessageContextMenu = ({
     windowWidth, windowHeight, insets, anchor, actionsCount: actions.length, isMine, sideOffset,
   });
   const { previewTop, previewHeight, align } = layout;
+  // Точка роста — угол у сообщения: реакции растут вверх от него, действия — вниз
+  const side = isMine ? 'right' : 'left';
 
   return (
-    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" statusBarTranslucent onRequestClose={onClose} onDismiss={onDismiss}>
       <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={StyleSheet.absoluteFill}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Закрыть меню">
           {Platform.OS === 'ios' ? (
@@ -68,7 +85,9 @@ export const MessageContextMenu = ({
 
       <Animated.View
         entering={REACTIONS_APPEAR}
-        style={[styles.reactions, align, { top: layout.reactionsTop, maxWidth: layout.reactionsMaxWidth, backgroundColor: theme.sheet }]}
+        style={[styles.reactions, align, {
+          top: layout.reactionsTop, maxWidth: layout.reactionsMaxWidth, backgroundColor: theme.sheet, transformOrigin: `bottom ${side}`,
+        }]}
       >
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reactionsContent}>
           {QUICK_REACTIONS.map((emoji) => (
@@ -91,7 +110,7 @@ export const MessageContextMenu = ({
       <Animated.View
         entering={MENU_APPEAR}
         style={[styles.menu, align, {
-          top: layout.menuTop, width: layout.menuWidth, height: layout.menuHeight, backgroundColor: theme.sheet,
+          top: layout.menuTop, width: layout.menuWidth, height: layout.menuHeight, backgroundColor: theme.sheet, transformOrigin: `top ${side}`,
         }]}
       >
         <ScrollView scrollEnabled={layout.menuScrolls} showsVerticalScrollIndicator={layout.menuScrolls} bounces={false}>

@@ -39,10 +39,14 @@ export const takePhoto = async () => {
  * extraOptions — дополнительные пункты (например, «Опрос» в группе): [{ key, label, icon, color, onPress }].
  */
 export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOptions = [] }) => {
-  const run = async (picker) => {
+  // iOS не показывает новое окно (системное или наше, например «Опрос»), пока закрывается это
+  const closeFirst = async () => {
     onClose();
-    // iOS не показывает системное окно, пока закрывается наше
     await new Promise((resolve) => setTimeout(resolve, Platform.OS === 'ios' ? 450 : 0));
+  };
+
+  const run = async (picker) => {
+    await closeFirst();
     try {
       const assets = await picker();
       // Системные окна выбора показывают статус-бар, а приложение работает без него
@@ -102,8 +106,8 @@ export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOption
   const extra = extraOptions.map((option) => ({
     ...option,
     action: null,
-    onSelect: () => {
-      onClose();
+    onSelect: async () => {
+      await closeFirst();
       option.onPress();
     },
   }));

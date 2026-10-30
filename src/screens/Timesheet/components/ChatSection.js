@@ -14,6 +14,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import Toast from 'react-native-toast-message';
 import { isCallAudioActive, onCallAudioChange } from '../../../services/callAudioState';
+import { allowHapticsDuringRecording } from '../../../services/iosVoip';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
 import { Can } from '../../../components/Can';
@@ -34,6 +35,8 @@ import { restoreStatusBar } from '../../../utils/statusBar';
 // Константы для расчета позиции меню
 const EMOJI_PICKER_HEIGHT = 60; // Высота блока реакций
 const CONTEXT_MENU_HEIGHT = 240; // Приблизительная высота контекстного меню
+// Голосовое короче — случайное касание: не отправляется (как в мессенджере)
+const MIN_VOICE_SECONDS = 1.2;
 const SCREEN_PADDING = 20; // Отступ от края экрана
 const EMOJI_OFFSET = 60; // EmojiPicker находится на 60px выше комментария
 const MENU_OFFSET = 10; // CommentContextMenu находится на 10px ниже комментария
@@ -172,6 +175,10 @@ export const ChatSection = ({
   const recordingTimerRef = React.useRef(null);
   // Звонок остановил запись раньше, чем отпустили кнопку: записанное отправится при отпускании
   const interruptedByCallRef = React.useRef(false);
+  // Точная длительность (порог 1,2 с) и быстрое касание: кнопку отпустили раньше, чем запись успела начаться
+  const recordingStartedAtRef = React.useRef(0);
+  const recordedSecondsRef = React.useRef(0);
+  const releasedRef = React.useRef(true);
 
   // Начался звонок — запись останавливается сразу, пока звонок не занял микрофон и аудиосессию
   React.useEffect(() => onCallAudioChange((active) => {
@@ -179,6 +186,14 @@ export const ChatSection = ({
     clearInterval(recordingTimerRef.current);
     recordingTimerRef.current = null;
     interruptedByCallRef.current = true;
+    // Длительность — у рекордера: на Android запись встаёт на паузу раньше, когда звонок забирает аудиофокус
+    let recordedMillis = 0;
+    try {
+      recordedMillis = audioRecorder.getStatus()?.durationMillis ?? 0;
+    } catch {
+      // Статус недоступен — считаем по часам
+    }
+    recordedSecondsRef.current = recordedMillis > 0 ? recordedMillis / 1000 : (Date.now() - recordingStartedAtRef.current) / 1000;
     audioRecorder.stop().catch(() => {});
   }), [audioRecorder]);
 
@@ -548,6 +563,7 @@ export const ChatSection = ({
 
   // Функция начала записи аудио
   const handleStartRecording = async () => {
+    releasedRef.current = false;
     try {
       // Проверяем, что запись не идёт
       if (audioRecorder.isRecording) {
@@ -577,14 +593,26 @@ export const ChatSection = ({
         return;
       }
 
+      // Кнопку уже отпустили (быстрое касание) — не записываем: ничего не происходит
+      if (releasedRef.current) return;
+
       // Подготавливаем и запускаем запись
       // На iOS без этого режима expo-audio отказывается записывать (RecordingDisabledException)
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
-      // Звонок мог начаться, пока готовили запись
-      if (isCallAudioActive()) return;
+      await allowHapticsDuringRecording();
+      // Пока готовили запись, кнопку отпустили или начался звонок — подготовленную запись освобождаем:
+      // иначе следующая подготовка на Android падает («already been prepared») и голосовые не пишутся
+      if (releasedRef.current || isCallAudioActive()) {
+        await audioRecorder.stop().catch(() => {});
+        if (!isCallAudioActive()) {
+          await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
+        }
+        return;
+      }
       interruptedByCallRef.current = false;
       audioRecorder.record();
+      recordingStartedAtRef.current = Date.now();
       setIsRecording(true);
       setRecordingDuration(0);
 
@@ -593,9 +621,11 @@ export const ChatSection = ({
         setRecordingDuration(prev => prev + 1);
       }, 1000);
 
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
     } catch (error) {
       console.error('Failed to start recording', { error: error.message });
+      // Рекордер мог остаться подготовленным — освобождаем, чтобы следующее нажатие сработало
+      audioRecorder.stop().catch(() => {});
       setIsRecording(false);
       Toast.show({
         type: 'error',
@@ -609,9 +639,8 @@ export const ChatSection = ({
 
   // Функция остановки записи и автоотправки
   const handleStopRecording = async () => {
+    releasedRef.current = true;
     try {
-      // Сохраняем длительность для проверки перед сбросом
-      const duration = recordingDuration;
 
       // Останавливаем таймер
       if (recordingTimerRef.current) {
@@ -622,6 +651,9 @@ export const ChatSection = ({
       // Запись уже остановил звонок — отправляем записанное без повторной остановки
       const interruptedByCall = interruptedByCallRef.current;
       interruptedByCallRef.current = false;
+      const duration = interruptedByCall
+        ? recordedSecondsRef.current
+        : (Date.now() - recordingStartedAtRef.current) / 1000;
 
       // Проверяем, что запись действительно идёт
       if (!interruptedByCall && !audioRecorder.isRecording) {
@@ -652,17 +684,8 @@ export const ChatSection = ({
       setIsRecording(false);
       setRecordingDuration(0);
 
-      // Проверка минимальной длительности записи
-      if (duration < 1) {
-        Toast.show({
-          type: 'info',
-          text1: 'Слишком короткая запись',
-          text2: 'Удерживайте кнопку минимум 1 секунду',
-          position: 'top',
-          visibilityTime: 2500,
-        });
-        return;
-      }
+      // Короче 1,2 с — случайное касание: не отправляем и ничего не показываем
+      if (duration < MIN_VOICE_SECONDS) return;
 
       // Получаем URI записанного файла
       const audioUri = audioRecorder.uri;

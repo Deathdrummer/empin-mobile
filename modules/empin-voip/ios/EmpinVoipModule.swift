@@ -1,3 +1,4 @@
+import AVFoundation
 import ExpoModulesCore
 import Foundation
 
@@ -77,6 +78,12 @@ public final class EmpinVoipModule: Module {
     AsyncFunction("reportOutgoingConnectedAsync") { (callId: String) in
       EmpinVoipManager.shared.reportOutgoingConnected(callId: callId)
     }.runOnQueue(.main)
+
+    // Виброотклики во время записи голосового (фиксация записи): iOS по умолчанию глушит их,
+    // пока аудиосессия пишет с микрофона
+    AsyncFunction("allowHapticsDuringRecordingAsync") {
+      try? AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(true)
+    }
   }
 
   private static func stringKeyedPayload(_ userInfo: [AnyHashable: Any]?) -> [String: Any]? {
