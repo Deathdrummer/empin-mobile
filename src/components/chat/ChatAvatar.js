@@ -13,12 +13,22 @@ const titleInitials = (title) => {
 };
 
 /**
- * Аватар чата по типу: сотрудник (с точкой «в сети»), группа (инициалы названия), объект (значок молнии).
+ * Аватар чата по типу: сотрудник (с точкой «в сети»), группа (инициалы названия), объект (значок молнии),
+ * «Избранное» (закладка).
  * chat — элемент списка или сведения о чате: { type, chat_id, title, participant, object }.
  */
 export const ChatAvatar = ({ chat, size = 52, showOnline = true }) => {
   const theme = useTheme();
   const dot = Math.max(10, Math.round(size * 0.24));
+
+  // «Избранное» — закладка на фирменном цвете, как в Telegram
+  if (chat?.type === 'saved') {
+    return (
+      <View style={[styles.center, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.accent }]}>
+        <Ionicons name="bookmark" size={Math.round(size * 0.44)} color={theme.onAccent} />
+      </View>
+    );
+  }
 
   if (chat?.type === 'object') {
     return (

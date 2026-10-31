@@ -14,7 +14,9 @@ import { DocumentCard, MediaGrid } from './MessageAttachments';
 import { ReactionBurst } from './ReactionBurst';
 import { PinIcon } from './PinIcon';
 import { RichText } from './RichText';
-import { plainText } from '../../utils/richText';
+import { LinkPreviewCard } from './LinkPreviewCard';
+import { useLinkPreview } from '../../services/linkPreviews';
+import { firstLink, plainText } from '../../utils/richText';
 
 const AVATAR_SLOT = 34;
 
@@ -114,6 +116,8 @@ const groupReactions = (reactions, myUserId) => {
 };
 
 const StatusIcon = ({ status, color, readColor, failedColor }) => {
+  // «Избранное»: отправлено себе — галочки не нужны
+  if (status === 'none') return null;
   if (status === 'sending') return <Ionicons name="time-outline" size={13} color={color} />;
   if (status === 'failed') return <Ionicons name="alert-circle" size={14} color={failedColor} />;
   if (status === 'read') return <Ionicons name="checkmark-done" size={15} color={readColor} />;
@@ -162,6 +166,9 @@ const MessageBubbleComponent = ({
   const files = media.filter((item) => !['image', 'video', 'audio'].includes(item.type));
   const reactions = useMemo(() => groupReactions(message.reactions, myUserId), [message.reactions, myUserId]);
   const text = (message.message || '').trim();
+  // Превью первой ссылки — у текстовых сообщений без вложений, как в Telegram
+  const link = useMemo(() => (!isPoll && !media.length && text ? firstLink(text) : null), [isPoll, media.length, text]);
+  const linkPreview = useLinkPreview(link);
   const forwardedFrom = message.forwarded_from?.name;
   const jumbo = !isPoll && !message.reply_to && !forwardedFrom && !media.length ? jumboEmojiCount(text) : 0;
   const lastTapRef = useRef(0);
@@ -186,7 +193,7 @@ const MessageBubbleComponent = ({
   const metaOnChip = mediaOnly || jumbo > 0;
 
   const meta = (
-    <View style={[styles.meta, mediaOnly && styles.metaOnMedia, jumbo > 0 && styles.metaJumbo]}>
+    <View style={[styles.meta, mediaOnly && styles.metaOnMedia, jumbo > 0 && styles.metaJumbo, linkPreview && styles.metaAfterCard]}>
       {message.pinned ? <PinIcon size={12} color={metaOnChip ? '#FFFFFF' : colors.meta} /> : null}
       <Text style={[styles.metaText, { color: metaOnChip ? '#FFFFFF' : colors.meta }]}>{metaText}</Text>
       {isMine ? (
@@ -371,9 +378,19 @@ const MessageBubbleComponent = ({
           codeBackground={theme.quoteBackground}
           interactive={!still}
         >
-          {/* Невидимый хвост резервирует место под время и галочки на последней строке */}
-          <Text style={styles.metaSpacer}>{`  ${metaText}${metaPadding(message.pinned, isMine)}`}</Text>
+          {/* Невидимый хвост резервирует место под время и галочки на последней строке (с превью ссылки время — под ним) */}
+          {linkPreview ? null : <Text style={styles.metaSpacer}>{`  ${metaText}${metaPadding(message.pinned, isMine)}`}</Text>}
         </RichText>
+      ) : null}
+
+      {linkPreview ? (
+        <LinkPreviewCard
+          preview={linkPreview}
+          accentColor={colors.accent}
+          textColor={colors.text}
+          disabled={still}
+          onLongPress={handleLongPress}
+        />
       ) : null}
 
       {!mediaOnly ? meta : null}
@@ -533,6 +550,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(0,0,0,0.45)',
   },
+  // Время под превью ссылки, а не поверх картинки
+  metaAfterCard: { position: 'relative', right: 0, bottom: 0, alignSelf: 'flex-end', marginTop: 4 },
   metaJumbo: {
     position: 'relative',
     right: 0,

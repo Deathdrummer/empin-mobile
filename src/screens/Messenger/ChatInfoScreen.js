@@ -147,6 +147,7 @@ export default function ChatInfoScreen({ navigation, route }) {
 
   const subtitle = (() => {
     if (chatType === 'direct' && info?.participant) return formatLastSeen(info.participant.online, info.participant.last_seen_at);
+    if (chatType === 'saved') return 'Заметки себе и пересланное на потом';
     if (hasMembers && info) {
       const count = info.members_count || 0;
       return `${count} ${plural(count, 'участник', 'участника', 'участников')}${info.online_count ? `, ${info.online_count} в сети` : ''}`;
@@ -160,7 +161,7 @@ export default function ChatInfoScreen({ navigation, route }) {
         <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={s.back} accessibilityLabel="Назад">
           <Ionicons name="chevron-back" size={28} color={theme.accent} />
         </Pressable>
-        <Text style={s.topTitle}>{isGroup ? 'Группа' : chatType === 'object' ? 'Объект' : 'Контакт'}</Text>
+        <Text style={s.topTitle}>{isGroup ? 'Группа' : chatType === 'object' ? 'Объект' : chatType === 'saved' ? 'Избранное' : 'Контакт'}</Text>
         <View style={s.back}>{busy ? <ActivityIndicator color={theme.accent} /> : null}</View>
       </View>
 
@@ -194,23 +195,26 @@ export default function ChatInfoScreen({ navigation, route }) {
             </View>
           ) : null}
 
-          <View style={s.card}>
-            <View style={s.row}>
-              <View style={[s.rowIcon, { backgroundColor: '#8A8D94' }]}>
-                <Ionicons name="volume-mute" size={17} color="#FFFFFF" />
+          {/* В «Избранном» уведомлений нет — и выключать нечего */}
+          {chatType === 'saved' ? null : (
+            <View style={s.card}>
+              <View style={s.row}>
+                <View style={[s.rowIcon, { backgroundColor: '#8A8D94' }]}>
+                  <Ionicons name="volume-mute" size={17} color="#FFFFFF" />
+                </View>
+                <View style={s.rowBody}>
+                  <Text style={s.rowTitle}>Без звука</Text>
+                  <Text style={s.rowSub}>Без уведомлений, кроме упоминаний</Text>
+                </View>
+                <Switch
+                  value={Boolean(info.muted)}
+                  onValueChange={toggleMute}
+                  trackColor={{ true: theme.accent, false: theme.separator }}
+                  thumbColor="#FFFFFF"
+                />
               </View>
-              <View style={s.rowBody}>
-                <Text style={s.rowTitle}>Без звука</Text>
-                <Text style={s.rowSub}>Без уведомлений, кроме упоминаний</Text>
-              </View>
-              <Switch
-                value={Boolean(info.muted)}
-                onValueChange={toggleMute}
-                trackColor={{ true: theme.accent, false: theme.separator }}
-                thumbColor="#FFFFFF"
-              />
             </View>
-          </View>
+          )}
 
           {/* Как в Telegram: всё, чем делились в чате, — одним разделом */}
           <View style={s.card}>

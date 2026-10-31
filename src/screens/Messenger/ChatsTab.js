@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -61,10 +62,17 @@ export const chatRouteParams = (chat) => (chat.type === 'direct'
   ? { chatType: 'direct', chatId: chat.chat_id, staffId: chat.participant?.id, staffName: fullName(chat.participant) }
   : { chatType: chat.type, chatId: chat.chat_id, title: chat.title });
 
-export default function ChatsTab() {
+/**
+ * Список чатов. archive — экран «Архив» (как в Telegram): только архивные чаты, без поиска и вкладок,
+ * смахивание — «Вернуть».
+ */
+export default function ChatsTab({ archive: archiveMode = false }) {
   const theme = useTheme();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const tabBarHeight = useTabBarHeight();
+  // В архиве нижних вкладок нет — отступ только под полоску «домой»
+  const bottomPadding = archiveMode ? insets.bottom : tabBarHeight;
   const { initiateCall } = useCallContext();
   const drafts = useDrafts();
   const [chats, setChats] = useState([]);
@@ -169,14 +177,19 @@ export default function ChatsTab() {
     };
   }, [trimmedQuery]);
 
-  const unreadChats = useMemo(() => chats.filter((chat) => chat.unread_count > 0).length, [chats]);
+  const unreadChats = useMemo(() => chats.filter((chat) => chat.unread_count > 0 && !chat.archived).length, [chats]);
+  const archivedChats = useMemo(() => chats.filter((chat) => chat.archived), [chats]);
 
   const visibleChats = useMemo(() => chats.filter((chat) => {
+    if (archiveMode) return chat.archived;
+    if (chat.archived) return false;
     if (folder === 'all') return true;
     if (folder === 'unread') return chat.unread_count > 0 || chat.mentioned;
     if (folder === 'no-objects') return chat.type !== 'object';
+    // «Избранное» — среди личных
+    if (folder === 'direct') return chat.type === 'direct' || chat.type === 'saved';
     return chat.type === folder;
-  }), [chats, folder]);
+  }), [chats, folder, archiveMode]);
 
   const localMatches = useMemo(() => {
     if (trimmedQuery.length < 1) return [];
@@ -190,6 +203,15 @@ export default function ChatsTab() {
   const openChat = (params) => {
     setNewChatVisible(false);
     navigation.navigate('Chat', params);
+  };
+
+  const openSaved = async () => {
+    try {
+      const data = await messengerAPI.getSavedChat();
+      openChat({ chatType: 'saved', chatId: data.chat_id, title: data.title });
+    } catch (error) {
+      Toast.show({ type: 'error', text1: 'Не удалось открыть «Избранное»', text2: 'Проверьте интернет и попробуйте ещё раз', position: 'top' });
+    }
   };
 
   const openSearchChat = async (item) => {
@@ -232,6 +254,25 @@ export default function ChatsTab() {
       } else if (action === 'pin') {
         updateChat(chat.chat_id, { pinned: !chat.pinned });
         await messengerAPI.pinChat(chat.chat_id, !chat.pinned);
+      } else if (action === 'archive') {
+        const archived = !chat.archived;
+        // В архиве закрепление снимается (как на сервере)
+        updateChat(chat.chat_id, archived ? { archived, pinned: false } : { archived });
+        const data = await messengerAPI.archiveChat(chat.chat_id, archived);
+        setTotalUnread(data.total_unread);
+        if (archived) {
+          Toast.show({
+            type: 'info',
+            text1: 'Чат в архиве — нажмите, чтобы вернуть',
+            text2: chat.muted ? 'Без звука: останется в архиве' : 'Вернётся сам при новом сообщении',
+            position: 'top',
+            visibilityTime: 3500,
+            onPress: () => {
+              Toast.hide();
+              runAction({ ...chat, archived: true }, 'archive');
+            },
+          });
+        }
       }
     } catch (error) {
       Toast.show({ type: 'error', text1: 'Не получилось', text2: 'Проверьте интернет и попробуйте ещё раз', position: 'top' });
@@ -253,12 +294,51 @@ export default function ChatsTab() {
         <Ionicons name={chat.muted ? 'volume-high' : 'volume-mute'} size={22} color="#FFFFFF" />
         <Text style={s.actionText}>{chat.muted ? 'Со звуком' : 'Без звука'}</Text>
       </Pressable>
-      <Pressable style={[s.action, { backgroundColor: theme.accent }]} onPress={() => runAction(chat, 'pin')}>
-        <PinIcon variant={chat.pinned ? 'off' : 'pin'} size={24} color="#FFFFFF" />
-        <Text style={s.actionText}>{chat.pinned ? 'Открепить' : 'Закрепить'}</Text>
+      {archiveMode ? null : (
+        <Pressable style={[s.action, { backgroundColor: theme.accent }]} onPress={() => runAction(chat, 'pin')}>
+          <PinIcon variant={chat.pinned ? 'off' : 'pin'} size={24} color="#FFFFFF" />
+          <Text style={s.actionText}>{chat.pinned ? 'Открепить' : 'Закрепить'}</Text>
+        </Pressable>
+      )}
+      <Pressable style={[s.action, { backgroundColor: '#6E7681' }]} onPress={() => runAction(chat, 'archive')}>
+        <Ionicons name={chat.archived ? 'arrow-undo' : 'archive'} size={22} color="#FFFFFF" />
+        <Text style={s.actionText}>{chat.archived ? 'Вернуть' : 'В архив'}</Text>
       </Pressable>
     </View>
   );
+
+  // Строка «Архив» над списком, как в Telegram: кто там и сколько непрочитанных чатов
+  const renderArchiveRow = () => {
+    if (archiveMode || folder !== 'all' || !archivedChats.length) return null;
+    const unreadArchived = archivedChats.filter((chat) => chat.unread_count > 0).length;
+    return (
+      <Pressable
+        style={({ pressed }) => [s.row, pressed && { backgroundColor: theme.surfacePressed }]}
+        onPress={() => navigation.navigate('ChatArchive')}
+        accessibilityRole="button"
+        accessibilityLabel={`Архив, чатов: ${archivedChats.length}`}
+      >
+        <View style={[s.archiveIcon, { backgroundColor: theme.textMuted }]}>
+          <Ionicons name="archive" size={26} color="#FFFFFF" />
+        </View>
+        <View style={s.rowBody}>
+          <View style={s.rowTop}>
+            <Text style={s.name} numberOfLines={1}>Архив</Text>
+          </View>
+          <View style={s.rowBottom}>
+            <View style={s.previewBox}>
+              <Text style={s.previewText} numberOfLines={1}>{archivedChats.map((chat) => chat.title).join(', ')}</Text>
+            </View>
+            {unreadArchived ? (
+              <View style={[s.badge, { backgroundColor: theme.textMuted }]}>
+                <Text style={s.badgeText}>{unreadArchived}</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
 
   const renderPreview = (chat) => {
     const typingNow = typing[chat.chat_id];
@@ -289,13 +369,14 @@ export default function ChatsTab() {
     }
 
     const typeIcon = last.type !== 'text' && last.type !== 'system' ? MESSAGE_TYPE_ICONS[last.type] : null;
-    const author = chat.type !== 'direct' && last.type !== 'system'
+    const author = (chat.type === 'group' || chat.type === 'object') && last.type !== 'system'
       ? (last.self ? 'Вы' : last.from_name)
       : null;
 
     return (
       <View style={s.preview}>
-        {last.self && chat.type !== 'object' && last.type !== 'system' ? (
+        {/* В «Избранном» читать некому — без галочек */}
+        {last.self && chat.type !== 'saved' && last.type !== 'system' ? (
           <Ionicons
             name={last.read ? 'checkmark-done' : 'checkmark'}
             size={16}
@@ -435,6 +516,45 @@ export default function ChatsTab() {
     'no-objects': 'Начните первый чат',
   }[folder];
 
+  if (archiveMode) {
+    return (
+      <View style={s.container}>
+        <View style={s.archiveHeader}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={s.headerButton} accessibilityLabel="Назад">
+            <Ionicons name="chevron-back" size={28} color={theme.accent} />
+          </Pressable>
+          <Text style={s.archiveTitle}>Архив</Text>
+          <View style={s.headerButton} />
+        </View>
+        {loading ? (
+          <ActivityIndicator style={s.loader} size="large" color={theme.accent} />
+        ) : (
+          <FlatList
+            data={visibleChats}
+            keyExtractor={(item) => String(item.chat_id)}
+            renderItem={renderChat}
+            contentContainerStyle={[visibleChats.length ? null : s.emptyContainer, { paddingBottom: bottomPadding + 12 }]}
+            onScrollBeginDrag={() => openRowRef.current?.close()}
+            ListEmptyComponent={(
+              <View style={s.empty}>
+                <Ionicons name="archive-outline" size={56} color={theme.textMuted} />
+                <Text style={s.emptyTitle}>В архиве пусто</Text>
+                <Text style={s.emptyText}>
+                  Смахните чат влево в списке и нажмите «В архив». Чат со звуком вернётся, когда в нём напишут.
+                </Text>
+              </View>
+            )}
+            ListFooterComponent={visibleChats.length ? (
+              <Text style={s.footer}>
+                {`${visibleChats.length} ${plural(visibleChats.length, 'чат', 'чата', 'чатов')} в архиве · смахните влево — вернуть в список`}
+              </Text>
+            ) : null}
+          />
+        )}
+      </View>
+    );
+  }
+
   return (
     <View style={s.container}>
       <View style={s.header}>
@@ -493,7 +613,8 @@ export default function ChatsTab() {
               keyExtractor={(item) => String(item.chat_id)}
               renderItem={renderChat}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={[visibleChats.length ? null : s.emptyContainer, { paddingBottom: tabBarHeight + 12 }]}
+              contentContainerStyle={[visibleChats.length ? null : s.emptyContainer, { paddingBottom: bottomPadding + 12 }]}
+              ListHeaderComponent={renderArchiveRow()}
               onScrollBeginDrag={() => openRowRef.current?.close()}
               refreshControl={(
                 <RefreshControl
@@ -528,7 +649,7 @@ export default function ChatsTab() {
               )}
               ListFooterComponent={visibleChats.length ? (
                 <Text style={s.footer}>
-                  {`${visibleChats.length} ${plural(visibleChats.length, 'чат', 'чата', 'чатов')} · смахните влево — закрепить или без звука`}
+                  {`${visibleChats.length} ${plural(visibleChats.length, 'чат', 'чата', 'чатов')} · смахните влево — закрепить, без звука или в архив`}
                 </Text>
               ) : null}
             />
@@ -540,6 +661,7 @@ export default function ChatsTab() {
         visible={newChatVisible}
         onClose={() => setNewChatVisible(false)}
         onOpenChat={(person) => openChat({ chatType: 'direct', staffId: person.id, staffName: fullName(person) })}
+        onOpenSaved={openSaved}
         onGroupCreated={(group) => openChat({ chatType: 'group', chatId: group.chatId, title: group.title })}
         // Экран звонка — после закрытия окна (на iOS иначе он не появится, см. useAfterModalClose)
         onCall={(person) => closeNewChatThen(
@@ -563,6 +685,9 @@ const styles = (theme) => StyleSheet.create({
     paddingBottom: 8,
   },
   title: { fontSize: 30, fontWeight: '700', color: theme.text, letterSpacing: 0.2 },
+  archiveHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 6 },
+  archiveTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: theme.text },
+  archiveIcon: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
   headerButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   search: {
     flexDirection: 'row',

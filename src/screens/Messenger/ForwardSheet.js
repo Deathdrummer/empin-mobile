@@ -25,7 +25,7 @@ import { getUserFacingError } from '../../utils/userFacingError';
 
 /**
  * «Переслать»: выбор чатов и сотрудников (можно несколько), как в Telegram.
- * Сверху — личные чаты и группы по последней активности, ниже — остальные сотрудники.
+ * Сверху — «Избранное» (себе), затем личные чаты и группы по последней активности, ниже — остальные сотрудники.
  * В чаты объектов не пересылается: там сообщения становятся комментариями табеля.
  */
 export default function ForwardSheet({ visible, sourceChatId, messageIds, onClose, onForwarded }) {
@@ -78,9 +78,12 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
   const items = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const matches = (value) => !needle || String(value || '').toLowerCase().includes(needle);
-    const chatItems = chats
-      .filter((chat) => matches(chat.title))
-      .map((chat) => ({ key: `chat-${chat.chat_id}`, kind: 'chat', chat }));
+    // «Избранное» есть всегда, даже если в нём ещё ничего нет (тогда чат создаётся при пересылке)
+    const savedChat = chats.find((chat) => chat.type === 'saved') || null;
+    const savedItems = matches('Избранное') ? [{ key: 'saved', kind: 'saved', chat: savedChat }] : [];
+    const chatItems = [...savedItems, ...chats
+      .filter((chat) => chat.type !== 'saved' && matches(chat.title))
+      .map((chat) => ({ key: `chat-${chat.chat_id}`, kind: 'chat', chat }))];
     // Сотрудники без чата — только при поиске, иначе список слишком длинный
     const staffItems = needle
       ? staff
@@ -105,8 +108,11 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
     if (!selected.length || sending) return;
     setSending(true);
     try {
+      const chatIds = selected.filter((item) => item.kind === 'chat').map((item) => item.chat.chat_id);
+      const saved = selected.find((item) => item.kind === 'saved');
+      if (saved) chatIds.unshift(saved.chat?.chat_id ?? (await messengerAPI.getSavedChat()).chat_id);
       const data = await messengerAPI.forward(sourceChatId, messageIds, {
-        chatIds: selected.filter((item) => item.kind === 'chat').map((item) => item.chat.chat_id),
+        chatIds,
         staffIds: selected.filter((item) => item.kind === 'staff').map((item) => item.person.id),
         clientKey,
       });
@@ -114,7 +120,9 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
       const count = data?.chat_ids?.length ?? selected.length;
       Toast.show({
         type: 'success',
-        text1: count > 1 ? `Переслано в ${count} ${plural(count, 'чат', 'чата', 'чатов')}` : 'Переслано',
+        text1: saved && selected.length === 1
+          ? 'Сохранено в «Избранном»'
+          : count > 1 ? `Переслано в ${count} ${plural(count, 'чат', 'чата', 'чатов')}` : 'Переслано',
         position: 'top',
         visibilityTime: 1800,
       });
@@ -132,10 +140,12 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
   const renderItem = ({ item }) => {
     if (item.kind === 'title') return <Text style={s.sectionTitle}>Сотрудники</Text>;
     const checked = isSelected(item);
-    const title = item.kind === 'chat' ? item.chat.title : fullName(item.person);
-    const sub = item.kind === 'chat' && item.chat.type === 'group'
-      ? `${item.chat.members_count || 0} ${plural(item.chat.members_count || 0, 'участник', 'участника', 'участников')}`
-      : null;
+    const title = itemTitle(item);
+    const sub = item.kind === 'saved'
+      ? 'Себе — заметки и пересланное на потом'
+      : item.kind === 'chat' && item.chat.type === 'group'
+        ? `${item.chat.members_count || 0} ${plural(item.chat.members_count || 0, 'участник', 'участника', 'участников')}`
+        : null;
     return (
       <Pressable
         style={({ pressed }) => [s.row, pressed && { backgroundColor: theme.surfacePressed }]}
@@ -144,8 +154,8 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
         accessibilityState={{ checked }}
         accessibilityLabel={title}
       >
-        {item.kind === 'chat'
-          ? <ChatAvatar chat={item.chat} size={44} showOnline={false} />
+        {item.kind === 'chat' || item.kind === 'saved'
+          ? <ChatAvatar chat={item.kind === 'saved' ? { type: 'saved' } : item.chat} size={44} showOnline={false} />
           : <Avatar person={item.person} id={item.person.id} size={44} />}
         <View style={s.rowBody}>
           <View style={s.rowText}>
@@ -206,7 +216,7 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
             {selected.length ? (
               <View style={[s.footer, { borderTopColor: theme.separator }]}>
                 <Text style={s.footerText} numberOfLines={1}>
-                  {selected.map((item) => (item.kind === 'chat' ? item.chat.title : fullName(item.person))).join(', ')}
+                  {selected.map(itemTitle).join(', ')}
                 </Text>
                 <Pressable
                   onPress={send}
@@ -224,6 +234,11 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
     </Modal>
   );
 }
+
+const itemTitle = (item) => {
+  if (item.kind === 'saved') return 'Избранное';
+  return item.kind === 'chat' ? item.chat.title : fullName(item.person);
+};
 
 const styles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.background },

@@ -3,7 +3,10 @@ import { AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { StackActions } from '@react-navigation/native';
 import { messengerAPI } from '../services/api';
+import { flushReplies, handleMessageAction } from '../services/messageActions';
+import { ensureMessageCategory } from '../services/messagePush';
 import { getActiveChatId, setTotalUnread, subscribeMessengerEvents } from '../services/messengerStore';
+import { isMessageAction } from '../utils/notificationActions';
 import { navigationRef } from '../services/navigationRef';
 import { setOpenChatsOnStart } from '../services/startScreen';
 
@@ -42,6 +45,10 @@ export const useMessengerSync = (isLoggedIn) => {
 
     refresh();
     ping();
+    // Кнопки «Ответить» / «Прочитано» у уведомлений (iOS берёт их по категории из push) и ответы из
+    // уведомлений, которые не ушли (не было связи, iOS усыпил приложение до отправки)
+    ensureMessageCategory();
+    flushReplies().catch(() => {});
     // Настройка первого экрана могла поменяться на другом устройстве — копия для следующего запуска
     messengerAPI.getSettings()
       .then((settings) => setOpenChatsOnStart(Boolean(settings?.open_chats_on_start)))
@@ -51,6 +58,7 @@ export const useMessengerSync = (isLoggedIn) => {
       if (state === 'active') {
         refresh();
         ping();
+        flushReplies().catch(() => {});
       }
     });
     const unsubscribe = subscribeMessengerEvents((name, data) => {
@@ -77,6 +85,12 @@ export const useMessengerSync = (isLoggedIn) => {
     if (!isLoggedIn) return undefined;
 
     const openFromResponse = (response) => {
+      // «Ответить» / «Прочитано» — без открытия чата (и при запуске приложения: последним ответом
+      // может оказаться такое нажатие — повторно оно не выполнится)
+      if (isMessageAction(response)) {
+        handleMessageAction(response).catch(() => {});
+        return;
+      }
       const content = response?.notification?.request?.content;
       const data = content?.data;
       if (data?.type !== 'message' || (!data.sender_id && !data.chat_id)) return;

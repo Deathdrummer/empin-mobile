@@ -531,8 +531,9 @@ export const messengerAPI = {
     await api.post('/messenger/chat/typing', { chat_id: chatId });
   },
 
-  // onUploadProgress({ loaded, total }) — прогресс загрузки вложений (плитка «Отправка 70%»)
-  addMessage: async (chatId, message, replyToId = null, mediaArray = [], { mentionIds = [], onUploadProgress } = {}) => {
+  // onUploadProgress({ loaded, total }) — прогресс загрузки вложений (плитка «Отправка 70%»);
+  // clientKey — ключ попытки: повтор с тем же ключом сервер не отправит второй раз (ответ из уведомления)
+  addMessage: async (chatId, message, replyToId = null, mediaArray = [], { mentionIds = [], onUploadProgress, clientKey } = {}) => {
     // Если есть медиа, используем FormData
     if (mediaArray && mediaArray.length > 0) {
       const formData = new FormData();
@@ -618,6 +619,7 @@ export const messengerAPI = {
       message,
       reply_to_id: replyToId,
       mention_ids: mentionIds.length ? mentionIds : undefined,
+      client_key: clientKey || undefined,
     }, { timeout: MESSAGE_SEND_TIMEOUT_MS });
     return response.data;
   },
@@ -630,6 +632,24 @@ export const messengerAPI = {
 
   removeMessage: async (id, chatId = null) => {
     const response = await api.delete(`/messenger/message/${id}`, { params: { chat_id: chatId || undefined } });
+    return response.data;
+  },
+
+  // Архив: чат убран из основного списка (со звуком — вернётся при новом сообщении)
+  archiveChat: async (chatId, archived) => {
+    const response = await api.post('/messenger/chat/archive', { chat_id: chatId, archived });
+    return response.data;
+  },
+
+  // Превью ссылки (сайт, заголовок, описание, картинка); null — показать нечего
+  getLinkPreview: async (url) => {
+    const response = await api.get('/messenger/link-preview', { params: { url }, timeout: MESSAGE_REFRESH_TIMEOUT_MS });
+    return response.data?.preview ?? null;
+  },
+
+  // «Избранное» — чат с самим собой; создаётся при первом открытии
+  getSavedChat: async () => {
+    const response = await api.post('/messenger/chat/saved');
     return response.data;
   },
 
@@ -693,6 +713,9 @@ export const messengerAPI = {
       platform,
       token_type: 'expo',
       installation_id: installationId,
+      // Android сам показывает уведомление о сообщении (с кнопками «Ответить» / «Прочитано»): push — только
+      // данными, иначе Firebase покажет ещё и своё, второе (см. messagePush)
+      data_only: platform === 'android',
     });
     return response.data;
   },

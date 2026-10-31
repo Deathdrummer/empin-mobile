@@ -162,7 +162,7 @@ export function StaffPicker({ visible, title, multiple = false, excludeIds = [],
 }
 
 /** Новый чат или новая группа: выбор сотрудника, для группы — участники и название */
-export default function NewChatModal({ visible, onClose, onOpenChat, onCall, onGroupCreated, onDismiss }) {
+export default function NewChatModal({ visible, onClose, onOpenChat, onOpenSaved, onCall, onGroupCreated, onDismiss }) {
   const theme = useTheme();
   const [step, setStep] = useState('chat');
   const [members, setMembers] = useState([]);
@@ -206,17 +206,33 @@ export default function NewChatModal({ visible, onClose, onOpenChat, onCall, onG
               onPick={onOpenChat}
               onCall={onCall}
               header={(
-                <Pressable style={({ pressed }) => [s.row, s.newGroup, pressed && { backgroundColor: theme.surfacePressed }]} onPress={() => setStep('members')}>
-                  <View style={[s.newGroupIcon, { backgroundColor: theme.accentSoft }]}>
-                    <Ionicons name="people" size={22} color={theme.accent} />
-                  </View>
-                  <View style={s.rowBody}>
-                    <View style={s.rowText}>
-                      <Text style={[s.name, { color: theme.accentText }]}>Новая группа</Text>
-                      <Text style={s.sub}>Бригада, объект или общий чат</Text>
+                <>
+                  <Pressable style={({ pressed }) => [s.row, s.newGroup, pressed && { backgroundColor: theme.surfacePressed }]} onPress={() => setStep('members')}>
+                    <View style={[s.newGroupIcon, { backgroundColor: theme.accentSoft }]}>
+                      <Ionicons name="people" size={22} color={theme.accent} />
                     </View>
-                  </View>
-                </Pressable>
+                    <View style={s.rowBody}>
+                      <View style={s.rowText}>
+                        <Text style={[s.name, { color: theme.accentText }]}>Новая группа</Text>
+                        <Text style={s.sub}>Бригада, объект или общий чат</Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                  {/* Чат с самим собой: заметки, пересланное на потом (как «Избранное» в Telegram) */}
+                  {onOpenSaved ? (
+                    <Pressable style={({ pressed }) => [s.row, s.newGroup, pressed && { backgroundColor: theme.surfacePressed }]} onPress={onOpenSaved}>
+                      <View style={[s.newGroupIcon, { backgroundColor: theme.accent }]}>
+                        <Ionicons name="bookmark" size={20} color={theme.onAccent} />
+                      </View>
+                      <View style={s.rowBody}>
+                        <View style={s.rowText}>
+                          <Text style={[s.name, { color: theme.accentText }]}>Избранное</Text>
+                          <Text style={s.sub}>Заметки себе и пересланное на потом</Text>
+                        </View>
+                      </View>
+                    </Pressable>
+                  ) : null}
+                </>
               )}
             />
           ) : null}

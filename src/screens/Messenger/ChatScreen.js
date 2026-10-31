@@ -136,6 +136,8 @@ export default function ChatScreen({ navigation, route }) {
   const isDirect = chatType === 'direct';
   const isGroup = chatType === 'group';
   const isObject = chatType === 'object';
+  // «Избранное» — чат с самим собой
+  const isSaved = chatType === 'saved';
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { initiateCall } = useCallContext();
@@ -1040,6 +1042,7 @@ export default function ChatScreen({ navigation, route }) {
       if (mine) {
         if (message._status) status = message._status;
         else if (!isServerId(message.id)) status = 'sent';
+        else if (isSaved) status = 'none';
         // Группа и объект: прочитал хоть кто-то, кто был в чате, когда сообщение отправили
         else if (isGroup || isObject) status = isReadByOthers(message, membersRead, membersJoined) ? 'read' : 'sent';
         else status = peerLastReadId != null && peerLastReadId >= message.id ? 'read' : 'sent';
@@ -1057,7 +1060,7 @@ export default function ChatScreen({ navigation, route }) {
       });
     });
     return result.reverse();
-  }, [messages, isMine, peerLastReadId, membersRead, membersJoined, isGroup, isObject, unreadMark]);
+  }, [messages, isMine, peerLastReadId, membersRead, membersJoined, isGroup, isObject, isSaved, unreadMark]);
 
   const jumpToMessage = useCallback(async (messageId) => {
     const index = items.findIndex((item) => item.type === 'message' && item.message.id === messageId);
@@ -1309,15 +1312,18 @@ export default function ChatScreen({ navigation, route }) {
                 }}
                 ListHeaderComponent={loadingNewer ? <ActivityIndicator style={s.olderLoader} color={theme.accent} /> : null}
                 ListFooterComponent={loadingOlder ? <ActivityIndicator style={s.olderLoader} color={theme.accent} /> : null}
-                ListEmptyComponent={(
-                  <View style={s.empty}>
-                    <Text style={[s.emptyText, { backgroundColor: theme.dateChip, color: theme.dateChipText }]}>
-                      {isObject ? 'Комментариев к объекту пока нет' : 'Сообщений пока нет. Напишите первым'}
-                    </Text>
-                  </View>
-                )}
               />
             )}
+
+            {/* Пустой чат — поверх ленты, а не внутри: перевёрнутая лента переворачивает и заглушку
+                (на Android — зеркально, текст читался справа налево) */}
+            {!initialLoading && !items.length ? (
+              <View pointerEvents="none" style={[s.empty, { paddingTop: headerHeight, paddingBottom: composerHeight + LIST_GAP }]}>
+                <Text style={[s.emptyText, { backgroundColor: theme.dateChip, color: theme.dateChipText }]}>
+                  {isObject ? 'Комментариев к объекту пока нет' : isSaved ? 'Пишите себе заметки и пересылайте сюда то, что пригодится позже' : 'Сообщений пока нет. Напишите первым'}
+                </Text>
+              </View>
+            ) : null}
 
             {mentionIds.length ? (
               // «@» над стрелкой вниз — к следующему сообщению, где меня упомянули (как в Telegram)
@@ -1394,7 +1400,7 @@ export default function ChatScreen({ navigation, route }) {
                     setEditing(null);
                     setReplyTo(null);
                   }}
-                  onTyping={notifyTyping}
+                  onTyping={isSaved ? undefined : notifyTyping}
                   mentionCandidates={mentionCandidates}
                   onCreatePoll={isGroup ? () => setPollVisible(true) : null}
                   floating
@@ -1710,7 +1716,7 @@ const screenStyles = (theme) => StyleSheet.create({
   readOnly: { textAlign: 'center', color: theme.textSecondary, fontSize: 14, paddingHorizontal: 20, paddingVertical: 12 },
   loader: { alignSelf: 'center' },
   olderLoader: { marginVertical: 12 },
-  empty: { alignItems: 'center', paddingVertical: 40, transform: [{ scaleY: -1 }] },
+  empty: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   emptyText: { fontSize: 14, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, overflow: 'hidden', textAlign: 'center' },
   scrollDown: {
     position: 'absolute',

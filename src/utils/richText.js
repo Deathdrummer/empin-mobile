@@ -16,7 +16,8 @@ const MARKERS = [
 
 // Домены без «http» — только с привычными окончаниями, чтобы «т.к.» или «1.5» не стали ссылками
 const TLD = '(?:ru|рф|su|com|net|org|info|biz|io|me|pro|online|site|store|app|dev|by|kz|ua|uz|de|eu|us|uk)';
-const URL_SOURCE = `(?:https?:\\/\\/[^\\s<>"«»]+|(?:www\\.)[^\\s<>"«»]+|(?<![@\\w.-])(?:[a-zа-яё0-9-]+\\.)+${TLD}(?![\\wа-яё-])(?:\\/[^\\s<>"«»]*)?)`;
+// Границы адреса без схемы — буквы и цифры (не «_»): __site.ru__ — курсивная ссылка
+const URL_SOURCE = `(?:https?:\\/\\/[^\\s<>"«»]+|(?:www\\.)[^\\s<>"«»]+|(?<![@\\p{L}\\p{N}.-])(?:[a-zа-яё0-9-]+\\.)+${TLD}(?![\\p{L}\\p{N}-])(?:\\/[^\\s<>"«»]*)?)`;
 const EMAIL_SOURCE = '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}';
 // Российские номера (+7 / 8 и 10 цифр) и международные (+ и 10–14 цифр) с пробелами, скобками, дефисами
 const PHONE_SOURCE = '(?<![\\d+])(?:\\+7|8)[\\s(-]*\\d{3}[\\s)-]*\\d{3}[\\s-]*\\d{2}[\\s-]*\\d{2}(?!\\d)|(?<![\\d+])\\+[1-9](?:[\\s()-]*\\d){9,13}(?!\\d)';
@@ -25,10 +26,16 @@ const MENTION_SOURCE = '(?<![\\w.])@[A-Za-zА-Яа-яЁё-]+(?:\\s[A-ZА-ЯЁ]\\
 
 const ENTITY_PATTERN = new RegExp(`(${EMAIL_SOURCE})|(${URL_SOURCE})|(${PHONE_SOURCE})|(${MENTION_SOURCE})`, 'giu');
 
-// Знаки препинания в конце ссылки обычно принадлежат предложению: «см. site.ru.» / «(site.ru)»
+// Знаки препинания в конце ссылки обычно принадлежат предложению: «см. site.ru.» / «(site.ru)»,
+// а маркеры форматирования — оформлению: **site.ru**, ||site.ru||, __site.ru__
 const trimUrl = (raw) => {
   let url = raw;
-  while (/[.,;:!?…»"')\]]$/.test(url)) {
+  for (;;) {
+    if (url.endsWith('__')) {
+      url = url.slice(0, -2);
+      continue;
+    }
+    if (!/[.,;:!?…»"')\]|*~`]$/.test(url)) break;
     // Закрывающая скобка — часть адреса, если внутри есть открывающая (Википедия)
     if (url.endsWith(')') && (url.match(/\(/g) || []).length >= (url.match(/\)/g) || []).length) break;
     url = url.slice(0, -1);
@@ -198,6 +205,12 @@ export const toggleFormat = (text, start, end, token) => {
     return body ? `${before}${token}${body}${token}${after}` : line;
   }).join('\n');
   return { text: value.slice(0, from) + wrapped + value.slice(to), start: from, end: from + wrapped.length };
+};
+
+/** Первая ссылка сообщения — для превью, как в Telegram. Ссылка в скрытом тексте превью не получает */
+export const firstLink = (text) => {
+  const piece = parseRichText(text).find((item) => item.entity?.type === 'url' && !item.style?.spoiler);
+  return piece ? linkHref(piece.entity.value) : null;
 };
 
 /** Есть ли в тексте что разбирать (быстрая проверка перед разбором) */

@@ -5,6 +5,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import App from './App';
 
 if (Platform.OS === 'android') {
+  // «Ответить» / «Прочитано» в уведомлении о сообщении, когда приложение свёрнуто или закрыто:
+  // expo-notifications запускает эту задачу (на iOS такие задачи не запускаются — там обработчик в приложении)
+  const TaskManager = require('expo-task-manager');
+  const Notifications = require('expo-notifications');
+  const MESSAGE_ACTIONS_TASK = 'message-notification-actions';
+  TaskManager.defineTask(MESSAGE_ACTIONS_TASK, async ({ data }) => {
+    if (!data || !('actionIdentifier' in data)) return;
+    const { handleMessageAction } = require('./src/services/messageActions');
+    await handleMessageAction(data).catch(() => {});
+  });
+  Notifications.registerTaskAsync(MESSAGE_ACTIONS_TASK).catch(() => {});
+
   const { getMessaging, setBackgroundMessageHandler } = require('@react-native-firebase/messaging');
   const incomingCallModule = require('react-native-full-screen-notification-incoming-call');
   const RNNotificationCall = incomingCallModule.default ?? incomingCallModule;

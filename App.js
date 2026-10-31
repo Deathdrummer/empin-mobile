@@ -16,7 +16,9 @@ import ChatScreen from './src/screens/Messenger/ChatScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import ChatInfoScreen from './src/screens/Messenger/ChatInfoScreen';
 import ChatMediaScreen from './src/screens/Messenger/ChatMediaScreen';
+import ChatArchiveScreen from './src/screens/Messenger/ChatArchiveScreen';
 import { clearDrafts, DRAFTS_STORAGE_KEY } from './src/services/drafts';
+import { clearPendingReplies } from './src/services/messageActions';
 import { authAPI, setUnauthorizedCallback } from './src/services/api';
 import { disconnectPusher } from './src/services/pusher';
 import { useAppStatePermissions } from './src/hooks/useAppStatePermissions';
@@ -80,6 +82,8 @@ export default function App() {
         disconnectPusher(),
         disableIosVoip(),
         AsyncStorage.multiRemove(['token', 'user', 'permissions', '@pendingCall', DRAFTS_STORAGE_KEY, START_SCREEN_STORAGE_KEY]),
+        // Неотправленные ответы из уведомлений не должны уйти от имени следующего пользователя
+        clearPendingReplies(),
       ]);
       clearDrafts();
       // Следующий пользователь на этом телефоне начинает с табеля
@@ -174,6 +178,7 @@ export default function App() {
                       </Stack.Screen>
                       <Stack.Screen name="ChatInfo" component={ChatInfoScreen} />
                       <Stack.Screen name="ChatMedia" component={ChatMediaScreen} />
+                      <Stack.Screen name="ChatArchive" component={ChatArchiveScreen} />
                     </Stack.Navigator>
                   </NavigationContainer>
                 ) : (
