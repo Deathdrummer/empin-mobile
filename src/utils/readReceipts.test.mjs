@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isReadByOthers, readersOf } from './readReceipts.js';
 
-const message = { id: 50, from_id: 1, created_at: '2026-10-30T10:00:00+03:00' };
+const message = { id: 50, from_id: 1 };
 const members = [
   { id: 1, sname: 'Иванов' },
   { id: 2, sname: 'Петров' },
@@ -20,23 +20,20 @@ test('прочитали — дочитавшие до сообщения; ав�
   assert.equal(isReadByOthers(message, { 3: 49 }, {}), false);
 });
 
-test('вступивший после отправки не «прочитал», хотя граница у него дальше', () => {
-  // Мастера добавил табель позже: граница прочитанного — последний комментарий
-  const membersRead = { 2: 60, 3: 60 };
-  const membersSince = { 2: '2026-10-29T08:00:00+03:00', 3: '2026-10-30T10:05:00+03:00' };
-  const { read, unread } = readersOf(message, members, membersRead, membersSince, 1);
+test('вступивший позже не «прочитал» то, что получил вместе с вступлением', () => {
+  // Мастера добавил табель, когда последним был этот комментарий (или новее): граница — 50 и 60
+  const membersRead = { 2: 60, 3: 60, 4: 60 };
+  const membersJoined = { 2: null, 3: 50, 4: 60 };
+  const { read, unread } = readersOf(message, members, membersRead, membersJoined, 1);
   assert.deepEqual(read.map((member) => member.id), [2]);
-  assert.deepEqual(unread.map((member) => member.id), [4]);
-  assert.equal(isReadByOthers(message, { 3: 60 }, membersSince), false);
+  assert.deepEqual(unread, []);
+  assert.equal(isReadByOthers(message, { 3: 60 }, membersJoined), false);
+  // Более новое сообщение тот же мастер прочитал по-настоящему
+  assert.equal(isReadByOthers({ id: 55, from_id: 1 }, { 3: 60 }, membersJoined), true);
 });
 
-test('вступивший в ту же секунду, что отправлено сообщение, — тоже позже (так ставит граница табель)', () => {
-  const membersSince = { 2: '2026-10-30T07:00:00Z' };
-  assert.equal(isReadByOthers(message, { 2: 50 }, membersSince), false);
-});
-
-test('нет даты вступления или времени сообщения — участник считается бывшим в чате', () => {
-  assert.equal(isReadByOthers(message, { 5: 50 }, { 2: '2026-10-29T08:00:00+03:00' }), true);
-  assert.equal(isReadByOthers({ id: 50 }, { 2: 50 }, { 2: '2026-10-29T08:00:00+03:00' }), true);
+test('нет сведений о вступлении (старый сервер) — участник считается бывшим в чате', () => {
+  assert.equal(isReadByOthers(message, { 5: 50 }, { 2: 40 }), true);
+  assert.equal(isReadByOthers(message, { 2: 50 }, undefined), true);
   assert.deepEqual(readersOf(message, null, null, null, 1), { read: [], unread: [] });
 });

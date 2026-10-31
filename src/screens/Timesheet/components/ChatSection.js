@@ -664,9 +664,21 @@ export const ChatSection = ({
       // Запись уже остановил звонок — отправляем записанное без повторной остановки
       const interruptedByCall = interruptedByCallRef.current;
       interruptedByCallRef.current = false;
+      // Длительность — у самого рекордера (до остановки): запись начинается чуть позже нажатия,
+      // и по часам голосовое вышло бы длиннее файла
+      let recordedMillis = 0;
+      if (!interruptedByCall) {
+        try {
+          recordedMillis = audioRecorder.getStatus()?.durationMillis ?? 0;
+        } catch {
+          // Статус недоступен — считаем по часам
+        }
+      }
       const duration = interruptedByCall
         ? recordedSecondsRef.current
-        : (Date.now() - recordingStartedAtRef.current) / 1000;
+        : recordedMillis > 0
+          ? recordedMillis / 1000
+          : (Date.now() - recordingStartedAtRef.current) / 1000;
 
       // Проверяем, что запись действительно идёт
       if (!interruptedByCall && !audioRecorder.isRecording) {

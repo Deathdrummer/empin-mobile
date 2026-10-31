@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 
@@ -59,67 +59,70 @@ export const PollCreateModal = ({ visible, onClose, onCreate }) => {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={s.container} edges={['top', 'bottom']}>
-        <KeyboardAvoidingView style={s.flex} behavior="padding">
-          <View style={s.header}>
-            <TouchableOpacity onPress={onClose} hitSlop={12}>
-              <Text style={s.headerAction}>Отмена</Text>
-            </TouchableOpacity>
-            <Text style={s.title}>Новый опрос</Text>
-            <TouchableOpacity onPress={create} disabled={!canCreate} hitSlop={12}>
-              {sending ? <ActivityIndicator color={theme.accent} /> : (
-                <Text style={[s.headerAction, s.headerActionStrong, !canCreate && { opacity: 0.4 }]}>Создать</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-            <Text style={s.label}>Вопрос</Text>
-            <TextInput
-              style={[s.input, s.question]}
-              placeholder="Например: Кто завтра выходит на ТП-9?"
-              placeholderTextColor={theme.textMuted}
-              value={question}
-              onChangeText={setQuestion}
-              autoFocus
-              multiline
-              maxLength={255}
-            />
-
-            <Text style={s.label}>Варианты ответа</Text>
-            <View style={s.card}>
-              {options.map((option, index) => (
-                <View key={index} style={[s.optionRow, index > 0 && s.optionBorder]}>
-                  <TextInput
-                    style={s.optionInput}
-                    placeholder={index < 2 ? `Вариант ${index + 1}` : 'Добавить вариант'}
-                    placeholderTextColor={theme.textMuted}
-                    value={option}
-                    onChangeText={(value) => setOption(index, value)}
-                    maxLength={100}
-                  />
-                  {options.length > 2 && option ? (
-                    <Pressable onPress={() => removeOption(index)} hitSlop={8} accessibilityLabel="Убрать вариант">
-                      <Ionicons name="remove-circle" size={22} color={theme.danger} />
-                    </Pressable>
-                  ) : null}
-                </View>
-              ))}
+      {/* Без своего провайдера SafeAreaView внутри Modal на iOS получает нулевые отступы (низ листа — под полоской «домой») */}
+      <SafeAreaProvider>
+        <SafeAreaView style={s.container} edges={['top', 'bottom']}>
+          <KeyboardAvoidingView style={s.flex} behavior="padding">
+            <View style={s.header}>
+              <TouchableOpacity onPress={onClose} hitSlop={12}>
+                <Text style={s.headerAction}>Отмена</Text>
+              </TouchableOpacity>
+              <Text style={s.title}>Новый опрос</Text>
+              <TouchableOpacity onPress={create} disabled={!canCreate} hitSlop={12}>
+                {sending ? <ActivityIndicator color={theme.accent} /> : (
+                  <Text style={[s.headerAction, s.headerActionStrong, !canCreate && { opacity: 0.4 }]}>Создать</Text>
+                )}
+              </TouchableOpacity>
             </View>
-            <Text style={s.hint}>{`До ${MAX_OPTIONS} вариантов`}</Text>
 
-            <View style={[s.card, s.switchRow]}>
-              <Text style={s.switchLabel}>Можно выбрать несколько</Text>
-              <Switch
-                value={multiple}
-                onValueChange={setMultiple}
-                trackColor={{ true: theme.accent, false: theme.separator }}
-                thumbColor="#FFFFFF"
+            <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+              <Text style={s.label}>Вопрос</Text>
+              <TextInput
+                style={[s.input, s.question]}
+                placeholder="Например: Кто завтра выходит на ТП-9?"
+                placeholderTextColor={theme.textMuted}
+                value={question}
+                onChangeText={setQuestion}
+                autoFocus
+                multiline
+                maxLength={255}
               />
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+
+              <Text style={s.label}>Варианты ответа</Text>
+              <View style={s.card}>
+                {options.map((option, index) => (
+                  <View key={index} style={[s.optionRow, index > 0 && s.optionBorder]}>
+                    <TextInput
+                      style={s.optionInput}
+                      placeholder={index < 2 ? `Вариант ${index + 1}` : 'Добавить вариант'}
+                      placeholderTextColor={theme.textMuted}
+                      value={option}
+                      onChangeText={(value) => setOption(index, value)}
+                      maxLength={100}
+                    />
+                    {options.length > 2 && option ? (
+                      <Pressable onPress={() => removeOption(index)} hitSlop={8} accessibilityLabel="Убрать вариант">
+                        <Ionicons name="remove-circle" size={22} color={theme.danger} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+              <Text style={s.hint}>{`До ${MAX_OPTIONS} вариантов`}</Text>
+
+              <View style={[s.card, s.switchRow]}>
+                <Text style={s.switchLabel}>Можно выбрать несколько</Text>
+                <Switch
+                  value={multiple}
+                  onValueChange={setMultiple}
+                  trackColor={{ true: theme.accent, false: theme.separator }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 };

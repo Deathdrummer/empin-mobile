@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Modal, SectionList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { Avatar } from '../../components/chat/Avatar';
@@ -24,41 +24,44 @@ export default function ReadersSheet({ visible, message, read, unread, onClose }
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={s.container} edges={['top', 'bottom']}>
-        <View style={s.header}>
-          <View style={s.headerSpacer} />
-          <Text style={s.title} numberOfLines={1}>Прочитали</Text>
-          <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Закрыть" style={s.headerSpacer}>
-            <Text style={s.headerAction}>Готово</Text>
-          </TouchableOpacity>
-        </View>
-        {preview ? <Text style={s.preview} numberOfLines={2}>{preview}</Text> : null}
+      {/* Без своего провайдера SafeAreaView внутри Modal на iOS получает нулевые отступы (низ листа — под полоской «домой») */}
+      <SafeAreaProvider>
+        <SafeAreaView style={s.container} edges={['top', 'bottom']}>
+          <View style={s.header}>
+            <View style={s.headerSpacer} />
+            <Text style={s.title} numberOfLines={1}>Прочитали</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Закрыть" style={s.headerSpacer}>
+              <Text style={s.headerAction}>Готово</Text>
+            </TouchableOpacity>
+          </View>
+          {preview ? <Text style={s.preview} numberOfLines={2}>{preview}</Text> : null}
 
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => String(item.id)}
-          stickySectionHeadersEnabled={false}
-          renderSectionHeader={({ section }) => <Text style={s.sectionTitle}>{section.title}</Text>}
-          renderItem={({ item, section }) => (
-            <View style={s.row} accessible accessibilityLabel={`${fullName(item)}, ${section.key === 'read' ? 'прочитал' : 'ещё не прочитал'}`}>
-              <Avatar person={item} id={item.id} size={40} />
-              <View style={s.rowBody}>
-                <View style={s.rowText}>
-                  <Text style={s.name} numberOfLines={1}>{fullName(item)}</Text>
-                  <Text style={[s.sub, item.online && { color: theme.accent }]} numberOfLines={1}>
-                    {formatLastSeen(item.online, item.last_seen_at)}
-                  </Text>
+          <SectionList
+            sections={sections}
+            keyExtractor={(item) => String(item.id)}
+            stickySectionHeadersEnabled={false}
+            renderSectionHeader={({ section }) => <Text style={s.sectionTitle}>{section.title}</Text>}
+            renderItem={({ item, section }) => (
+              <View style={s.row} accessible accessibilityLabel={`${fullName(item)}, ${section.key === 'read' ? 'прочитал' : 'ещё не прочитал'}`}>
+                <Avatar person={item} id={item.id} size={40} />
+                <View style={s.rowBody}>
+                  <View style={s.rowText}>
+                    <Text style={s.name} numberOfLines={1}>{fullName(item)}</Text>
+                    <Text style={[s.sub, item.online && { color: theme.accent }]} numberOfLines={1}>
+                      {formatLastSeen(item.online, item.last_seen_at)}
+                    </Text>
+                  </View>
+                  {section.key === 'read'
+                    ? <Ionicons name="checkmark-done" size={20} color={theme.accent} />
+                    : <Ionicons name="checkmark" size={20} color={theme.textMuted} />}
                 </View>
-                {section.key === 'read'
-                  ? <Ionicons name="checkmark-done" size={20} color={theme.accent} />
-                  : <Ionicons name="checkmark" size={20} color={theme.textMuted} />}
               </View>
-            </View>
-          )}
-          ListEmptyComponent={<Text style={s.empty}>В чате больше никого нет</Text>}
-          contentContainerStyle={s.listContent}
-        />
-      </SafeAreaView>
+            )}
+            ListEmptyComponent={<Text style={s.empty}>В чате больше никого нет</Text>}
+            contentContainerStyle={s.listContent}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

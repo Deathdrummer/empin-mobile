@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
@@ -308,20 +308,23 @@ export default function ChatInfoScreen({ navigation, route }) {
       )}
 
       <Modal visible={adding} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setAdding(false)}>
-        <SafeAreaView style={s.container} edges={['top', 'bottom']}>
-          <StaffPicker
-            visible={adding}
-            title={isObject ? 'Добавить в чат объекта' : 'Добавить в группу'}
-            multiple
-            confirmLabel="Добавить"
-            excludeIds={(info?.members || []).map((member) => member.id)}
-            onClose={() => setAdding(false)}
-            onConfirm={(people) => {
-              setAdding(false);
-              addMembers(people);
-            }}
-          />
-        </SafeAreaView>
+        {/* Без своего провайдера SafeAreaView внутри Modal на iOS получает нулевые отступы (низ листа — под полоской «домой») */}
+        <SafeAreaProvider>
+          <SafeAreaView style={s.container} edges={['top', 'bottom']}>
+            <StaffPicker
+              visible={adding}
+              title={isObject ? 'Добавить в чат объекта' : 'Добавить в группу'}
+              multiple
+              confirmLabel="Добавить"
+              excludeIds={(info?.members || []).map((member) => member.id)}
+              onClose={() => setAdding(false)}
+              onConfirm={(people) => {
+                setAdding(false);
+                addMembers(people);
+              }}
+            />
+          </SafeAreaView>
+        </SafeAreaProvider>
       </Modal>
 
       <Modal visible={renaming} transparent animationType="fade" onRequestClose={() => setRenaming(false)}>

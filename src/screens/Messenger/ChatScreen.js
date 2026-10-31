@@ -72,6 +72,8 @@ const GROUP_WINDOW_MS = 5 * 60 * 1000;
 const HIGHLIGHT_MS = 1600;
 // «Удалить у меня» — не больше стольких сообщений за запрос
 const HIDE_BATCH = 100;
+// Пролистано вверх больше — показываем кнопку «вниз» и не отмечаем всё прочитанным
+const SCROLLED_AWAY_OFFSET = 320;
 // Больше стольких непрочитанных — чат открывается на первом из них, а не внизу
 const UNREAD_OPEN_AT_DIVIDER = 6;
 // Отступ от последнего сообщения до панели ввода
@@ -145,7 +147,7 @@ export default function ChatScreen({ navigation, route }) {
   const [messages, setMessages] = useState([]);
   const [peerLastReadId, setPeerLastReadId] = useState(null);
   const [membersRead, setMembersRead] = useState({});
-  const [membersSince, setMembersSince] = useState({});
+  const [membersJoined, setMembersJoined] = useState({});
   // «Прочитали» у своего сообщения (группа, объект)
   const [readersMessage, setReadersMessage] = useState(null);
   const [hasMore, setHasMore] = useState(false);
@@ -207,6 +209,8 @@ export default function ChatScreen({ navigation, route }) {
   const pendingJumpRef = useRef(null);
   // Удалённые на этом экране (у меня или у всех)
   const goneIdsRef = useRef(new Set());
+  // Сколько пролистано от низа ленты (она перевёрнута: 0 — самое новое внизу)
+  const scrollOffsetRef = useRef(0);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -240,7 +244,7 @@ export default function ChatScreen({ navigation, route }) {
   const applyPage = useCallback((data) => {
     setPeerLastReadId(data.peer_last_read_id ?? null);
     if (data.members_read) setMembersRead(data.members_read);
-    if (data.members_since) setMembersSince(data.members_since);
+    if (data.members_joined) setMembersJoined(data.members_joined);
     // Сведения о непрочитанном берутся один раз — с первой страницы открытия (дальше чат их сам и прочитает)
     if (openingUnreadRef.current === undefined && data.unread !== undefined) {
       openingUnreadRef.current = data.unread;
@@ -921,7 +925,7 @@ export default function ChatScreen({ navigation, route }) {
       });
     }
     if (mine && serverMessage && (isGroup || isObject)) {
-      const { read, unread } = readersOf(actionMessage, info?.members, membersRead, membersSince, me.staffId);
+      const { read, unread } = readersOf(actionMessage, info?.members, membersRead, membersJoined, me.staffId);
       const total = read.length + unread.length;
       // Как в Telegram — первой строкой меню
       list.unshift({
@@ -935,7 +939,7 @@ export default function ChatScreen({ navigation, route }) {
       list.push({ key: 'delete', label: 'Удалить', icon: 'trash-outline', destructive: true, onPress: () => closeMenuThen(() => confirmDelete([actionMessage])) });
     }
     return list;
-  }, [actionMessage, isMine, can, confirmDelete, togglePin, info, closeMenuThen, isGroup, isObject, membersRead, membersSince, me.staffId]);
+  }, [actionMessage, isMine, can, confirmDelete, togglePin, info, closeMenuThen, isGroup, isObject, membersRead, membersJoined, me.staffId]);
 
   const selecting = selectedIds.length > 0;
   const selectedMessages = useMemo(() => {
@@ -1037,7 +1041,7 @@ export default function ChatScreen({ navigation, route }) {
         if (message._status) status = message._status;
         else if (!isServerId(message.id)) status = 'sent';
         // Группа и объект: прочитал хоть кто-то, кто был в чате, когда сообщение отправили
-        else if (isGroup || isObject) status = isReadByOthers(message, membersRead, membersSince) ? 'read' : 'sent';
+        else if (isGroup || isObject) status = isReadByOthers(message, membersRead, membersJoined) ? 'read' : 'sent';
         else status = peerLastReadId != null && peerLastReadId >= message.id ? 'read' : 'sent';
       }
 
@@ -1053,7 +1057,7 @@ export default function ChatScreen({ navigation, route }) {
       });
     });
     return result.reverse();
-  }, [messages, isMine, peerLastReadId, membersRead, membersSince, isGroup, isObject, unreadMark]);
+  }, [messages, isMine, peerLastReadId, membersRead, membersJoined, isGroup, isObject, unreadMark]);
 
   const jumpToMessage = useCallback(async (messageId) => {
     const index = items.findIndex((item) => item.type === 'message' && item.message.id === messageId);
@@ -1098,6 +1102,15 @@ export default function ChatScreen({ navigation, route }) {
     requestAnimationFrame(() => listRef.current?.scrollToIndex(unreadMode
       ? { index, viewPosition: 1, viewOffset: headerHeight + 8, animated: false }
       : { index, viewPosition: 0.5, animated: false }));
+    // Непрочитанное поместилось на экране — прокручивать некуда, событий прокрутки нет, и лента так и
+    // считалась бы пролистанной вверх (кнопка «вниз» висела бы у самого низа). Смотрим, где она на самом деле
+    if (unreadMode) {
+      setTimeout(() => {
+        if (detachedRef.current || scrollOffsetRef.current > SCROLLED_AWAY_OFFSET) return;
+        scrolledAwayRef.current = false;
+        setShowScrollDown(false);
+      }, 400);
+    }
   }, [items, headerHeight]);
 
   const renderItem = useCallback(({ item }) => {
@@ -1219,9 +1232,9 @@ export default function ChatScreen({ navigation, route }) {
   // «Прочитали» обновляется на открытом листе, пока приходят прочтения
   const readers = useMemo(
     () => (readersMessage
-      ? readersOf(readersMessage, info?.members, membersRead, membersSince, me.staffId)
+      ? readersOf(readersMessage, info?.members, membersRead, membersJoined, me.staffId)
       : { read: [], unread: [] }),
-    [readersMessage, info?.members, membersRead, membersSince, me.staffId],
+    [readersMessage, info?.members, membersRead, membersJoined, me.staffId],
   );
 
   const composerContext = editing
@@ -1274,8 +1287,9 @@ export default function ChatScreen({ navigation, route }) {
                 onEndReachedThreshold={0.4}
                 onScroll={(event) => {
                   const offset = event.nativeEvent.contentOffset.y;
+                  scrollOffsetRef.current = offset;
                   if (offset < 120 && hasMoreNewer && !loadingNewer) loadNewer();
-                  const away = offset > 320 || detachedRef.current;
+                  const away = offset > SCROLLED_AWAY_OFFSET || detachedRef.current;
                   if (away !== scrolledAwayRef.current) {
                     scrolledAwayRef.current = away;
                     setShowScrollDown(away);

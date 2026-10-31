@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { messengerAPI } from '../../services/api';
@@ -197,15 +197,18 @@ export default function CallHistoryTab() {
         onRequestClose={() => setPicking(false)}
         onDismiss={onPickerDismiss}
       >
-        <SafeAreaView style={s.container} edges={['top', 'bottom']}>
-          <StaffPicker
-            visible={picking}
-            title="Новый звонок"
-            onClose={() => setPicking(false)}
-            onPick={callPicked}
-            onCall={callPicked}
-          />
-        </SafeAreaView>
+        {/* Без своего провайдера SafeAreaView внутри Modal на iOS получает нулевые отступы (низ листа — под полоской «домой») */}
+        <SafeAreaProvider>
+          <SafeAreaView style={s.container} edges={['top', 'bottom']}>
+            <StaffPicker
+              visible={picking}
+              title="Новый звонок"
+              onClose={() => setPicking(false)}
+              onPick={callPicked}
+              onCall={callPicked}
+            />
+          </SafeAreaView>
+        </SafeAreaProvider>
       </Modal>
     </View>
   );

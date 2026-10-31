@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../chat/Avatar';
 
 // Экран звонка всегда тёмный, как в мессенджерах: фон в цветах иконки приложения
@@ -194,47 +194,51 @@ export const CallModal = ({
       animationType="none"
       statusBarTranslucent={true}
     >
-      <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-        <LinearGradient colors={CALL_BACKGROUND} style={StyleSheet.absoluteFill} />
-        <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerSpacer} />
-            <Text style={styles.headerTitle}>Аудиозвонок</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={handleClose}
-              activeOpacity={0.6}
-              accessibilityLabel="Закрыть"
-            >
-              <Ionicons name="close" size={22} color="rgba(255, 255, 255, 0.85)" />
-            </TouchableOpacity>
-          </View>
-
-          <Animated.View style={[styles.center, { transform: [{ translateY: slideAnim }] }]}>
-            {/* Avatar */}
-            <View style={styles.avatarRing}>
-              {/* Фото сотрудника (если есть) или инициалы */}
-              <Avatar person={{ ...person, avatar: participant?.avatar }} id={participant?.id} size={128} />
+      {/* Своя «безопасная зона»: у содержимого Modal на iOS отдельная иерархия видов, и без провайдера внутри
+          SafeAreaView получал нулевые отступы — шапка с крестиком уезжала под строку состояния (на значок батареи) */}
+      <SafeAreaProvider>
+        <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+          <LinearGradient colors={CALL_BACKGROUND} style={StyleSheet.absoluteFill} />
+          <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerSpacer} />
+              <Text style={styles.headerTitle}>Аудиозвонок</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={handleClose}
+                activeOpacity={0.6}
+                accessibilityLabel="Закрыть"
+              >
+                <Ionicons name="close" size={22} color="rgba(255, 255, 255, 0.85)" />
+              </TouchableOpacity>
             </View>
 
-            {/* Name */}
-            <Text style={styles.participantName} numberOfLines={2}>{participant?.name || 'Неизвестный'}</Text>
+            <Animated.View style={[styles.center, { transform: [{ translateY: slideAnim }] }]}>
+              {/* Avatar */}
+              <View style={styles.avatarRing}>
+                {/* Фото сотрудника (если есть) или инициалы */}
+                <Avatar person={{ ...person, avatar: participant?.avatar }} id={participant?.id} size={128} />
+              </View>
 
-            {/* Status / Duration */}
-            {callState.status === 'active' ? (
-              <Text style={styles.durationText}>
-                {formatDuration(callState.duration)}
-              </Text>
-            ) : (
-              <Text style={styles.statusText}>{getStatusText()}</Text>
-            )}
-          </Animated.View>
+              {/* Name */}
+              <Text style={styles.participantName} numberOfLines={2}>{participant?.name || 'Неизвестный'}</Text>
 
-          {/* Action Buttons */}
-          <View style={styles.actionsContainer}>{renderActionButtons()}</View>
-        </SafeAreaView>
-      </Animated.View>
+              {/* Status / Duration */}
+              {callState.status === 'active' ? (
+                <Text style={styles.durationText}>
+                  {formatDuration(callState.duration)}
+                </Text>
+              ) : (
+                <Text style={styles.statusText}>{getStatusText()}</Text>
+              )}
+            </Animated.View>
+
+            {/* Action Buttons */}
+            <View style={styles.actionsContainer}>{renderActionButtons()}</View>
+          </SafeAreaView>
+        </Animated.View>
+      </SafeAreaProvider>
     </Modal>
   );
 };

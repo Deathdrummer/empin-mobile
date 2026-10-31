@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
@@ -195,93 +195,96 @@ export default function NewChatModal({ visible, onClose, onOpenChat, onCall, onG
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose} onDismiss={onDismiss}>
-      <SafeAreaView style={s.container} edges={['top', 'bottom']}>
-        {step === 'chat' ? (
-          <StaffPicker
-            visible={visible && step === 'chat'}
-            title="Новый чат"
-            onClose={onClose}
-            onPick={onOpenChat}
-            onCall={onCall}
-            header={(
-              <Pressable style={({ pressed }) => [s.row, s.newGroup, pressed && { backgroundColor: theme.surfacePressed }]} onPress={() => setStep('members')}>
-                <View style={[s.newGroupIcon, { backgroundColor: theme.accentSoft }]}>
-                  <Ionicons name="people" size={22} color={theme.accent} />
-                </View>
-                <View style={s.rowBody}>
-                  <View style={s.rowText}>
-                    <Text style={[s.name, { color: theme.accentText }]}>Новая группа</Text>
-                    <Text style={s.sub}>Бригада, объект или общий чат</Text>
+      {/* Без своего провайдера SafeAreaView внутри Modal на iOS получает нулевые отступы (низ листа — под полоской «домой») */}
+      <SafeAreaProvider>
+        <SafeAreaView style={s.container} edges={['top', 'bottom']}>
+          {step === 'chat' ? (
+            <StaffPicker
+              visible={visible && step === 'chat'}
+              title="Новый чат"
+              onClose={onClose}
+              onPick={onOpenChat}
+              onCall={onCall}
+              header={(
+                <Pressable style={({ pressed }) => [s.row, s.newGroup, pressed && { backgroundColor: theme.surfacePressed }]} onPress={() => setStep('members')}>
+                  <View style={[s.newGroupIcon, { backgroundColor: theme.accentSoft }]}>
+                    <Ionicons name="people" size={22} color={theme.accent} />
                   </View>
-                </View>
-              </Pressable>
-            )}
-          />
-        ) : null}
-
-        {step === 'members' ? (
-          <StaffPicker
-            visible={visible && step === 'members'}
-            title="Участники"
-            multiple
-            confirmLabel="Далее"
-            onClose={() => setStep('chat')}
-            onConfirm={(people) => {
-              setMembers(people);
-              setStep('title');
-            }}
-          />
-        ) : null}
-
-        {step === 'title' ? (
-          <KeyboardAvoidingView style={s.flex} behavior="padding">
-            <View style={s.header}>
-              <TouchableOpacity onPress={() => setStep('members')} hitSlop={12}>
-                <Text style={s.headerAction}>Назад</Text>
-              </TouchableOpacity>
-              <Text style={s.title}>Новая группа</Text>
-              <TouchableOpacity onPress={createGroup} disabled={!title.trim() || creating} hitSlop={12}>
-                {creating ? <ActivityIndicator color={theme.accent} /> : (
-                  <Text style={[s.headerAction, s.headerActionStrong, !title.trim() && { opacity: 0.4 }]}>Создать</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            <View style={s.titleRow}>
-              <View style={[s.groupMark, { backgroundColor: theme.accentSoft }]}>
-                <Ionicons name="people" size={28} color={theme.accent} />
-              </View>
-              <TextInput
-                style={s.titleInput}
-                placeholder="Название, например «Бригада Иванова»"
-                placeholderTextColor={theme.textMuted}
-                value={title}
-                onChangeText={setTitle}
-                autoFocus
-                maxLength={64}
-                returnKeyType="done"
-                onSubmitEditing={createGroup}
-              />
-            </View>
-
-            <Text style={s.sectionTitle}>
-              {`${members.length} ${plural(members.length, 'участник', 'участника', 'участников')}`}
-            </Text>
-            <FlatList
-              data={members}
-              keyExtractor={(item) => String(item.id)}
-              renderItem={({ item }) => (
-                <View style={s.row}>
-                  <Avatar person={item} id={item.id} size={40} />
                   <View style={s.rowBody}>
-                    <Text style={s.name} numberOfLines={1}>{fullName(item)}</Text>
+                    <View style={s.rowText}>
+                      <Text style={[s.name, { color: theme.accentText }]}>Новая группа</Text>
+                      <Text style={s.sub}>Бригада, объект или общий чат</Text>
+                    </View>
                   </View>
-                </View>
+                </Pressable>
               )}
             />
-          </KeyboardAvoidingView>
-        ) : null}
-      </SafeAreaView>
+          ) : null}
+
+          {step === 'members' ? (
+            <StaffPicker
+              visible={visible && step === 'members'}
+              title="Участники"
+              multiple
+              confirmLabel="Далее"
+              onClose={() => setStep('chat')}
+              onConfirm={(people) => {
+                setMembers(people);
+                setStep('title');
+              }}
+            />
+          ) : null}
+
+          {step === 'title' ? (
+            <KeyboardAvoidingView style={s.flex} behavior="padding">
+              <View style={s.header}>
+                <TouchableOpacity onPress={() => setStep('members')} hitSlop={12}>
+                  <Text style={s.headerAction}>Назад</Text>
+                </TouchableOpacity>
+                <Text style={s.title}>Новая группа</Text>
+                <TouchableOpacity onPress={createGroup} disabled={!title.trim() || creating} hitSlop={12}>
+                  {creating ? <ActivityIndicator color={theme.accent} /> : (
+                    <Text style={[s.headerAction, s.headerActionStrong, !title.trim() && { opacity: 0.4 }]}>Создать</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={s.titleRow}>
+                <View style={[s.groupMark, { backgroundColor: theme.accentSoft }]}>
+                  <Ionicons name="people" size={28} color={theme.accent} />
+                </View>
+                <TextInput
+                  style={s.titleInput}
+                  placeholder="Название, например «Бригада Иванова»"
+                  placeholderTextColor={theme.textMuted}
+                  value={title}
+                  onChangeText={setTitle}
+                  autoFocus
+                  maxLength={64}
+                  returnKeyType="done"
+                  onSubmitEditing={createGroup}
+                />
+              </View>
+
+              <Text style={s.sectionTitle}>
+                {`${members.length} ${plural(members.length, 'участник', 'участника', 'участников')}`}
+              </Text>
+              <FlatList
+                data={members}
+                keyExtractor={(item) => String(item.id)}
+                renderItem={({ item }) => (
+                  <View style={s.row}>
+                    <Avatar person={item} id={item.id} size={40} />
+                    <View style={s.rowBody}>
+                      <Text style={s.name} numberOfLines={1}>{fullName(item)}</Text>
+                    </View>
+                  </View>
+                )}
+              />
+            </KeyboardAvoidingView>
+          ) : null}
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

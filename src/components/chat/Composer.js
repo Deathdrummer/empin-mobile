@@ -612,7 +612,8 @@ const styles = (theme) => StyleSheet.create({
     flexDirection: 'row',
     alignSelf: 'flex-start',
     marginHorizontal: 8,
-    marginTop: 6,
+    // Ручки выделения текста свисают под поле — панель ниже них
+    marginTop: 16,
     padding: 4,
     gap: 2,
     borderRadius: 14,

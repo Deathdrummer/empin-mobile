@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -162,62 +162,65 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <SafeAreaView style={s.container} edges={['top', 'bottom']}>
-        <View style={s.header}>
-          <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Закрыть">
-            <Text style={s.headerAction}>Отмена</Text>
-          </TouchableOpacity>
-          <Text style={s.title} numberOfLines={1}>
-            {count > 1 ? `Переслать ${count} ${plural(count, 'сообщение', 'сообщения', 'сообщений')}` : 'Переслать'}
-          </Text>
-          <View style={s.headerSpacer} />
-        </View>
-
-        {/* Поиск с открытой клавиатурой: список и кнопка «Отправить» остаются над ней */}
-        <KeyboardAvoidingView style={s.flex} behavior="padding">
-          <View style={s.search}>
-            <Ionicons name="search" size={18} color={theme.textMuted} />
-            <TextInput
-              style={s.searchInput}
-              placeholder="Поиск чата или сотрудника"
-              placeholderTextColor={theme.textMuted}
-              value={query}
-              onChangeText={setQuery}
-              autoCorrect={false}
-              clearButtonMode="while-editing"
-            />
+      {/* Без своего провайдера SafeAreaView внутри Modal на iOS получает нулевые отступы (низ листа — под полоской «домой») */}
+      <SafeAreaProvider>
+        <SafeAreaView style={s.container} edges={['top', 'bottom']}>
+          <View style={s.header}>
+            <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Закрыть">
+              <Text style={s.headerAction}>Отмена</Text>
+            </TouchableOpacity>
+            <Text style={s.title} numberOfLines={1}>
+              {count > 1 ? `Переслать ${count} ${plural(count, 'сообщение', 'сообщения', 'сообщений')}` : 'Переслать'}
+            </Text>
+            <View style={s.headerSpacer} />
           </View>
 
-          {loading ? (
-            <ActivityIndicator style={s.loader} color={theme.accent} />
-          ) : (
-            <FlatList
-              data={items}
-              keyExtractor={(item) => item.key}
-              renderItem={renderItem}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-              ListEmptyComponent={<Text style={s.empty}>{query.trim() ? 'Ничего не нашли' : 'Чатов пока нет — найдите сотрудника поиском'}</Text>}
-            />
-          )}
-
-          {selected.length ? (
-            <View style={[s.footer, { borderTopColor: theme.separator }]}>
-              <Text style={s.footerText} numberOfLines={1}>
-                {selected.map((item) => (item.kind === 'chat' ? item.chat.title : fullName(item.person))).join(', ')}
-              </Text>
-              <Pressable
-                onPress={send}
-                disabled={sending}
-                style={({ pressed }) => [s.send, { backgroundColor: pressed ? theme.accentPressed : theme.accent }]}
-                accessibilityLabel="Отправить"
-              >
-                {sending ? <ActivityIndicator color={theme.onAccent} /> : <Ionicons name="arrow-up" size={22} color={theme.onAccent} />}
-              </Pressable>
+          {/* Поиск с открытой клавиатурой: список и кнопка «Отправить» остаются над ней */}
+          <KeyboardAvoidingView style={s.flex} behavior="padding">
+            <View style={s.search}>
+              <Ionicons name="search" size={18} color={theme.textMuted} />
+              <TextInput
+                style={s.searchInput}
+                placeholder="Поиск чата или сотрудника"
+                placeholderTextColor={theme.textMuted}
+                value={query}
+                onChangeText={setQuery}
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+              />
             </View>
-          ) : null}
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+
+            {loading ? (
+              <ActivityIndicator style={s.loader} color={theme.accent} />
+            ) : (
+              <FlatList
+                data={items}
+                keyExtractor={(item) => item.key}
+                renderItem={renderItem}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                ListEmptyComponent={<Text style={s.empty}>{query.trim() ? 'Ничего не нашли' : 'Чатов пока нет — найдите сотрудника поиском'}</Text>}
+              />
+            )}
+
+            {selected.length ? (
+              <View style={[s.footer, { borderTopColor: theme.separator }]}>
+                <Text style={s.footerText} numberOfLines={1}>
+                  {selected.map((item) => (item.kind === 'chat' ? item.chat.title : fullName(item.person))).join(', ')}
+                </Text>
+                <Pressable
+                  onPress={send}
+                  disabled={sending}
+                  style={({ pressed }) => [s.send, { backgroundColor: pressed ? theme.accentPressed : theme.accent }]}
+                  accessibilityLabel="Отправить"
+                >
+                  {sending ? <ActivityIndicator color={theme.onAccent} /> : <Ionicons name="arrow-up" size={22} color={theme.onAccent} />}
+                </Pressable>
+              </View>
+            ) : null}
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }
