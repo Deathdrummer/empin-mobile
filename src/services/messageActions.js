@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NotificationActionsKeepAlive from '../../modules/empin-notification-actions';
 import { messengerAPI } from './api';
 import { setDraft } from './drafts';
 import { setTotalUnread } from './messengerStore';
@@ -9,6 +10,7 @@ import {
   READ_ACTION,
   actionKey,
   clientKeyFor,
+  createActionRunner,
   isMessageAction,
   responseData,
   withHandled,
@@ -20,14 +22,17 @@ import {
  * Одно нажатие может прийти несколько раз: на Android, пока приложение не на экране, — и в фоновую задачу,
  * и обработчику; если приложение было закрыто — ещё раз при следующем запуске. Поэтому нажатие помечается
  * обработанным (в памяти и на телефоне), а сервер не отправляет повтор с тем же ключом попытки.
- * Ответ сначала кладётся в очередь: если связи нет или iOS усыпил приложение до отправки, он уйдёт при
- * следующем открытии приложения (flushReplies).
+ * iOS после нажатия запускает или будит приложение в фоне; чтобы система не усыпила его до отправки,
+ * нативный модуль держит фоновое задание до конца обработки (до ~25 с).
+ * Ответ сначала кладётся в очередь: если связи нет, он уйдёт при следующем открытии приложения (flushReplies).
  */
 
 const HANDLED_KEY = '@notificationActionsHandled';
 const OUTBOX_KEY = '@notificationRepliesOutbox';
 
-const inFlight = new Set();
+// Синхронно, до первого await: второе такое же нажатие в этом же процессе ждёт первое.
+// iOS держит приложение в фоне от нажатия до finish (modules/empin-notification-actions)
+const runAction = createActionRunner((key) => NotificationActionsKeepAlive?.finish(key));
 let flushing = null;
 
 const readJson = async (key, fallback) => {
@@ -134,6 +139,32 @@ const markChatRead = async (chatId, messageId) => {
   await dismissChatNotifications(chatId);
 };
 
+const processAction = async (key, response) => {
+  const data = responseData(response);
+  const chatId = Number(data.chat_id);
+  if (data.type !== 'message' || !chatId) return;
+
+  const handled = await readJson(HANDLED_KEY, []);
+  if (handled.includes(key)) return;
+  await writeJson(HANDLED_KEY, withHandled(handled, key));
+
+  // После выхода из аккаунта не отвечаем от имени следующего пользователя
+  if (!(await AsyncStorage.getItem('token'))) return;
+
+  if (response.actionIdentifier === READ_ACTION) {
+    await markChatRead(chatId, data.message_id);
+    return;
+  }
+
+  const text = (response.userText || '').trim();
+  if (!text) return;
+  const request = response.notification.request;
+  const reply = { key, chatId, text, data, notificationId: request.identifier, title: request.content?.title };
+  const outbox = await readJson(OUTBOX_KEY, {});
+  await writeJson(OUTBOX_KEY, { ...outbox, [key]: reply });
+  await sendReply(reply);
+};
+
 /**
  * Нажатие «Ответить» или «Прочитано». true — нажатие наше (обработано или уже обрабатывалось),
  * false — обычное касание уведомления: его обрабатывает открытие чата
@@ -141,37 +172,9 @@ const markChatRead = async (chatId, messageId) => {
 export const handleMessageAction = async (response) => {
   if (!isMessageAction(response)) return false;
   const key = actionKey(response);
-  const data = responseData(response);
-  const chatId = Number(data.chat_id);
-  if (!key || data.type !== 'message' || !chatId) return true;
-
-  // Синхронно, до первого await: второе такое же нажатие в этом же процессе дальше не пройдёт
-  if (inFlight.has(key)) return true;
-  inFlight.add(key);
-  try {
-    const handled = await readJson(HANDLED_KEY, []);
-    if (handled.includes(key)) return true;
-    await writeJson(HANDLED_KEY, withHandled(handled, key));
-
-    // После выхода из аккаунта не отвечаем от имени следующего пользователя
-    if (!(await AsyncStorage.getItem('token'))) return true;
-
-    if (response.actionIdentifier === READ_ACTION) {
-      await markChatRead(chatId, data.message_id);
-      return true;
-    }
-
-    const text = (response.userText || '').trim();
-    if (!text) return true;
-    const request = response.notification.request;
-    const reply = { key, chatId, text, data, notificationId: request.identifier, title: request.content?.title };
-    const outbox = await readJson(OUTBOX_KEY, {});
-    await writeJson(OUTBOX_KEY, { ...outbox, [key]: reply });
-    await sendReply(reply);
-    return true;
-  } finally {
-    inFlight.delete(key);
-  }
+  if (!key) return true;
+  await runAction(key, () => processAction(key, response));
+  return true;
 };
 
 /** Отправить ответы из уведомлений, которые не ушли (не было связи, iOS усыпил приложение) */

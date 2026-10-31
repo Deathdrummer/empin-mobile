@@ -38,3 +38,21 @@ export const clientKeyFor = (key) => String(key).slice(-CLIENT_KEY_LENGTH);
 /** Список обработанных нажатий с новым ключом: последние HANDLED_LIMIT */
 export const withHandled = (list, key) => [...(Array.isArray(list) ? list : []).filter((item) => item !== key), key]
   .slice(-HANDLED_LIMIT);
+
+/**
+ * Одно нажатие — одна обработка. Повтор того же нажатия, пока идёт первая обработка, ждёт её, а не
+ * заканчивается сразу: на iOS onDone(key) отпускает фоновое задание, и раннее «готово» от повтора
+ * позволило бы системе усыпить приложение посреди отправки ответа
+ */
+export const createActionRunner = (onDone) => {
+  const inFlight = new Map();
+  return (key, task) => {
+    if (!inFlight.has(key)) {
+      inFlight.set(key, Promise.resolve().then(task).finally(() => {
+        inFlight.delete(key);
+        onDone(key);
+      }));
+    }
+    return inFlight.get(key);
+  };
+};

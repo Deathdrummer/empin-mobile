@@ -1,7 +1,7 @@
 // Кнопки уведомления о сообщении. Запуск: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { actionKey, clientKeyFor, isMessageAction, responseData, withHandled } from './notificationActions.js';
+import { actionKey, clientKeyFor, createActionRunner, isMessageAction, responseData, withHandled } from './notificationActions.js';
 
 const response = (content, actionIdentifier = 'reply', identifier = 'message-42') => ({
   actionIdentifier,
@@ -39,4 +39,39 @@ test('обработанные нажатия: без повторов, толь
   const list = withHandled(many, 'new');
   assert.equal(list.length, 50);
   assert.equal(list[49], 'new');
+});
+
+test('повтор нажатия ждёт первую обработку; «готово» — один раз и только после неё', async () => {
+  const done = [];
+  const run = createActionRunner((key) => done.push(key));
+  let release;
+  let calls = 0;
+  const task = () => {
+    calls += 1;
+    return new Promise((resolve) => { release = resolve; });
+  };
+
+  const first = run('message-42:reply', task);
+  let secondSettled = false;
+  const second = run('message-42:reply', task).then(() => { secondSettled = true; });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(calls, 1);
+  assert.equal(secondSettled, false);
+  assert.deepEqual(done, []);
+
+  release();
+  await Promise.all([first, second]);
+  assert.equal(secondSettled, true);
+  assert.deepEqual(done, ['message-42:reply']);
+
+  // Закончилась — то же нажатие снова обрабатывается (повтор отсекает список обработанных на телефоне)
+  await run('message-42:reply', async () => { calls += 1; });
+  assert.equal(calls, 2);
+});
+
+test('ошибка обработки: «готово» всё равно отмечается, ошибка не теряется', async () => {
+  const done = [];
+  const run = createActionRunner((key) => done.push(key));
+  await assert.rejects(run('message-7:read', async () => { throw new Error('нет сети'); }), /нет сети/);
+  assert.deepEqual(done, ['message-7:read']);
 });
