@@ -31,10 +31,11 @@ export const connectAudio = ({
     clearTimeout(peerTimer);
     joinTimer = peerTimer = null;
   };
-  const fail = (message, code) => {
+  const fail = (message, code, event = 'rtc-failed') => {
     if (disposed || failed) return;
     failed = true;
     clearTimers();
+    onDiagnostic(event, { code });
     onFailure(message, code);
   };
   const finishConnecting = () => {
@@ -55,17 +56,20 @@ export const connectAudio = ({
       onLocalJoined?.();
       finishConnecting();
     }),
-    onUserJoined: live(() => {
+    onUserJoined: live((_connection, uid, elapsed) => {
       peerJoined = true;
-      onDiagnostic('peer-joined');
+      onDiagnostic('peer-joined', { uid, elapsed });
       finishConnecting();
     }),
-    onUserOffline: live(() => onOffline()),
+    onUserOffline: live((_connection, uid, reason) => {
+      onDiagnostic('peer-offline', { uid, reason });
+      onOffline();
+    }),
     onConnectionStateChanged: live((_connection, state, reason) => {
       onDiagnostic('connection', { state, reason });
       if (state === sdk.failedState) fail(`Не удалось подключиться к серверу звонков (Agora ${reason})`, reason);
       if (state === sdk.reconnectingState && !joinTimer) {
-        joinTimer = setTimeout(() => fail('Связь во время звонка потеряна. Повторите вызов.'), timeoutMs);
+        joinTimer = setTimeout(() => fail('Связь во время звонка потеряна. Повторите вызов.', undefined, 'rtc-reconnect-timeout'), timeoutMs);
       }
       if (state === sdk.connectedState && localJoined) {
         clearTimeout(joinTimer);
@@ -83,8 +87,14 @@ export const connectAudio = ({
         fail('Нет доступа к микрофону. Разрешите его в настройках устройства.', reason);
       }
     }),
-    onRemoteAudioStateChanged: live((_connection, _uid, state, reason) => {
-      onDiagnostic('remote-audio', { state, reason });
+    onRemoteAudioStateChanged: live((_connection, uid, state, reason) => {
+      onDiagnostic('remote-audio', { uid, state, reason });
+    }),
+    onFirstLocalAudioFramePublished: live((_connection, elapsed) => {
+      onDiagnostic('first-local-audio', { elapsed });
+    }),
+    onAudioSubscribeStateChanged: live((_channel, uid, _oldState, state, elapsed) => {
+      onDiagnostic('audio-subscription', { uid, state, elapsed });
     }),
   };
   const dispose = () => {
@@ -101,7 +111,7 @@ export const connectAudio = ({
     // уже идущего звонка; до подключения он мог не примениться.
     const routeResult = engine.setDefaultAudioRouteToSpeakerphone(false);
     if (routeResult !== 0) onDiagnostic('audio-route', { code: routeResult });
-    joinTimer = setTimeout(() => fail('Не удалось соединить звонок. Проверьте сеть и повторите вызов.'), timeoutMs);
+    joinTimer = setTimeout(() => fail('Не удалось соединить звонок. Проверьте сеть и повторите вызов.', undefined, 'rtc-join-timeout'), timeoutMs);
     requireRtcSuccess(engine.joinChannel(token, channelName, uid, {
       clientRoleType: sdk.broadcaster,
       publishMicrophoneTrack: true,
@@ -116,7 +126,7 @@ export const connectAudio = ({
     peerAccepted: () => {
       if (disposed || failed || connected || peerTimer) return;
       // Ответ через API/push ещё не доказывает, что собеседник вошёл в RTC-канал.
-      peerTimer = setTimeout(() => fail('Собеседник ответил, но голосовое соединение не установлено. Повторите вызов.'), timeoutMs);
+      peerTimer = setTimeout(() => fail('Собеседник ответил, но голосовое соединение не установлено. Повторите вызов.', undefined, 'rtc-peer-timeout'), timeoutMs);
     },
   };
 };

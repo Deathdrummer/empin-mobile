@@ -4,6 +4,8 @@ import Toast from 'react-native-toast-message';
 import { Platform } from 'react-native';
 import permissionsEmitter from '../utils/permissionsEmitter';
 import { getInstallationId } from './deviceInstallation';
+import Constants from 'expo-constants';
+import { recordCallDiagnostic, getCallDiagnosticSession } from './callDiagnostics';
 
 const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://empin-pro.ru/api')
   .replace(/\/$/, '');
@@ -68,6 +70,28 @@ let onUnauthorizedCallback = null;
 
 export const setUnauthorizedCallback = (callback) => {
   onUnauthorizedCallback = callback;
+};
+
+const callAction = async (action, callId, data, cause = 0) => {
+  const timeouts = { initiate: 30000, accept: 15000, reject: 10000, end: 10000 };
+  const started = Date.now();
+  const numericCause = Number.isInteger(cause) && cause >= 0 && cause <= 99 ? cause : 0;
+  const build = String(Constants.nativeBuildVersion ?? '0');
+  const headers = { 'X-Empin-Build': /^\d{1,8}$/.test(build) ? build : '0',
+    'X-Empin-Platform': Platform.OS, 'X-Empin-Call-Cause': String(numericCause),
+    'X-Empin-Call-Session': String(getCallDiagnosticSession()) };
+  recordCallDiagnostic(`http-${action}-request`, { callId, cause: numericCause });
+  try {
+    const path = action === 'initiate' ? '/messenger/calls/initiate' : `/messenger/calls/${callId}/${action}`;
+    const response = await api.post(path, data, { timeout: timeouts[action], headers });
+    recordCallDiagnostic(`http-${action}-response`, { callId: callId ?? response.data?.call_id,
+      status: response.status, cause: numericCause, elapsed: Date.now() - started });
+    return response.data;
+  } catch (error) {
+    recordCallDiagnostic(`http-${action}-failed`, { callId, status: error?.response?.status ?? 0,
+      cause: numericCause, elapsed: Date.now() - started });
+    throw error;
+  }
 };
 
 // Перехватчик ответов: 401 — выход на экран входа.
@@ -683,26 +707,20 @@ export const messengerAPI = {
 
   // Calls API
   initiateCall: async (calleeId) => {
-    const response = await api.post('/messenger/calls/initiate', {
-      callee_id: calleeId,
-    }, { timeout: 30000 });
-    return response.data;
+    return callAction('initiate', null, { callee_id: calleeId });
   },
 
   acceptCall: async (callId) => {
     const installationId = await getInstallationId();
-    const response = await api.post(`/messenger/calls/${callId}/accept`, { installation_id: installationId }, { timeout: 15000 });
-    return response.data;
+    return callAction('accept', callId, { installation_id: installationId });
   },
 
-  rejectCall: async (callId) => {
-    const response = await api.post(`/messenger/calls/${callId}/reject`, undefined, { timeout: 10000 });
-    return response.data;
+  rejectCall: async (callId, cause = 0) => {
+    return callAction('reject', callId, undefined, cause);
   },
 
-  endCall: async (callId) => {
-    const response = await api.post(`/messenger/calls/${callId}/end`, undefined, { timeout: 10000 });
-    return response.data;
+  endCall: async (callId, cause = 0) => {
+    return callAction('end', callId, undefined, cause);
   },
 
   getCallHistory: async () => {

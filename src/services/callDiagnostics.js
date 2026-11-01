@@ -3,22 +3,23 @@ import Constants from 'expo-constants';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
+import { CALL_CAUSES, safeCallDiagnostic, readCallDiagnostics } from './callDiagnosticFormat';
 
 const KEY = '@callDiagnostics';
-const MAX_EVENTS = 160;
-const ALLOWED_FIELDS = ['state', 'reason', 'code', 'status', 'callId', 'uid'];
+const MAX_EVENTS = 400;
+const session = Date.now();
+export const getCallDiagnosticSession = () => session;
+let seq = 0;
 let writes = Promise.resolve();
 
 // Только технические коды: без голоса, содержимого сообщений, имён, адресов и токенов.
 export const recordCallDiagnostic = (event, details = {}) => {
-  const safe = Object.fromEntries(ALLOWED_FIELDS
-    .filter((key) => typeof details[key] === 'number' || /^\d+$/.test(String(details[key] ?? '')))
-    .map((key) => [key, details[key]]));
-  const entry = { time: new Date().toISOString(), event, ...safe };
+  const safe = safeCallDiagnostic(event, { ...details, session, seq: ++seq });
+  if (!safe) return;
+  const entry = { time: new Date().toISOString(), ...safe };
   writes = writes.then(async () => {
     const raw = await AsyncStorage.getItem(KEY);
-    let entries;
-    try { entries = raw ? JSON.parse(raw) : []; } catch { entries = []; }
+    const entries = readCallDiagnostics(raw, MAX_EVENTS);
     await AsyncStorage.setItem(KEY, JSON.stringify([...entries, entry].slice(-MAX_EVENTS)));
   }).catch(() => {});
 };
@@ -26,8 +27,9 @@ export const recordCallDiagnostic = (event, details = {}) => {
 export const shareCallDiagnostics = async () => {
   await writes;
   const raw = await AsyncStorage.getItem(KEY);
-  const report = { platform: Platform.OS, version: Constants.expoConfig?.version,
-    build: Constants.nativeBuildVersion, events: raw ? JSON.parse(raw) : [] };
+  const report = { schema: 2, generatedAt: new Date().toISOString(), platform: Platform.OS,
+    version: Constants.expoConfig?.version, build: Constants.nativeBuildVersion,
+    causes: CALL_CAUSES, events: readCallDiagnostics(raw, MAX_EVENTS) };
   const file = new File(Paths.cache, 'empin-call-diagnostics.json');
   file.write(JSON.stringify(report, null, 2));
   if (!(await Sharing.isAvailableAsync())) throw new Error('Обмен файлами недоступен на устройстве');

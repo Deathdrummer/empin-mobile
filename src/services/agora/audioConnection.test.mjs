@@ -20,6 +20,29 @@ const setup = (overrides = {}) => {
   return { open, events, handlers, engine };
 };
 
+test('диагностика различает публикацию микрофона, подписку, аудио и уход участника', () => {
+  const x = setup();
+  const diagnostics = [];
+  const session = x.open({ onDiagnostic: (event, details) => diagnostics.push({ event, details }) });
+  try {
+    const handler = x.handlers[0];
+    handler.onFirstLocalAudioFramePublished({}, 300);
+    handler.onAudioSubscribeStateChanged('private-channel', 55, 1, 3, 40);
+    handler.onRemoteAudioStateChanged({}, 55, 2, 0);
+    handler.onUserOffline({}, 55, 1);
+    assert.deepEqual(diagnostics, [
+      { event: 'first-local-audio', details: { elapsed: 300 } },
+      { event: 'audio-subscription', details: { uid: 55, state: 3, elapsed: 40 } },
+      { event: 'remote-audio', details: { uid: 55, state: 2, reason: 0 } },
+      { event: 'peer-offline', details: { uid: 55, reason: 1 } },
+    ]);
+    assert.equal(JSON.stringify(diagnostics).includes('private-channel'), false);
+    session.dispose();
+    handler.onRemoteAudioStateChanged({}, 55, 3, 4);
+    assert.equal(diagnostics.length, 4);
+  } finally { session.dispose(); }
+});
+
 test('ответ API и успешная команда join не означают голосовое соединение', () => {
   const x = setup();
   const session = x.open();

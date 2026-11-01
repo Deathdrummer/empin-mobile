@@ -18,14 +18,15 @@ import { CallStatus, CallData, CallState } from './types';
 import { getUserFacingError } from '../../utils/userFacingError';
 import { connectAudio } from './audioConnection';
 import { recordCallDiagnostic } from '../callDiagnostics';
+import { CALL_CAUSES as C } from '../callDiagnosticFormat';
 
 interface UseCallReturn extends CallState {
   initiateCall: (calleeId: number, calleeName: string, calleeAvatar?: string) => Promise<void>;
   /** true — звонок принят и подключение к каналу запущено */
   acceptCall: (callId: string, participant?: CallData['participant']) => Promise<boolean>;
-  rejectCall: (callId: string) => Promise<void>;
-  endCall: () => Promise<void>;
-  resetToIdle: () => void;
+  rejectCall: (callId: string, cause?: number) => Promise<void>;
+  endCall: (cause?: number) => Promise<void>;
+  resetToIdle: (cause?: number) => void;
   toggleMute: () => void;
   toggleSpeaker: () => void;
   clearRingingTimeout: () => void;
@@ -76,6 +77,7 @@ export const useCall = (): UseCallReturn => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ringingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const engineRef = useRef<IRtcEngine | null>(null);
+  const engineTraceRef = useRef({ callId: 0, engine: 0, attempt: 0 });
   const connectionRef = useRef<ReturnType<typeof connectAudio> | null>(null);
   const acceptPromiseRef = useRef<{ id: string; promise: Promise<boolean> } | null>(null);
   // Звонок, к каналу которого подключён движок: о его внезапном обрыве нужно сообщить серверу
@@ -93,11 +95,12 @@ export const useCall = (): UseCallReturn => {
     }
   };
 
-  const finishCallOnServer = () => {
+  const finishCallOnServer = (cause: number = C.unknown) => {
     const callId = callIdRef.current;
     callIdRef.current = null;
     if (callId) {
-      notifyServer('Завершение звонка', () => messengerAPI.endCall(callId));
+      recordCallDiagnostic('finish-requested', { callId, cause, attempt: attemptRef.current });
+      notifyServer('Завершение звонка', () => messengerAPI.endCall(callId, cause));
     }
   };
 
@@ -123,7 +126,7 @@ export const useCall = (): UseCallReturn => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (ringingTimeoutRef.current) clearTimeout(ringingTimeoutRef.current);
-      destroyEngine();
+      destroyEngine(C.unmount);
     };
   }, []);
 
@@ -158,23 +161,28 @@ export const useCall = (): UseCallReturn => {
     } catch {}
   };
 
-  const destroyEngine = () => {
+  const destroyEngine = (cause: number = C.unknown) => {
     stopRingback();
     const engine = engineRef.current;
     const connection = connectionRef.current;
     engineRef.current = null;
     connectionRef.current = null;
     if (!engine) return;
+    recordCallDiagnostic('rtc-leave-command', { ...engineTraceRef.current, cause });
     // Ошибка движка не должна мешать завершить звонок и закрыть экран
     try {
       connection?.dispose();
-      engine.leaveChannel();
+      const code = engine.leaveChannel();
+      recordCallDiagnostic('rtc-leave-result', { ...engineTraceRef.current, cause, code });
     } catch (error: any) {
+      recordCallDiagnostic('rtc-leave-failed', { ...engineTraceRef.current, cause, code: error?.code });
       console.warn('[Agora] Выход из канала:', error?.message ?? error);
     }
     try {
+      recordCallDiagnostic('rtc-release-command', { ...engineTraceRef.current, cause });
       engine.release();
     } catch (error: any) {
+      recordCallDiagnostic('rtc-release-failed', { ...engineTraceRef.current, cause, code: error?.code });
       console.warn('[Agora] Освобождение движка:', error?.message ?? error);
     }
   };
@@ -225,10 +233,13 @@ export const useCall = (): UseCallReturn => {
     uid: number,
     outgoing = false
   ): Promise<void> => {
-    destroyEngine();
+    destroyEngine(C.replaceChannel);
 
     const engine = createAgoraRtcEngine();
     engineRef.current = engine;
+    const trace = { callId: Number(callIdRef.current), engine: engineTraceRef.current.engine + 1, attempt: attemptRef.current };
+    engineTraceRef.current = trace;
+    recordCallDiagnostic('rtc-created', trace);
 
     ringbackRef.current = outgoing;
     connectionRef.current = connectAudio({
@@ -245,30 +256,33 @@ export const useCall = (): UseCallReturn => {
         noAudioPermission: LocalAudioStreamReason.LocalAudioStreamReasonDeviceNoPermission,
       },
       onDiagnostic: (event, details) => {
-        recordCallDiagnostic(event, { ...details, callId: Number(callIdRef.current) });
+        recordCallDiagnostic(event, { ...details, ...trace });
         console.log('[Agora RTC]', event, details ?? '');
       },
       onLocalJoined: () => {
         if (ringbackRef.current) startRingback();
       },
       onConnected: () => {
+        recordCallDiagnostic('rtc-connected', trace);
         stopRingback();
         stopRingingTimeout();
         setState((prev) => ({ ...prev, status: 'active' }));
       },
       onOffline: () => {
+        recordCallDiagnostic('rtc-peer-offline', { ...trace, cause: C.peerOffline });
         setState((prev) => ({ ...prev, status: 'ended' }));
         scheduleIdleReset('ended');
         stopRingingTimeout();
-        finishCallOnServer();
-        destroyEngine();
+        finishCallOnServer(C.peerOffline);
+        destroyEngine(C.peerOffline);
       },
       onFailure: (message, code) => {
+        recordCallDiagnostic('rtc-failure', { ...trace, code, cause: C.rtcFailure });
         console.warn('[Agora RTC] failure', code);
         attemptRef.current += 1;
         stopRingingTimeout();
-        finishCallOnServer();
-        destroyEngine();
+        finishCallOnServer(C.rtcFailure);
+        destroyEngine(C.rtcFailure);
         setState((prev) => ({ ...prev, status: 'error', error: message }));
         scheduleIdleReset('error');
       },
@@ -282,10 +296,12 @@ export const useCall = (): UseCallReturn => {
   const initiateCall = useCallback(
     async (calleeId: number, calleeName: string, calleeAvatar?: string) => {
       const attempt = ++attemptRef.current;
+      recordCallDiagnostic('initiate-requested', { attempt });
       try {
         const hasPermission = await requestMicrophonePermission();
         if (attempt !== attemptRef.current) return;
         if (!hasPermission) {
+          recordCallDiagnostic('permission-denied', { attempt, cause: C.permissionDenied });
           Alert.alert(
             'Нет доступа к микрофону',
             'Разрешите доступ к микрофону в настройках устройства'
@@ -304,7 +320,7 @@ export const useCall = (): UseCallReturn => {
         if (attempt !== attemptRef.current) {
           // Пока создавался звонок, его уже отменили: у собеседника он не должен звонить
           if (response?.call_id) {
-            notifyServer('Отмена звонка', () => messengerAPI.endCall(String(response.call_id)));
+            notifyServer('Отмена звонка', () => messengerAPI.endCall(String(response.call_id), C.lateInitiate));
           }
           return;
         }
@@ -315,6 +331,7 @@ export const useCall = (): UseCallReturn => {
 
         const { call_id, channel_name, token, uid, agora_app_id } = response;
         callIdRef.current = String(call_id);
+        recordCallDiagnostic('initiate-succeeded', { callId: Number(call_id), uid, attempt });
 
         const callData: CallData = {
           callId: String(call_id),
@@ -346,8 +363,8 @@ export const useCall = (): UseCallReturn => {
             return prev;
           });
           // Никто не ответил: сервер отменит звонок, и у собеседника он перестанет звонить
-          finishCallOnServer();
-          destroyEngine();
+          finishCallOnServer(C.ringingTimeout);
+          destroyEngine(C.ringingTimeout);
         }, 90000); // Увеличен с 45s до 90s — WebSocket обычно уведомит раньше
       } catch (error: any) {
         recordCallDiagnostic('initiate-failed', { status: error?.response?.status, code: error?.rtcCode });
@@ -355,8 +372,8 @@ export const useCall = (): UseCallReturn => {
         if (attempt !== attemptRef.current) return;
         stopRingingTimeout();
         // Звонок мог успеть создаться на сервере — отменяем, чтобы у собеседника не звонило
-        finishCallOnServer();
-        destroyEngine();
+        finishCallOnServer(C.initiateFailed);
+        destroyEngine(C.initiateFailed);
         setState((prev) => ({
           ...prev,
           status: 'error',
@@ -374,6 +391,7 @@ export const useCall = (): UseCallReturn => {
   const acceptCallOnce = useCallback(async (callId: string, participant?: CallData['participant']) => {
     if (callIdRef.current === String(callId) && engineRef.current) return true;
     const attempt = ++attemptRef.current;
+    recordCallDiagnostic('accept-requested', { callId: Number(callId), attempt });
     try {
       const hasPermission = await requestMicrophonePermission();
       if (attempt !== attemptRef.current) return false;
@@ -382,7 +400,7 @@ export const useCall = (): UseCallReturn => {
           'Нет доступа к микрофону',
           'Разрешите доступ к микрофону в настройках устройства'
         );
-        notifyServer('Отклонение звонка', () => messengerAPI.rejectCall(callId));
+        notifyServer('Отклонение звонка', () => messengerAPI.rejectCall(callId, C.permissionDenied));
         setState((prev) => ({ ...prev, status: 'error', error: 'Нет доступа к микрофону' }));
         scheduleIdleReset('error');
         return false;
@@ -395,10 +413,11 @@ export const useCall = (): UseCallReturn => {
       const response = await messengerAPI.acceptCall(callId);
       if (attempt !== attemptRef.current) {
         // Пока принимали, звонок отклонили или он завершился — сервер уже считает его принятым
-        notifyServer('Завершение звонка', () => messengerAPI.endCall(String(callId)));
+        notifyServer('Завершение звонка', () => messengerAPI.endCall(String(callId), C.lateAccept));
         return false;
       }
       const { channel_name, token, uid, agora_app_id } = response;
+      recordCallDiagnostic('accept-succeeded', { callId: Number(callId), uid, attempt });
       callIdRef.current = String(callId);
 
       setState((prev) => ({
@@ -424,8 +443,8 @@ export const useCall = (): UseCallReturn => {
       recordCallDiagnostic('accept-failed', { status: error?.response?.status, code: error?.rtcCode, callId: Number(callId) });
       if (attempt !== attemptRef.current) return false;
       // Сервер уже отметил звонок принятым, а подключиться не удалось — завершаем его на сервере
-      finishCallOnServer();
-      destroyEngine();
+      finishCallOnServer(C.acceptFailed);
+      destroyEngine(C.acceptFailed);
       setState((prev) => ({
         ...prev,
         status: 'error',
@@ -450,13 +469,14 @@ export const useCall = (): UseCallReturn => {
   /**
    * Отклонение звонка
    */
-  const rejectCall = useCallback(async (callId: string) => {
+  const rejectCall = useCallback(async (callId: string, cause: number = C.userReject) => {
     // Раньше при ошибке запроса (например, 429) состояние не сбрасывалось, а сервер не узнавал об отказе
-    notifyServer('Отклонение звонка', () => messengerAPI.rejectCall(callId));
+    recordCallDiagnostic('reject-command', { callId, cause, attempt: attemptRef.current });
+    notifyServer('Отклонение звонка', () => messengerAPI.rejectCall(callId, cause));
     attemptRef.current += 1;
     callIdRef.current = null;
     stopRingingTimeout();
-    destroyEngine();
+    destroyEngine(cause);
     setState({
       status: 'idle',
       callData: null,
@@ -470,17 +490,18 @@ export const useCall = (): UseCallReturn => {
   /**
    * Завершение звонка
    */
-  const endCall = useCallback(async () => {
+  const endCall = useCallback(async (cause: number = C.userHangup) => {
     // Раньше при ошибке запроса (например, 429) звонок у собеседника продолжал звонить, а движок
     // оставался в канале: звонящий нажимал вызов снова, и собеседнику приходил второй входящий
     const callId = state.callData?.callId ?? callIdRef.current;
+    recordCallDiagnostic('end-command', { callId, cause, attempt: attemptRef.current });
     attemptRef.current += 1;
     callIdRef.current = null;
     if (callId) {
-      notifyServer('Завершение звонка', () => messengerAPI.endCall(callId));
+      notifyServer('Завершение звонка', () => messengerAPI.endCall(callId, cause));
     }
     stopRingingTimeout();
-    destroyEngine();
+    destroyEngine(cause);
     setState({
       status: 'ended',
       callData: null,
@@ -518,12 +539,13 @@ export const useCall = (): UseCallReturn => {
    * Локальный сброс состояния без API вызова.
    * Используется когда внешнее событие (WebSocket) уже обработано бэкендом.
    */
-  const resetToIdle = useCallback(() => {
+  const resetToIdle = useCallback((cause: number = C.reset) => {
+    recordCallDiagnostic('reset-command', { callId: callIdRef.current ?? engineTraceRef.current.callId, cause, attempt: attemptRef.current });
     // Вызывается, когда звонок завершён другой стороной — сервер уже знает
     attemptRef.current += 1;
     callIdRef.current = null;
     stopRingingTimeout();
-    destroyEngine();
+    destroyEngine(cause);
     setState({
       status: 'idle',
       callData: null,
