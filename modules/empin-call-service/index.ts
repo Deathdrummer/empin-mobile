@@ -4,6 +4,8 @@ declare class EmpinCallServiceNativeModule extends NativeModule<Record<string, n
   /** Запускает службу переднего плана на время звонка. false — запуск невозможен (нет разрешения, приложение в фоне). */
   start(title: string): boolean;
   stop(): void;
+  /** Тёмная системная панель у окна (Modal), в котором находится этот вид */
+  setDarkNavigationBar(viewTag: number): Promise<void>;
 }
 
 // Только Android: на iOS фоновый звук держат CallKit и фоновые режимы audio/voip

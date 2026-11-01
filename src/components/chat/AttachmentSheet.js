@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import Toast from 'react-native-toast-message';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { restoreStatusBar } from '../../utils/statusBar';
 
 const openSettingsAlert = (title, message) => {
@@ -39,6 +40,7 @@ export const takePhoto = async () => {
  * extraOptions — дополнительные пункты (например, «Опрос» в группе): [{ key, label, icon, color, onPress }].
  */
 export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOptions = [] }) => {
+  const insets = useSafeAreaInsets();
   // iOS не показывает новое окно (системное или наше, например «Опрос»), пока закрывается это
   const closeFirst = async () => {
     onClose();
@@ -115,7 +117,7 @@ export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOption
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={[styles.backdrop, { backgroundColor: theme.overlay }]} onPress={onClose}>
-        <Pressable style={[styles.sheet, { backgroundColor: theme.sheet }]}>
+        <Pressable style={[styles.sheet, { backgroundColor: theme.sheet, paddingBottom: Math.max(insets.bottom + 8, 34) }]}>
           <View style={[styles.handle, { backgroundColor: theme.separator }]} />
           <View style={styles.grid}>
             {[...options, ...extra].map((option) => (
@@ -135,7 +137,7 @@ export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOption
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 8, paddingBottom: 34, paddingHorizontal: 16 },
+  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, paddingTop: 8, paddingHorizontal: 16 },
   handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: 18 },
   // Четыре колонки: пятый пункт («Опрос») встаёт под первым, а не по центру
   grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 16 },

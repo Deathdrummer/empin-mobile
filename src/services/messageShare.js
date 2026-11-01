@@ -7,6 +7,7 @@ import { plainText } from '../utils/richText';
 import { getUserFacingError } from '../utils/userFacingError';
 import { restoreStatusBar } from '../utils/statusBar';
 import { cachedFileUri } from '../components/ui/CachedImage';
+import { shareFileName } from '../utils/shareFile';
 
 /**
  * «Поделиться» в другие приложения (WhatsApp, Telegram, почта, «Файлы»): текст, фото, видео, документы.
@@ -14,10 +15,8 @@ import { cachedFileUri } from '../components/ui/CachedImage';
  */
 const SHARE_DIR = 'share';
 
-const safeName = (name, index) => {
-  const base = String(name || `file-${index + 1}`).replace(/[\\/:*?"<>|]/g, '_');
-  return `${index + 1}-${base}`;
-};
+// Второе нажатие, пока готовятся файлы, удалило бы папку у первого
+let preparing = false;
 
 /** Скачать вложения во временную папку; уже локальные (только что отправленные) берутся как есть */
 const downloadMedia = async (media) => {
@@ -27,7 +26,10 @@ const downloadMedia = async (media) => {
 
   return Promise.all(media.map(async (item, index) => {
     if (item.uri.startsWith('file://')) return { ...item, localUri: item.uri };
-    const target = new File(dir, safeName(item.name || item.uri.split('/').pop(), index));
+    // Своя папка у каждого файла: получатель видит исходное имя, а одинаковые имена не конфликтуют
+    const fileDir = new Directory(dir, String(index));
+    fileDir.create();
+    const target = new File(fileDir, shareFileName(item, index));
     // Фото, уже показанное в чате, копируется из кэша телефона (с нормальным именем) — без загрузки
     const cached = item.type === 'image' ? await cachedFileUri(item.uri) : item.uri;
     if (cached.startsWith('file:')) {
@@ -62,7 +64,7 @@ export const messagesText = (messages, { withAuthors = messages.length > 1 } = {
 export const shareMessages = async (messages) => {
   const media = messages.flatMap((message) => normalizeMedia(message.media));
   const message = messagesText(messages);
-  if (!media.length && !message) return;
+  if ((!media.length && !message) || preparing) return;
 
   try {
     if (!media.length) {
@@ -70,13 +72,17 @@ export const shareMessages = async (messages) => {
       return;
     }
 
+    preparing = true;
     Toast.show({ type: 'info', text1: 'Готовим файлы…', position: 'top', visibilityTime: 1500 });
-    const files = await downloadMedia(media);
+    const files = await downloadMedia(media).finally(() => {
+      preparing = false;
+    });
     const types = [...new Set(files.map((file) => file.mime_type || file.mimeType).filter(Boolean))];
 
+    // Без filenames: на Android библиотека считает путь папкой, дописывает к нему имя и передаёт
+    // несуществующий файл. Один файл — через url: его принимают и приложения без отправки нескольких
     await RNShare.open({
-      urls: files.map((file) => file.localUri),
-      filenames: files.map((file, index) => safeName(file.name, index)),
+      ...(files.length === 1 ? { url: files[0].localUri } : { urls: files.map((file) => file.localUri) }),
       type: types.length === 1 ? types[0] : undefined,
       message: message || undefined,
       failOnCancel: false,

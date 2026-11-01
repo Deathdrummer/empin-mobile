@@ -156,14 +156,22 @@ export const useCall = (): UseCallReturn => {
 
   const destroyEngine = () => {
     stopRingback();
-    if (engineRef.current) {
-      if (eventHandlerRef.current) {
-        engineRef.current.unregisterEventHandler(eventHandlerRef.current);
-        eventHandlerRef.current = null;
-      }
-      engineRef.current.leaveChannel();
-      engineRef.current.release();
-      engineRef.current = null;
+    const engine = engineRef.current;
+    const handler = eventHandlerRef.current;
+    engineRef.current = null;
+    eventHandlerRef.current = null;
+    if (!engine) return;
+    // Ошибка движка не должна мешать завершить звонок и закрыть экран
+    try {
+      if (handler) engine.unregisterEventHandler(handler);
+      engine.leaveChannel();
+    } catch (error: any) {
+      console.warn('[Agora] Выход из канала:', error?.message ?? error);
+    }
+    try {
+      engine.release();
+    } catch (error: any) {
+      console.warn('[Agora] Освобождение движка:', error?.message ?? error);
     }
   };
 
@@ -310,6 +318,9 @@ export const useCall = (): UseCallReturn => {
             'Нет доступа к микрофону',
             'Разрешите доступ к микрофону в настройках устройства'
           );
+          // Экран звонка уже открыт: без этого он остался бы на экране без звонка
+          setState((prev) => ({ ...prev, status: 'error', error: 'Нет доступа к микрофону' }));
+          scheduleIdleReset('error');
           return;
         }
 

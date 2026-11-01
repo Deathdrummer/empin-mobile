@@ -635,6 +635,11 @@ export const CallProvider = ({ children, isLoggedIn }) => {
    * Инициация исходящего звонка
    */
   const initiateCall = useCallback(async (userId, userName, userAvatar) => {
+    // Хвосты прошлого звонка (восстановленный входящий, «отклонён») не должны попасть на экран нового:
+    // имя чужого собеседника, кнопки входящего или экран без кнопок
+    incomingCallDataRef.current = null;
+    setIncomingCallData(null);
+    setCallEndReason(null);
     setOutgoingParticipant({ id: userId, name: userName, avatar: userAvatar });
     setCallModalVisible(true);
     await callState.initiateCall(userId, userName, userAvatar);
@@ -672,13 +677,16 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       setCallTimeoutId(null);
     }
 
-    if (incomingCallData?.callId) {
-      await endIosSystemCall(incomingCallData.callId, 'declined');
-      await callState.rejectCall(incomingCallData.callId);
+    // Экран закрывается в любом случае: кроме этой кнопки выхода с него нет
+    try {
+      if (incomingCallData?.callId) {
+        endIosSystemCall(incomingCallData.callId, 'declined');
+        await callState.rejectCall(incomingCallData.callId);
+      }
+    } finally {
+      setCallModalVisible(false);
+      setIncomingCallData(null);
     }
-
-    setCallModalVisible(false);
-    setIncomingCallData(null);
   }, [callState, callTimeoutId, incomingCallData]);
 
   /**
@@ -710,11 +718,14 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       setCallTimeoutId(null);
     }
 
-    const callId = callState.callData?.callId ?? incomingCallData?.callId;
-    await endIosSystemCall(callId, 'remoteEnded');
-    await callState.endCall();
-    setCallModalVisible(false);
-    setIncomingCallData(null);
+    // Экран закрывается в любом случае и не ждёт системный звонок: кроме этой кнопки выхода с него нет
+    try {
+      endIosSystemCall(callState.callData?.callId ?? incomingCallData?.callId, 'remoteEnded');
+      await callState.endCall();
+    } finally {
+      setCallModalVisible(false);
+      setIncomingCallData(null);
+    }
   }, [callState, callTimeoutId, incomingCallData]);
 
   // Синхронизируем refs с актуальными версиями обработчиков (избегаем stale closure в event listeners)

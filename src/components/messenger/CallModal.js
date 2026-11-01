@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   View,
@@ -6,11 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  findNodeHandle,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../chat/Avatar';
+import { callScreenActions } from '../../utils/callScreen';
+import EmpinCallService from '../../../modules/empin-call-service';
 
 // Экран звонка всегда тёмный, как в мессенджерах: фон в цветах иконки приложения
 const CALL_BACKGROUND = ['#3A0B11', '#140709', '#0B0B0E'];
@@ -66,6 +69,7 @@ export const CallModal = ({
 }) => {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(50));
+  const overlayRef = useRef(null);
 
   useEffect(() => {
     if (visible) {
@@ -97,18 +101,9 @@ export const CallModal = ({
     }
   }, [visible]);
 
-  // Авто-закрытие при статусе 'ended'
-  useEffect(() => {
-    if (callState.status === 'ended') {
-      const timer = setTimeout(() => {
-        // Modal закроется автоматически через 2 секунды
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [callState.status]);
-
   const getStatusText = () => {
     switch (callState.status) {
+      case 'idle':
       case 'initiating':
         return 'Звоним...';
       case 'ringing':
@@ -129,8 +124,9 @@ export const CallModal = ({
   };
 
   const renderActionButtons = () => {
-    if (callState.status === 'ringing' && callState.callData?.isIncoming) {
-      // Входящий звонок
+    const actions = callScreenActions(callState.status, callState.callData?.isIncoming);
+
+    if (actions === 'incoming') {
       return (
         <View style={styles.actionsRow}>
           <CallButton icon="call-end" iconSet="material" label="Отклонить" color={DECLINE_COLOR} onPress={onReject} />
@@ -139,8 +135,7 @@ export const CallModal = ({
       );
     }
 
-    if (callState.status === 'active') {
-      // Активный звонок
+    if (actions === 'talk') {
       return (
         <View style={styles.actionsRow}>
           <CallButton
@@ -162,8 +157,7 @@ export const CallModal = ({
       );
     }
 
-    if (callState.status === 'initiating' || callState.status === 'ringing') {
-      // Исходящий звонок
+    if (actions === 'outgoing') {
       return (
         <View style={styles.actionsRow}>
           <CallButton icon="call-end" iconSet="material" label="Отменить" color={DECLINE_COLOR} onPress={onEnd} />
@@ -171,18 +165,10 @@ export const CallModal = ({
       );
     }
 
-    if (['error', 'ended', 'no_answer', 'rejected'].includes(callState.status)) {
-      return null;
-    }
-
     return null;
   };
 
   if (!visible) return null;
-
-  // Крестик у входящего — это «Отклонить»: иначе сервер не узнал бы об отказе и у звонящего звонило бы дальше
-  const isIncomingRinging = callState.status === 'ringing' && callState.callData?.isIncoming;
-  const handleClose = isIncomingRinging ? onReject : onEnd;
 
   const nameParts = (participant?.name || '').trim().split(/\s+/);
   const person = { sname: nameParts[0], fname: nameParts[1] };
@@ -195,23 +181,18 @@ export const CallModal = ({
       statusBarTranslucent={true}
     >
       {/* Своя «безопасная зона»: у содержимого Modal на iOS отдельная иерархия видов, и без провайдера внутри
-          SafeAreaView получал нулевые отступы — шапка с крестиком уезжала под строку состояния (на значок батареи) */}
+          SafeAreaView получал нулевые отступы — шапка уезжала под строку состояния (на значок батареи) */}
       <SafeAreaProvider>
-        <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+        <Animated.View
+          ref={overlayRef}
+          style={[styles.overlay, { opacity: fadeAnim }]}
+          onLayout={() => EmpinCallService?.setDarkNavigationBar(findNodeHandle(overlayRef.current)).catch(() => {})}
+        >
           <LinearGradient colors={CALL_BACKGROUND} style={StyleSheet.absoluteFill} />
           <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
             {/* Header */}
             <View style={styles.header}>
-              <View style={styles.headerSpacer} />
               <Text style={styles.headerTitle}>Аудиозвонок</Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={handleClose}
-                activeOpacity={0.6}
-                accessibilityLabel="Закрыть"
-              >
-                <Ionicons name="close" size={22} color="rgba(255, 255, 255, 0.85)" />
-              </TouchableOpacity>
             </View>
 
             <Animated.View style={[styles.center, { transform: [{ translateY: slideAnim }] }]}>
@@ -251,29 +232,15 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
   },
-  // Кнопки не у края: на iPhone с большими скруглениями угла (17 Pro Max) крестик уходил в угол
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingTop: 12,
-  },
-  headerSpacer: {
-    width: 40,
   },
   headerTitle: {
     fontSize: 15,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.7)',
-  },
-  closeButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
   center: {
     flex: 1,

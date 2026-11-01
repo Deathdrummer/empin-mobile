@@ -15,16 +15,21 @@ const TABS = [
   { key: 'profile', label: 'Профиль', icon: 'person-circle', route: 'Profile' },
 ];
 
-const BAR_HEIGHT = 56;
+const BAR_HEIGHT = 62;
+const MIN_BOTTOM_GAP = 8;
+
+/** Отступ капсулы снизу: над системными кнопками Android и полоской «домой» iPhone */
+const bottomGap = (insets) => Math.max(insets.bottom, MIN_BOTTOM_GAP);
 
 /** Высота панели вкладок: контент экрана прокручивается под ней, отступ снизу — на эту высоту */
 export const useTabBarHeight = () => {
   const insets = useSafeAreaInsets();
-  return BAR_HEIGHT + Math.max(insets.bottom, 6);
+  return BAR_HEIGHT + bottomGap(insets);
 };
 
 /**
- * Нижние вкладки приложения — полупрозрачная панель поверх контента.
+ * Нижние вкладки приложения — плавающая полупрозрачная капсула поверх контента, как в Telegram.
+ * Системные кнопки Android и полоска «домой» iPhone всегда ниже неё.
  * Переключение заменяет экран (как вкладки мессенджеров):
  * «назад» на Android с главного экрана закрывает приложение, а не листает историю вкладок.
  */
@@ -46,14 +51,14 @@ export const TabBar = ({ active }) => {
   };
 
   return (
-    <GlassView edge="top" style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 6) }]}>
+    <GlassView lite style={[styles.bar, { bottom: bottomGap(insets) }]}>
       {TABS.map((tab) => {
         const selected = tab.key === active;
         const color = selected ? theme.accent : theme.textMuted;
         return (
           <Pressable
             key={tab.key}
-            style={styles.tab}
+            style={[styles.tab, selected && { backgroundColor: theme.surfacePressed }]}
             onPress={() => open(tab)}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
@@ -78,13 +83,14 @@ export const TabBar = ({ active }) => {
 const styles = StyleSheet.create({
   bar: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    left: 12,
+    right: 12,
+    height: BAR_HEIGHT,
+    borderRadius: BAR_HEIGHT / 2,
     flexDirection: 'row',
-    paddingTop: 6,
+    padding: 4,
   },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, height: BAR_HEIGHT - 6 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, borderRadius: (BAR_HEIGHT - 8) / 2 },
   label: { fontSize: 11, fontWeight: '500' },
   labelSelected: { fontWeight: '600' },
   badge: {

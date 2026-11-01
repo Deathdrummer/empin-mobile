@@ -78,6 +78,8 @@ export const Composer = ({
   mentionCandidates = null,
   onCreatePoll = null,
   floating = false,
+  incomingFiles = null,
+  onIncomingFilesTaken = null,
 }) => {
   const Surface = floating ? GlassSurface : View;
   const [attachments, setAttachments] = useState([]);
@@ -107,6 +109,14 @@ export const Composer = ({
   const [hasSelection, setHasSelection] = useState(false);
 
   const canSend = value.trim().length > 0 || attachments.length > 0 || context?.type === 'edit';
+
+  // Файлы из «Поделиться» другого приложения: родитель забывает их сразу, иначе при следующем
+  // появлении поля ввода (например, после режима выбора) они добавились бы снова
+  useEffect(() => {
+    if (!incomingFiles?.length) return;
+    setAttachments((prev) => [...prev, ...incomingFiles].slice(0, 10));
+    onIncomingFilesTaken?.();
+  }, [incomingFiles]);
 
   useEffect(() => () => clearInterval(timerRef.current), []);
 

@@ -27,6 +27,7 @@ import { CallProvider } from './src/contexts/CallContext';
 import { useMessengerSync } from './src/hooks/useMessengerSync';
 import { navigationRef } from './src/services/navigationRef';
 import { GlobalCallModal } from './src/components/messenger/GlobalCallModal';
+import { IncomingShare } from './src/components/messenger/IncomingShare';
 import {
   registerPushNotifications,
   unregisterPushNotifications,
@@ -93,11 +94,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS === 'android') {
-      NavigationBar.setVisibilityAsync('hidden');
-    }
     requestCallPermissions();
   }, []);
+
+  // Системная панель Android видна всегда, как в Telegram: экраны отступают от неё сами (insets).
+  // Цвет значков — по теме приложения: она может не совпадать с темой телефона
+  useEffect(() => {
+    if (Platform.OS === 'android') NavigationBar.setStyle(theme.dark ? 'dark' : 'light');
+  }, [theme.dark]);
 
   useEffect(() => {
     checkAuth();
@@ -186,6 +190,7 @@ export default function App() {
                 )}
                 <Toast />
                 {isLoggedIn && <GlobalCallModal />}
+                <IncomingShare isLoggedIn={isLoggedIn} />
               </View>
             </>
           </CallProvider>

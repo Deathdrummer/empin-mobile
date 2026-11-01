@@ -157,7 +157,9 @@ export default function ChatScreen({ navigation, route }) {
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [loadingNewer, setLoadingNewer] = useState(false);
-  const [text, setText] = useState('');
+  // «Поделиться» из другого приложения: текст и файлы сразу в поле ввода
+  const [text, setText] = useState(params.shared?.text || '');
+  const [sharedFiles, setSharedFiles] = useState(params.shared?.files ?? null);
   const [replyTo, setReplyTo] = useState(null);
   const [editing, setEditing] = useState(null);
   // Меню по долгому нажатию: строка ленты и её положение на экране
@@ -1256,6 +1258,12 @@ export default function ChatScreen({ navigation, route }) {
   );
 
   const canWrite = info?.can_write !== false;
+  const hasShared = Boolean(params.shared);
+  useEffect(() => {
+    if (hasShared && info?.can_write === false) {
+      Toast.show({ type: 'error', text1: 'В этот чат нельзя отправить', text2: 'Нет права писать в чат объекта', position: 'top' });
+    }
+  }, [hasShared, info?.can_write]);
   const bottomGap = Platform.OS === 'android' ? Math.max(insets.bottom, ANDROID_GESTURE_GAP) : insets.bottom;
   const s = screenStyles(theme);
   // Затухание фона чата под «стеклянными» элементами шапки и низа
@@ -1404,6 +1412,8 @@ export default function ChatScreen({ navigation, route }) {
                   mentionCandidates={mentionCandidates}
                   onCreatePoll={isGroup ? () => setPollVisible(true) : null}
                   floating
+                  incomingFiles={sharedFiles}
+                  onIncomingFilesTaken={() => setSharedFiles(null)}
                 />
               ) : (
                 <GlassView lite style={s.glassCard}>

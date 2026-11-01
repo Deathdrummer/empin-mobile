@@ -2,6 +2,7 @@
   "expo": {
     "name": "empin-mobile",
     "slug": "empin-mobile",
+    "scheme": "empinpro",
     "owner": "empin",
     "version": "1.0.2",
     "orientation": "portrait",
@@ -96,6 +97,22 @@
         }
       ],
       "./plugins/withAndroidReleaseManifest",
+      [
+        "expo-share-intent",
+        {
+          "iosShareExtensionName": "Эмпин PRO",
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsText": true,
+            "NSExtensionActivationSupportsWebURLWithMaxCount": 1,
+            "NSExtensionActivationSupportsWebPageWithMaxCount": 1,
+            "NSExtensionActivationSupportsImageWithMaxCount": 10,
+            "NSExtensionActivationSupportsMovieWithMaxCount": 10,
+            "NSExtensionActivationSupportsFileWithMaxCount": 10
+          },
+          "androidIntentFilters": ["text/*", "image/*", "video/*", "*/*"],
+          "androidMultiIntentFilters": ["image/*", "video/*", "*/*"]
+        }
+      ],
       "expo-asset",
       [
         "./plugins/withAppDisplayName",

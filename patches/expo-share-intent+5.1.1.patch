@@ -1,0 +1,125 @@
+diff --git a/node_modules/expo-share-intent/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt b/node_modules/expo-share-intent/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
+index 0153c89..8cf9c77 100644
+--- a/node_modules/expo-share-intent/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
++++ b/node_modules/expo-share-intent/android/src/main/java/expo/modules/shareintent/ExpoShareIntentModule.kt
+@@ -122,7 +122,7 @@ class ExpoShareIntentModule : Module() {
+                 return
+             }
+             if (intent.type == null) return
+-            if (intent.type!!.startsWith("text/plain")) {
++            if (intent.type!!.startsWith("text/plain") && !intent.hasExtra(Intent.EXTRA_STREAM)) {
+                 // text / urls
+                 if (intent.action == Intent.ACTION_SEND) {
+                     notifyShareIntent(mapOf(
+@@ -137,7 +137,7 @@ class ExpoShareIntentModule : Module() {
+                 } else {
+                     notifyError("Invalid action for text sharing: " + intent.action)
+                 }
+-            } else {
++            } else try {
+                 // files / medias
+                 if (intent.action == Intent.ACTION_SEND) {
+                     val uri = intent.parcelable<Uri>(Intent.EXTRA_STREAM);
+@@ -156,6 +156,8 @@ class ExpoShareIntentModule : Module() {
+                 } else {
+                     notifyError("Invalid action for file sharing: " + intent.action)
+                 }
++            } catch (error: Exception) {
++                notifyError("Cannot read shared file: " + error.message)
+             }
+         }
+ 
+@@ -197,7 +199,7 @@ class ExpoShareIntentModule : Module() {
+         }
+ 
+         OnNewIntent {
+-            handleShareIntent(it)
++            Thread { handleShareIntent(it) }.start()
+         }
+ 
+         OnCreate {
+diff --git a/node_modules/expo-share-intent/android/src/main/java/expo/modules/shareintent/ExpoShareIntentReactActivityLifecycleListener.kt b/node_modules/expo-share-intent/android/src/main/java/expo/modules/shareintent/ExpoShareIntentReactActivityLifecycleListener.kt
+index db573ec..641df39 100644
+--- a/node_modules/expo-share-intent/android/src/main/java/expo/modules/shareintent/ExpoShareIntentReactActivityLifecycleListener.kt
++++ b/node_modules/expo-share-intent/android/src/main/java/expo/modules/shareintent/ExpoShareIntentReactActivityLifecycleListener.kt
+@@ -14,7 +14,7 @@ class ExpoShareIntentReactActivityLifecycleListener(activityContext: Context) :
+ 
+     override fun onCreate(activity: Activity?, savedInstanceState: Bundle?) {
+         // only store when the new intent is not empty
+-        if (activity?.intent?.type != null) {
++        if (activity?.intent?.type != null && (activity.intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) == 0) {
+             ExpoShareIntentSingleton.intent = activity?.intent
+             ExpoShareIntentSingleton.isPending = true
+         }
+diff --git a/node_modules/expo-share-intent/plugin/build/ios/ShareExtensionViewController.swift b/node_modules/expo-share-intent/plugin/build/ios/ShareExtensionViewController.swift
+index 0911a9e..7c799ad 100644
+--- a/node_modules/expo-share-intent/plugin/build/ios/ShareExtensionViewController.swift
++++ b/node_modules/expo-share-intent/plugin/build/ios/ShareExtensionViewController.swift
+@@ -26,6 +26,13 @@ class ShareViewController: UIViewController {
+   let pdfContentType: String = UTType.pdf.identifier
+   let vcardContentType: String = "public.vcard"
+ 
++  private var finishedAttachments = 0
++
++  private func finishedLastAttachment(_ content: NSExtensionItem) -> Bool {
++    finishedAttachments += 1
++    return finishedAttachments == (content.attachments?.count ?? 0)
++  }
++
+   override func viewDidLoad() {
+     super.viewDidLoad()
+   }
+@@ -103,7 +110,7 @@ class ShareViewController: UIViewController {
+ 
+           self.sharedText.append(item)
+           // If this is the last item, save sharedText in userDefaults and redirect to host app
+-          if index == (content.attachments?.count)! - 1 {
++          if self.finishedLastAttachment(content) {
+             let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+             userDefaults?.set(self.sharedText, forKey: self.sharedKey)
+             userDefaults?.synchronize()
+@@ -126,7 +133,7 @@ class ShareViewController: UIViewController {
+ 
+           self.sharedWebUrl.append(WebUrl(url: item.absoluteString, meta: ""))
+           // If this is the last item, save sharedText in userDefaults and redirect to host app
+-          if index == (content.attachments?.count)! - 1 {
++          if self.finishedLastAttachment(content) {
+             let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+             userDefaults?.set(self.toData(data: self.sharedWebUrl), forKey: self.sharedKey)
+             userDefaults?.synchronize()
+@@ -161,7 +168,7 @@ class ShareViewController: UIViewController {
+             self.sharedWebUrl.append(
+               WebUrl(url: results["baseURI"] as! String, meta: results["meta"] as! String))
+             // If this is the last item, save sharedText in userDefaults and redirect to host app
+-            if index == (content.attachments?.count)! - 1 {
++            if self.finishedLastAttachment(content) {
+               let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+               userDefaults?.set(self.toData(data: self.sharedWebUrl), forKey: self.sharedKey)
+               userDefaults?.synchronize()
+@@ -300,7 +307,7 @@ class ShareViewController: UIViewController {
+           }
+ 
+           // If this is the last item, save imagesData in userDefaults and redirect to host app
+-          if index == (content.attachments?.count)! - 1 {
++          if self.finishedLastAttachment(content) {
+             let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+             userDefaults?.set(self.toData(data: self.sharedMedia), forKey: self.sharedKey)
+             userDefaults?.synchronize()
+@@ -385,7 +392,7 @@ class ShareViewController: UIViewController {
+           }
+ 
+           // If this is the last item, save imagesData in userDefaults and redirect to host app
+-          if index == (content.attachments?.count)! - 1 {
++          if self.finishedLastAttachment(content) {
+             let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+             userDefaults?.set(self.toData(data: self.sharedMedia), forKey: self.sharedKey)
+             userDefaults?.synchronize()
+@@ -453,7 +460,7 @@ class ShareViewController: UIViewController {
+           type: .file))
+     }
+ 
+-    if index == (content.attachments?.count)! - 1 {
++    if self.finishedLastAttachment(content) {
+       let userDefaults = UserDefaults(suiteName: self.hostAppGroupIdentifier)
+       userDefaults?.set(self.toData(data: self.sharedMedia), forKey: self.sharedKey)
+       userDefaults?.synchronize()

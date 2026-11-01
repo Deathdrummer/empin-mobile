@@ -27,8 +27,10 @@ import { getUserFacingError } from '../../utils/userFacingError';
  * «Переслать»: выбор чатов и сотрудников (можно несколько), как в Telegram.
  * Сверху — «Избранное» (себе), затем личные чаты и группы по последней активности, ниже — остальные сотрудники.
  * В чаты объектов не пересылается: там сообщения становятся комментариями табеля.
+ * onPick — выбор одного чата одним нажатием, без пересылки («Поделиться» из другого приложения): доступны и чаты
+ * объектов, отправляет сам человек из поля ввода чата.
  */
-export default function ForwardSheet({ visible, sourceChatId, messageIds, onClose, onForwarded }) {
+export default function ForwardSheet({ visible, sourceChatId, messageIds, onClose, onForwarded, onPick = null, title: customTitle = null }) {
   const theme = useTheme();
   const [chats, setChats] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -59,7 +61,7 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
         ]);
         if (cancelled) return;
         const myStaffId = Number(userJson ? JSON.parse(userJson)?.staff_id : 0);
-        const list = (chatData?.chats || []).filter((chat) => chat.type !== 'object');
+        const list = (chatData?.chats || []).filter((chat) => onPick || chat.type !== 'object');
         const withChat = new Set(list.filter((chat) => chat.type === 'direct').map((chat) => Number(chat.participant?.id)));
         setChats(list);
         setStaff((staffData || []).filter((person) => Number(person.id) !== myStaffId && !withChat.has(Number(person.id))));
@@ -149,9 +151,9 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
     return (
       <Pressable
         style={({ pressed }) => [s.row, pressed && { backgroundColor: theme.surfacePressed }]}
-        onPress={() => toggle(item)}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked }}
+        onPress={() => (onPick ? onPick(item) : toggle(item))}
+        accessibilityRole={onPick ? 'button' : 'checkbox'}
+        accessibilityState={onPick ? undefined : { checked }}
         accessibilityLabel={title}
       >
         {item.kind === 'chat' || item.kind === 'saved'
@@ -162,9 +164,11 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
             <Text style={s.name} numberOfLines={1}>{title}</Text>
             {sub ? <Text style={s.sub} numberOfLines={1}>{sub}</Text> : null}
           </View>
-          <View style={[s.check, checked && { backgroundColor: theme.accent, borderColor: theme.accent }]}>
-            {checked ? <Ionicons name="checkmark" size={16} color={theme.onAccent} /> : null}
-          </View>
+          {onPick ? null : (
+            <View style={[s.check, checked && { backgroundColor: theme.accent, borderColor: theme.accent }]}>
+              {checked ? <Ionicons name="checkmark" size={16} color={theme.onAccent} /> : null}
+            </View>
+          )}
         </View>
       </Pressable>
     );
@@ -180,7 +184,7 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
               <Text style={s.headerAction}>Отмена</Text>
             </TouchableOpacity>
             <Text style={s.title} numberOfLines={1}>
-              {count > 1 ? `Переслать ${count} ${plural(count, 'сообщение', 'сообщения', 'сообщений')}` : 'Переслать'}
+              {customTitle || (count > 1 ? `Переслать ${count} ${plural(count, 'сообщение', 'сообщения', 'сообщений')}` : 'Переслать')}
             </Text>
             <View style={s.headerSpacer} />
           </View>

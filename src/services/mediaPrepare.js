@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Video, createVideoThumbnail } from 'react-native-compressor';
+import { isHeic } from '../utils/incomingShare';
 
 // Как в Telegram: фото — до 2560 по длинной стороне, видео — 720p (1280 по длинной стороне)
 const PHOTO_MAX_SIDE = 2560;
@@ -18,9 +19,11 @@ const isPickedVideo = (file) => file.type === 'video';
 
 const preparePhoto = async (file) => {
   const longest = Math.max(file.width || 0, file.height || 0);
-  if (!longest || longest <= PHOTO_MAX_SIDE) return file;
+  const tooBig = longest > PHOTO_MAX_SIDE;
+  // HEIC приходит из «Поделиться» на iPhone (галерея приложения отдаёт уже JPEG)
+  if (!tooBig && !isHeic(file)) return file;
   const resize = file.width >= file.height ? { width: PHOTO_MAX_SIDE } : { height: PHOTO_MAX_SIDE };
-  const result = await ImageManipulator.manipulateAsync(file.uri, [{ resize }], {
+  const result = await ImageManipulator.manipulateAsync(file.uri, tooBig ? [{ resize }] : [], {
     compress: PHOTO_QUALITY,
     format: ImageManipulator.SaveFormat.JPEG,
   });

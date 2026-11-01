@@ -3,7 +3,11 @@ package expo.modules.empincallservice
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
+import android.view.View
+import android.view.WindowInsetsController
+import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -34,5 +38,15 @@ class EmpinCallServiceModule : Module() {
       context.stopService(Intent(context, CallForegroundService::class.java))
       Unit
     }
+
+    // Экран звонка всегда тёмный, а Modal — отдельное окно: при светлой теме его системная панель была бы светлой
+    AsyncFunction("setDarkNavigationBar") { viewTag: Int ->
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        appContext.findView<View>(viewTag)?.windowInsetsController?.setSystemBarsAppearance(
+          0,
+          WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+        )
+      }
+    }.runOnQueue(Queues.MAIN)
   }
 }
