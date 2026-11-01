@@ -6,6 +6,7 @@ import { requestRecordingPermissionsAsync, useAudioPlayer } from 'expo-audio';
 import { useCall } from '../services/agora/useCall';
 import { messengerAPI } from '../services/api';
 import { setCallAudioActive } from '../services/callAudioState';
+import { incomingCallEvents, selectIncomingCall } from '../services/incomingCallEvents';
 import EmpinCallService from '../../modules/empin-call-service';
 import { subscribeToCalls, unsubscribeFromCalls } from '../services/pusher';
 import { presentMessagePush } from '../services/messagePush';
@@ -127,6 +128,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
 
   /** Входящий ещё не принят: закрыть его экран без запроса к серверу (сервер уже знает) */
   const closeIncomingCall = (reason) => {
+    incomingCallEvents.finish(incomingCallDataRef.current?.callId);
     RNNotificationCall.hideNotification();
     setCallTimeoutId(prev => { if (prev) clearTimeout(prev); return null; });
     callStateRef.current?.resetToIdle?.();
@@ -198,6 +200,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       },
 
       onCallCancelled: (data) => {
+        incomingCallEvents.finish(data.call_id);
         // Callee получает: caller отменил до ответа
         console.log('[WS] Call cancelled:', data.call_id);
         endIosSystemCall(data.call_id, 'remoteEnded');
@@ -206,6 +209,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       },
 
       onCallEnded: (data) => {
+        incomingCallEvents.finish(data.call_id);
         // Другой участник завершил активный звонок
         console.log('[WS] Call ended:', data.call_id);
         endIosSystemCall(data.call_id, 'remoteEnded');
@@ -233,6 +237,11 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       if (!stored || cancelled) return;
       try {
         const callData = JSON.parse(stored);
+        if (!incomingCallEvents.canPresent(callData.callId, callData.expiresAt)) {
+          AsyncStorage.removeItem('@pendingCall');
+          RNNotificationCall.hideNotification();
+          return;
+        }
         incomingCallDataRef.current = callData;
         setIncomingCallData(callData);
         handledCallIdRef.current = callData.callId;
@@ -336,13 +345,15 @@ export const CallProvider = ({ children, isLoggedIn }) => {
    * Подписка на события нативного полноэкранного окна (RNNotificationCall)
    */
   useEffect(() => {
-    RNNotificationCall.addEventListener('answer', async () => {
+    RNNotificationCall.addEventListener('answer', async (event) => {
       if (!isLoggedInRef.current) {
         RNNotificationCall.hideNotification();
         await AsyncStorage.removeItem('@pendingCall').catch(() => {});
         return;
       }
 
+      if (event?.callUUID && ['initiating', 'ringing', 'connecting', 'active'].includes(callStateRef.current?.status)
+        && !isCurrentCall(event.callUUID)) return;
       isAnsweringRef.current = true;
       // backToApp() до hideNotification() — пока IncomingCallActivity видима,
       // Android 12+ разрешает запуск из фона (нет BAL restriction)
@@ -351,23 +362,22 @@ export const CallProvider = ({ children, isLoggedIn }) => {
 
       // Всегда читаем AsyncStorage первым — background handler там записывает актуальный callId.
       // incomingCallDataRef может содержать данные от предыдущего звонка (не успел сброситься).
-      let callData = null;
+      let storedCall = null;
       try {
         const stored = await AsyncStorage.getItem('@pendingCall');
-        if (stored) {
-          callData = JSON.parse(stored);
-          await AsyncStorage.removeItem('@pendingCall');
-          incomingCallDataRef.current = callData;
-          setIncomingCallData(callData);
-          handledCallIdRef.current = callData.callId;
-        }
+        if (stored) storedCall = JSON.parse(stored);
       } catch (e) { console.log('[CallCtx][answer] AsyncStorage error:', e); }
-
-      // Fallback: foreground звонок (onMessage) — AsyncStorage не заполняется,
-      // данные только в ref
-      if (!callData) {
-        callData = incomingCallDataRef.current;
+      if (event?.callUUID && ['initiating', 'ringing', 'connecting', 'active'].includes(callStateRef.current?.status)
+        && !isCurrentCall(event.callUUID)) return;
+      const callData = selectIncomingCall(event?.callUUID, storedCall, incomingCallDataRef.current);
+      if (!callData || !incomingCallEvents.canPresent(callData.callId, callData.expiresAt)) {
+        isAnsweringRef.current = false;
+        return;
       }
+      if (storedCall?.callId === callData.callId) await AsyncStorage.removeItem('@pendingCall');
+      incomingCallDataRef.current = callData;
+      setIncomingCallData(callData);
+      handledCallIdRef.current = callData.callId;
 
       console.log('[CallCtx][answer] callData:', JSON.stringify(callData), 'callStateRef:', callStateRef.current ? 'ok' : 'null');
       setCallModalVisible(true);
@@ -390,13 +400,14 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       // Race condition guard: если пользователь уже принял звонок (answer event
       // сработал одновременно с 30s native timeout) — не отклоняем
       if (isAnsweringRef.current) return;
+      if (event?.callUUID && !isCurrentCall(event.callUUID)) return;
 
       RNNotificationCall.hideNotification();
 
       // Когда app в background (телефон заблокирован), FCM обрабатывается
       // headless handler (setBackgroundMessageHandler), а не onMessage.
       // Поэтому incomingCallDataRef может быть null — читаем из AsyncStorage.
-      let callId = incomingCallDataRef.current?.callId;
+      let callId = event?.callUUID ?? incomingCallDataRef.current?.callId;
 
       if (!callId) {
         try {
@@ -409,6 +420,8 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       }
 
       // Сбрасываем ref сразу — чтобы следующий answer event не получил устаревшие данные
+      if (callId && !isCurrentCall(callId)) return;
+      incomingCallEvents.finish(callId);
       incomingCallDataRef.current = null;
       await AsyncStorage.removeItem('@pendingCall').catch(() => {});
 
@@ -442,6 +455,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
 
     if (data.type === 'incoming_call') {
       const callId = String(data.call_id);
+      if (!incomingCallEvents.canPresent(callId, data.expires_at)) return;
 
       // Не обрабатываем повторно
       if (handledCallIdRef.current === callId) return;
@@ -465,6 +479,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
           mname: '',
         },
         callType: 'audio',
+        expiresAt: data.expires_at,
       };
 
         // Обновляем ref напрямую — не ждём useEffect, исключаем race condition
@@ -476,12 +491,15 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       // Для background/killed состояний → index.js background handler → displayNotification.
       setCallModalVisible(true);
       const timeoutId = setTimeout(() => {
-        handleMissedCallRef.current?.();
+        if (incomingCallDataRef.current?.callId === callId && !isAnsweringRef.current) {
+          handleMissedCallRef.current?.();
+        }
       }, 30000);
       setCallTimeoutId(timeoutId);
     }
 
     if (data.type === 'call_cancelled' || data.type === 'call_ended') {
+      incomingCallEvents.finish(data.call_id);
       endIosSystemCall(data.call_id, 'remoteEnded');
       // Push о прошлом звонке, пришедший с опозданием, не трогает текущий
       if (!isCurrentCall(data.call_id)) return;
@@ -530,30 +548,47 @@ export const CallProvider = ({ children, isLoggedIn }) => {
   }, [isLoggedIn]);
 
   // Подтверждение ответа/завершения через API — страховка от потери WebSocket или push.
-  const syncingCallId = callState.callData?.callId;
+  const syncingCallId = callState.callData?.callId ?? incomingCallData?.callId;
   useEffect(() => {
-    if (!isLoggedIn || !syncingCallId || !['ringing', 'connecting', 'active'].includes(callState.status)) return undefined;
+    if (!isLoggedIn || !syncingCallId) return undefined;
     let stopped = false;
     let timer;
+    let pending = false;
     const sync = async () => {
+      if (stopped || pending || AppState.currentState !== 'active') return;
+      pending = true;
       try {
         const response = await messengerAPI.getCallDetails(syncingCallId);
-        if (stopped) return;
+        if (stopped || !isCurrentCall(syncingCallId)) return;
         const call = response?.call;
         if (call?.status === 'active' && callStateRef.current?.callData?.isIncoming === false) {
           callStateRef.current?.markAccepted?.();
-        } else if (['completed', 'cancelled', 'rejected', 'missed'].includes(call?.status)) {
+        } else if (call?.status === 'active' && incomingCallDataRef.current
+          && !['connecting', 'active'].includes(callStateRef.current?.status)) {
           endIosSystemCall(syncingCallId, 'remoteEnded');
-          callStateRef.current?.resetToIdle?.();
-          incomingCallDataRef.current = null;
-          setIncomingCallData(null);
-          setCallModalVisible(false);
+          closeIncomingCall('answeredElsewhere');
+        } else if (['completed', 'cancelled', 'rejected', 'missed'].includes(call?.status)) {
+          incomingCallEvents.finish(syncingCallId);
+          endIosSystemCall(syncingCallId, 'remoteEnded');
+          closeIncomingCall('ended');
         }
-      } catch { /* Agora продолжает разговор при временной недоступности HTTP. */ }
-      finally { if (!stopped) timer = setTimeout(sync, 3000); }
+      } catch (error) {
+        if (!stopped && error?.response?.status === 404 && isCurrentCall(syncingCallId)) {
+          endIosSystemCall(syncingCallId, 'remoteEnded');
+          closeIncomingCall('ended');
+        }
+        // При временном сбое HTTP голосовой канал продолжает работать.
+      } finally {
+        pending = false;
+        if (!stopped) { clearTimeout(timer); timer = setTimeout(sync, 3000); }
+      }
     };
-    timer = setTimeout(sync, 3000);
-    return () => { stopped = true; clearTimeout(timer); };
+    sync();
+    const foreground = AppState.addEventListener('change', (state) => {
+      clearTimeout(timer);
+      if (state === 'active') sync();
+    });
+    return () => { stopped = true; clearTimeout(timer); foreground.remove(); };
   }, [isLoggedIn, syncingCallId, callState.status]);
 
   // Синхронизируем ref с актуальной версией handlePushNotification
@@ -637,16 +672,44 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       }
 
       if (event.type === 'incoming') {
+        if (!incomingCallEvents.canPresent(callData.callId)) {
+          await endIosSystemCall(callData.callId, 'remoteEnded');
+          return;
+        }
         iosSystemCallIdRef.current = callData.callId;
         handledCallIdRef.current = callData.callId;
         incomingCallDataRef.current = callData;
         setIncomingCallData(callData);
         // CallKit уже показывает системный экран и воспроизводит рингтон.
         setCallModalVisible(false);
+        // Проверяем и в фоне: foreground-опрос здесь может ещё не работать.
+        // PushKit обязан сразу отчитаться CallKit, но законченный вызов сразу закрываем.
+        try {
+          const response = await messengerAPI.getCallDetails(callData.callId);
+          if (disposed || !isCurrentCall(callData.callId)) return;
+          const status = callStateRef.current?.status;
+          const finished = ['completed', 'cancelled', 'rejected', 'missed'].includes(response?.call?.status);
+          const answeredElsewhere = response?.call?.status === 'active' && !['connecting', 'active'].includes(status);
+          if (finished || answeredElsewhere) {
+            incomingCallEvents.finish(callData.callId);
+            await endIosSystemCall(callData.callId, 'remoteEnded');
+            if (isCurrentCall(callData.callId)) closeIncomingCall('ended');
+          }
+        } catch (error) {
+          if (!disposed && error?.response?.status === 404 && isCurrentCall(callData.callId)) {
+            incomingCallEvents.finish(callData.callId);
+            await endIosSystemCall(callData.callId, 'remoteEnded');
+            if (isCurrentCall(callData.callId)) closeIncomingCall('ended');
+          }
+        }
         return;
       }
 
       if (event.type === 'answer') {
+        if (!incomingCallEvents.canPresent(callData.callId)) {
+          await endIosSystemCall(callData.callId, 'remoteEnded');
+          return;
+        }
         iosSystemCallIdRef.current = callData.callId;
         handledCallIdRef.current = callData.callId;
         incomingCallDataRef.current = callData;
@@ -661,6 +724,9 @@ export const CallProvider = ({ children, isLoggedIn }) => {
         return;
       }
 
+      incomingCallEvents.finish(callData.callId);
+      // Завершение старого CallKit-вызова не должно сбрасывать новый разговор.
+      if (!isCurrentCall(callData.callId)) return;
       iosSystemCallIdRef.current = null;
 
       if (event.type === 'remoteEnded' || event.type === 'answeredElsewhere') {
@@ -760,6 +826,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
     // Экран закрывается в любом случае: кроме этой кнопки выхода с него нет
     try {
       if (incomingCallData?.callId) {
+        incomingCallEvents.finish(incomingCallData.callId);
         endIosSystemCall(incomingCallData.callId, 'declined');
         await callState.rejectCall(incomingCallData.callId);
       }
@@ -779,6 +846,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
 
     const callId = incomingCallData?.callId;
     if (callId) {
+      incomingCallEvents.finish(callId);
       await endIosSystemCall(callId, 'unanswered');
       messengerAPI.endCall(callId).catch(() => {});
     }
@@ -791,6 +859,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
    * Завершение звонка
    */
   const handleEndCall = useCallback(async () => {
+    incomingCallEvents.finish(callState.callData?.callId ?? incomingCallData?.callId);
     RNNotificationCall.hideNotification();
 
     if (callTimeoutId) {

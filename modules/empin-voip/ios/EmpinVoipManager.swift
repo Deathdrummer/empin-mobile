@@ -293,6 +293,14 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
       return
     }
 
+    // Истёкший входящий нельзя возобновлять. Требование PushKit о reportNewIncomingCall
+    // выполняем внутри reportAndEndInvalidCall, затем сразу закрываем CallKit.
+    if let value = stringValue(data["expires_at"]), let expiresAt = TimeInterval(value),
+       expiresAt > 0, expiresAt <= Date().timeIntervalSince1970 {
+      reportAndEndInvalidCall(completion: completion)
+      return
+    }
+
     let callUUID = UUID(uuidString: stringValue(data["call_uuid"]) ?? "") ?? UUID()
     let callerName = stringValue(data["caller_name"]) ?? "Неизвестный"
     let callerId = stringValue(data["caller_id"])

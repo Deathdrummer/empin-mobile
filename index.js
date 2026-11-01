@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import App from './App';
+import { incomingCallEvents } from './src/services/incomingCallEvents';
 
 if (Platform.OS === 'android') {
   // «Ответить» / «Прочитано» в уведомлении о сообщении, когда приложение свёрнуто или закрыто:
@@ -36,6 +37,19 @@ if (Platform.OS === 'android') {
       if (!authToken) return;
 
       const callId = String(data.call_id);
+      if (!incomingCallEvents.canPresent(callId, data.expires_at)) return;
+      // Не открываем системный вызов из push, если сервер уже закончил этот звонок.
+      try {
+        const { messengerAPI } = require('./src/services/api');
+        const response = await messengerAPI.getCallDetails(callId);
+        if (!['initiated', 'ringing'].includes(response?.call?.status)) {
+          incomingCallEvents.finish(callId);
+          return;
+        }
+      } catch (error) {
+        if ([401, 403, 404].includes(error?.response?.status)) return;
+      }
+      if (!incomingCallEvents.canPresent(callId, data.expires_at)) return;
 
       // Сохраняем данные звонка — React state недоступен в headless контексте,
       // CallContext прочитает их при открытии приложения
@@ -48,6 +62,7 @@ if (Platform.OS === 'android') {
           mname: '',
         },
         callType: 'audio',
+        expiresAt: data.expires_at,
       }));
 
       RNNotificationCall.displayNotification(
@@ -78,6 +93,7 @@ if (Platform.OS === 'android') {
     }
 
     if (['call_cancelled', 'call_ended', 'call_answered_elsewhere'].includes(data.type)) {
+      incomingCallEvents.finish(data.call_id);
       // FCM fallback: скрываем нативное окно звонка если app в killed/background
       // (WebSocket не работает в killed state — foreground обрабатывает через CallContext)
       const pending = await AsyncStorage.getItem('@pendingCall');

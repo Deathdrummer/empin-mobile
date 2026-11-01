@@ -685,23 +685,23 @@ export const messengerAPI = {
   initiateCall: async (calleeId) => {
     const response = await api.post('/messenger/calls/initiate', {
       callee_id: calleeId,
-    });
+    }, { timeout: 30000 });
     return response.data;
   },
 
   acceptCall: async (callId) => {
     const installationId = await getInstallationId();
-    const response = await api.post(`/messenger/calls/${callId}/accept`, { installation_id: installationId });
+    const response = await api.post(`/messenger/calls/${callId}/accept`, { installation_id: installationId }, { timeout: 15000 });
     return response.data;
   },
 
   rejectCall: async (callId) => {
-    const response = await api.post(`/messenger/calls/${callId}/reject`);
+    const response = await api.post(`/messenger/calls/${callId}/reject`, undefined, { timeout: 10000 });
     return response.data;
   },
 
   endCall: async (callId) => {
-    const response = await api.post(`/messenger/calls/${callId}/end`);
+    const response = await api.post(`/messenger/calls/${callId}/end`, undefined, { timeout: 10000 });
     return response.data;
   },
 
@@ -754,12 +754,12 @@ export const messengerAPI = {
 
   // Polling: проверка входящих звонков (оставлен как fallback)
   getPendingCall: async () => {
-    const response = await api.get('/messenger/calls/pending');
+    const response = await api.get('/messenger/calls/pending', { timeout: 5000 });
     return response.data;
   },
 
   getCallDetails: async (callId) => {
-    const response = await api.get(`/messenger/calls/${callId}`);
+    const response = await api.get(`/messenger/calls/${callId}`, { timeout: 5000 });
     return response.data;
   },
 };
