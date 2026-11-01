@@ -29,7 +29,7 @@ import { navigationRef } from './src/services/navigationRef';
 import { GlobalCallModal } from './src/components/messenger/GlobalCallModal';
 import { IncomingShare } from './src/components/messenger/IncomingShare';
 import {
-  registerPushNotifications,
+  startPushRegistration,
   unregisterPushNotifications,
 } from './src/services/pushNotifications';
 import { disableIosVoip, unregisterIosVoipToken } from './src/services/iosVoip';
@@ -126,9 +126,6 @@ export default function App() {
       const loggedIn = !!token;
       setStartRoute(openChats ? 'Messenger' : 'Timesheet');
       setIsLoggedIn(loggedIn);
-      if (loggedIn) {
-        registerPushNotifications();
-      }
     } catch (error) {
       setIsLoggedIn(false);
     } finally {
@@ -138,8 +135,12 @@ export default function App() {
 
   const handleLoginSuccess = () => {
     setIsLoggedIn(true);
-    registerPushNotifications();
   };
+
+  useEffect(() => {
+    if (isLoggedIn) return startPushRegistration();
+    return undefined;
+  }, [isLoggedIn]);
 
   const handleLogout = async () => {
     await clearSession({ notifyServer: true });

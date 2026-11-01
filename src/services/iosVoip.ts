@@ -1,33 +1,38 @@
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import EmpinVoip, {
   type VoipCallEvent,
   type VoipTokenEvent,
 } from '../../modules/empin-voip';
 import { messengerAPI } from './api';
+import { createDeviceRegistration } from './deviceRegistration';
+import { recordCallDiagnostic } from './callDiagnostics';
 
 const MAX_PENDING_EVENT_AGE_MS = 2 * 60 * 1000;
+let stopCurrentRuntime: (() => void) | null = null;
 
 export const isIosVoipAvailable = (): boolean => Platform.OS === 'ios' && EmpinVoip !== null;
-
-const registerTokenWithBackend = async (token: string | null): Promise<void> => {
-  if (!token) return;
-
-  await messengerAPI.registerVoipToken(token).catch((error) => {
-    console.warn('[VoIP] Не удалось зарегистрировать токен на сервере:', error?.response?.status ?? error?.message);
-  });
-};
 
 export const startIosVoip = async (
   onCallEvent: (event: VoipCallEvent) => Promise<void> | void
 ): Promise<() => void> => {
   if (!isIosVoipAvailable() || !EmpinVoip) {
+    recordCallDiagnostic('voip-module-missing');
     return () => {};
   }
 
   const deliveredEventIds = new Set<string>();
+  let stopped = false;
+  const registration = createDeviceRegistration({
+    getToken: () => EmpinVoip!.getVoipTokenAsync(),
+    sendToken: (token: string, signal: AbortSignal) => messengerAPI.registerVoipToken(token, signal),
+    onState: (state, details) => {
+      recordCallDiagnostic(`voip-registration-${state}`, details);
+      if (state === 'error') console.warn('[VoIP] Регистрация не завершена:', details?.status ?? 'сеть');
+    },
+  });
 
   const processEvent = async (event: VoipCallEvent) => {
-    if (!event?.eventId || deliveredEventIds.has(event.eventId)) return;
+    if (stopped || !event?.eventId || deliveredEventIds.has(event.eventId)) return;
     deliveredEventIds.add(event.eventId);
 
     try {
@@ -35,6 +40,7 @@ export const startIosVoip = async (
         || Date.now() - event.createdAt > MAX_PENDING_EVENT_AGE_MS;
 
       if (!isExpired) {
+        recordCallDiagnostic(`callkit-${event.type}`, { callId: Number(event.callId) });
         await onCallEvent(event);
       }
     } finally {
@@ -43,30 +49,44 @@ export const startIosVoip = async (
   };
 
   const callSubscription = EmpinVoip.addListener('onVoipCallEvent', processEvent);
-  const tokenSubscription = EmpinVoip.addListener('onVoipToken', (event: VoipTokenEvent) => {
-    registerTokenWithBackend(event.token);
+  const tokenSubscription = EmpinVoip.addListener('onVoipToken', (_event: VoipTokenEvent) => {
+    registration.sync(true);
   });
-
-  await EmpinVoip.registerAsync();
-
-  const [token, pendingEvents] = await Promise.all([
-    EmpinVoip.getVoipTokenAsync(),
-    EmpinVoip.getPendingEventsAsync(),
-  ]);
-
-  await registerTokenWithBackend(token);
-  // Сохраняем порядок: incoming должен быть обработан до answer/reject/end.
-  for (const event of pendingEvents) {
-    await processEvent(event);
-  }
-
-  return () => {
+  const foregroundSubscription = AppState.addEventListener('change', (state) => {
+    if (state === 'active') registration.sync(true);
+  });
+  const stop = () => {
+    stopped = true;
+    registration.dispose();
     callSubscription.remove();
     tokenSubscription.remove();
+    foregroundSubscription.remove();
+    if (stopCurrentRuntime === stop) stopCurrentRuntime = null;
   };
+  stopCurrentRuntime?.();
+  stopCurrentRuntime = stop;
+
+  try { await EmpinVoip.registerAsync(); }
+  catch (error) {
+    stop();
+    throw error;
+  }
+  if (stopped) return stop;
+  registration.sync();
+  try {
+    const pendingEvents = await EmpinVoip.getPendingEventsAsync();
+    // Сохраняем порядок: incoming должен быть обработан до answer/reject/end.
+    for (const event of pendingEvents) await processEvent(event);
+  } catch (error) {
+    stop();
+    throw error;
+  }
+
+  return stop;
 };
 
 export const unregisterIosVoipToken = async (): Promise<void> => {
+  stopCurrentRuntime?.();
   if (!isIosVoipAvailable() || !EmpinVoip) return;
 
   const token = await EmpinVoip.getVoipTokenAsync().catch(() => null);
@@ -77,6 +97,7 @@ export const unregisterIosVoipToken = async (): Promise<void> => {
 };
 
 export const disableIosVoip = async (): Promise<void> => {
+  stopCurrentRuntime?.();
   if (!isIosVoipAvailable() || !EmpinVoip) return;
   await EmpinVoip.setEnabledAsync(false).catch(() => {});
 };

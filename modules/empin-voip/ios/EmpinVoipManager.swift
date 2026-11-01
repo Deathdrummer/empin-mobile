@@ -73,6 +73,10 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
         provider?.reportCall(with: record.uuid, endedAt: Date(), reason: .failed)
         cleanupCall(record)
       }
+      // Новый пользователь на этом телефоне не должен получить события прежнего аккаунта.
+      lock.lock()
+      savePendingEventsLocked([])
+      lock.unlock()
     }
   }
 
@@ -213,15 +217,16 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     guard
       let data = normalizedNotificationData(userInfo),
       let type = stringValue(data["type"]),
-      type == "call_cancelled" || type == "call_ended",
+      type == "call_cancelled" || type == "call_ended" || type == "call_answered_elsewhere",
       let callId = stringValue(data["call_id"]),
       let record = callsById[callId]
     else {
       return false
     }
 
+    if type == "call_answered_elsewhere" && record.answered { return true }
     // Сервер уже знает о завершении: JS только сбрасывает экран и выходит из канала
-    enqueueEvent(type: "remoteEnded", record: record)
+    enqueueEvent(type: type == "call_answered_elsewhere" ? "answeredElsewhere" : "remoteEnded", record: record)
     provider?.reportCall(with: record.uuid, endedAt: Date(), reason: .remoteEnded)
     cleanupCall(record)
     return true

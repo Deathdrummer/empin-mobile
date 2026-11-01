@@ -1,10 +1,12 @@
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { messengerAPI } from './api';
 import { getActiveChatId } from './messengerStore';
 import { ensureMessagesChannel } from './messagePush';
+import { createDeviceRegistration } from './deviceRegistration';
+import { recordCallDiagnostic } from './callDiagnostics';
 
 const EXPO_PUSH_TOKEN_STORAGE_KEY = '@expoPushToken';
 
@@ -45,7 +47,7 @@ const setupAndroidChannel = async (): Promise<void> => {
  * Отправляет токен на бэкенд при первом получении или смене.
  * Возвращает null если разрешения не выданы.
  */
-export const registerPushNotifications = async (): Promise<string | null> => {
+const obtainPushToken = async (askPermission = true): Promise<string | null> => {
   try {
     await setupAndroidChannel();
     await ensureMessagesChannel();
@@ -53,7 +55,7 @@ export const registerPushNotifications = async (): Promise<string | null> => {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
 
-    if (existingStatus !== 'granted') {
+    if (existingStatus !== 'granted' && askPermission) {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
@@ -72,13 +74,37 @@ export const registerPushNotifications = async (): Promise<string | null> => {
 
     // Отправляем токен на бэкенд (ошибку не пробрасываем — не критично)
     await AsyncStorage.setItem(EXPO_PUSH_TOKEN_STORAGE_KEY, token);
-    await messengerAPI.registerPushToken(token, Platform.OS).catch(() => {});
-
     return token;
   } catch (error: any) {
     console.error('[Push] Registration failed:', error?.message);
-    return null;
+    throw error;
   }
+};
+
+export const registerPushNotifications = async (): Promise<string | null> => {
+  try {
+    const token = await obtainPushToken();
+    if (token) await messengerAPI.registerPushToken(token, Platform.OS);
+    return token;
+  } catch { return null; }
+};
+
+export const startPushRegistration = (): (() => void) => {
+  let askPermission = true;
+  const registration = createDeviceRegistration({
+    getToken: async () => {
+      const ask = askPermission;
+      askPermission = false;
+      return obtainPushToken(ask);
+    },
+    sendToken: (token: string, signal: AbortSignal) => messengerAPI.registerPushToken(token, Platform.OS, signal),
+    onState: (state, details) => recordCallDiagnostic(`push-registration-${state}`, details),
+  });
+  registration.sync();
+  const foreground = AppState.addEventListener('change', (state) => {
+    if (state === 'active') registration.sync(true);
+  });
+  return () => { registration.dispose(); foreground.remove(); };
 };
 
 export const unregisterPushNotifications = async (): Promise<void> => {

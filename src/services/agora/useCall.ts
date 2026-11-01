@@ -5,17 +5,19 @@ import { Asset } from 'expo-asset';
 import {
   createAgoraRtcEngine,
   IRtcEngine,
-  IRtcEngineEventHandler,
   ChannelProfileType,
   ClientRoleType,
   AudioScenarioType,
   AudioProfileType,
   ConnectionStateType,
-  UserOfflineReasonType,
+  LocalAudioStreamState,
+  LocalAudioStreamReason,
 } from 'react-native-agora';
 import { messengerAPI } from '../api';
 import { CallStatus, CallData, CallState } from './types';
 import { getUserFacingError } from '../../utils/userFacingError';
+import { connectAudio } from './audioConnection';
+import { recordCallDiagnostic } from '../callDiagnostics';
 
 interface UseCallReturn extends CallState {
   initiateCall: (calleeId: number, calleeName: string, calleeAvatar?: string) => Promise<void>;
@@ -27,6 +29,7 @@ interface UseCallReturn extends CallState {
   toggleMute: () => void;
   toggleSpeaker: () => void;
   clearRingingTimeout: () => void;
+  markAccepted: () => void;
 }
 
 /**
@@ -73,7 +76,8 @@ export const useCall = (): UseCallReturn => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ringingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const engineRef = useRef<IRtcEngine | null>(null);
-  const eventHandlerRef = useRef<IRtcEngineEventHandler | null>(null);
+  const connectionRef = useRef<ReturnType<typeof connectAudio> | null>(null);
+  const acceptPromiseRef = useRef<{ id: string; promise: Promise<boolean> } | null>(null);
   // Звонок, к каналу которого подключён движок: о его внезапном обрыве нужно сообщить серверу
   const callIdRef = useRef<string | null>(null);
   // Номер попытки звонка. Отмена, отказ или сброс увеличивают его: ответ сервера на устаревшую
@@ -157,13 +161,13 @@ export const useCall = (): UseCallReturn => {
   const destroyEngine = () => {
     stopRingback();
     const engine = engineRef.current;
-    const handler = eventHandlerRef.current;
+    const connection = connectionRef.current;
     engineRef.current = null;
-    eventHandlerRef.current = null;
+    connectionRef.current = null;
     if (!engine) return;
     // Ошибка движка не должна мешать завершить звонок и закрыть экран
     try {
-      if (handler) engine.unregisterEventHandler(handler);
+      connection?.dispose();
       engine.leaveChannel();
     } catch (error: any) {
       console.warn('[Agora] Выход из канала:', error?.message ?? error);
@@ -200,10 +204,10 @@ export const useCall = (): UseCallReturn => {
         if (!current.canAskAgain) return false;
         // Из фона (ответ через CallKit на заблокированном экране) системный запрос не покажется.
         // Разрешение запрашивается заранее после входа, здесь не блокируем звонок.
-        if (AppState.currentState !== 'active') return true;
+        if (AppState.currentState !== 'active') return false;
         return (await requestRecordingPermissionsAsync()).granted;
       } catch {
-        return true;
+        return false;
       }
     }
 
@@ -218,90 +222,58 @@ export const useCall = (): UseCallReturn => {
     appId: string,
     token: string,
     channelName: string,
-    uid: number
+    uid: number,
+    outgoing = false
   ): Promise<void> => {
     destroyEngine();
 
     const engine = createAgoraRtcEngine();
     engineRef.current = engine;
 
-    engine.initialize({
-      appId,
-      channelProfile: ChannelProfileType.ChannelProfileCommunication,
-    });
-
-    // Включаем аудио, настраиваем профиль для голосового звонка
-    engine.enableAudio();
-    engine.setAudioProfile(
-      AudioProfileType.AudioProfileDefault,
-      AudioScenarioType.AudioScenarioChatroom
-    );
-    engine.adjustPlaybackSignalVolume(150);
-
-    // По умолчанию — наушник (не громкая связь)
-    engine.setEnableSpeakerphone(false);
-
-    const handler: IRtcEngineEventHandler = {
-      onJoinChannelSuccess: (_connection, _elapsed) => {
-        // Исходящий: в канале, собеседник ещё не ответил — гудки
+    ringbackRef.current = outgoing;
+    connectionRef.current = connectAudio({
+      engine, appId, token, channelName, uid,
+      sdk: {
+        communication: ChannelProfileType.ChannelProfileCommunication,
+        broadcaster: ClientRoleType.ClientRoleBroadcaster,
+        audioProfile: AudioProfileType.AudioProfileDefault,
+        audioScenario: AudioScenarioType.AudioScenarioDefault,
+        failedState: ConnectionStateType.ConnectionStateFailed,
+        connectedState: ConnectionStateType.ConnectionStateConnected,
+        reconnectingState: ConnectionStateType.ConnectionStateReconnecting,
+        audioFailedState: LocalAudioStreamState.LocalAudioStreamStateFailed,
+        noAudioPermission: LocalAudioStreamReason.LocalAudioStreamReasonDeviceNoPermission,
+      },
+      onDiagnostic: (event, details) => {
+        recordCallDiagnostic(event, { ...details, callId: Number(callIdRef.current) });
+        console.log('[Agora RTC]', event, details ?? '');
+      },
+      onLocalJoined: () => {
         if (ringbackRef.current) startRingback();
       },
-
-      onUserJoined: (_connection, _remoteUid, _elapsed) => {
-        // Второй участник зашёл — звонок активен
+      onConnected: () => {
         stopRingback();
-        if (ringingTimeoutRef.current) {
-          clearTimeout(ringingTimeoutRef.current);
-          ringingTimeoutRef.current = null;
-        }
+        stopRingingTimeout();
         setState((prev) => ({ ...prev, status: 'active' }));
       },
-
-      onUserOffline: (_connection, _remoteUid, _reason) => {
-        // Второй участник покинул канал — завершаем звонок
-        setState((prev) => {
-          if (prev.status === 'active' || prev.status === 'ringing') {
-            scheduleIdleReset('ended');
-            return { ...prev, status: 'ended' };
-          }
-          return prev;
-        });
-        // Если собеседник пропал без запроса end (обрыв сети), звонок на сервере остался бы активным.
-        // Если он завершил штатно, повторный end сервер игнорирует.
+      onOffline: () => {
+        setState((prev) => ({ ...prev, status: 'ended' }));
+        scheduleIdleReset('ended');
         stopRingingTimeout();
         finishCallOnServer();
         destroyEngine();
       },
-
-      onConnectionStateChanged: (_connection, newState, _reason) => {
-        if (newState === ConnectionStateType.ConnectionStateFailed) {
-          console.error('[Agora] Connection failed');
-          setState((prev) => {
-            if (prev.status !== 'idle' && prev.status !== 'ended') {
-              scheduleIdleReset('error');
-              return { ...prev, status: 'error', error: 'Ошибка соединения' };
-            }
-            return prev;
-          });
-          stopRingingTimeout();
-          finishCallOnServer();
-          destroyEngine();
-        }
+      onFailure: (message, code) => {
+        console.warn('[Agora RTC] failure', code);
+        attemptRef.current += 1;
+        stopRingingTimeout();
+        finishCallOnServer();
+        destroyEngine();
+        setState((prev) => ({ ...prev, status: 'error', error: message }));
+        scheduleIdleReset('error');
       },
-
-      onError: (err, msg) => {
-        console.error('[Agora] Error:', err, msg);
-      },
-    };
-
-    eventHandlerRef.current = handler;
-    engine.registerEventHandler(handler);
-
-    engine.joinChannel(token, channelName, uid, {
-      clientRoleType: ClientRoleType.ClientRoleBroadcaster,
-      publishMicrophoneTrack: true,
-      autoSubscribeAudio: true,
     });
+    if (!outgoing) connectionRef.current.peerAccepted();
   };
 
   /**
@@ -359,9 +331,8 @@ export const useCall = (): UseCallReturn => {
 
         setState((prev) => ({ ...prev, status: 'ringing', callData, error: null }));
 
-        await joinChannel(agora_app_id, token, channel_name, uid);
-        // Флаг после joinChannel: тот пересоздаёт движок и сбрасывает гудки прежнего
-        ringbackRef.current = true;
+        await joinChannel(agora_app_id, token, channel_name, uid, true);
+        if (attempt !== attemptRef.current) return;
 
         // Таймаут: страховка если call_cancelled FCM не пришёл.
         // Сбрасывается при любом завершении звонка, поэтому срабатывает только для этого звонка.
@@ -379,7 +350,8 @@ export const useCall = (): UseCallReturn => {
           destroyEngine();
         }, 90000); // Увеличен с 45s до 90s — WebSocket обычно уведомит раньше
       } catch (error: any) {
-        console.error('[Agora] Ошибка инициации звонка:', error);
+        recordCallDiagnostic('initiate-failed', { status: error?.response?.status, code: error?.rtcCode });
+        console.error('[Agora] Ошибка инициации звонка:', error?.response?.status ?? error?.message);
         if (attempt !== attemptRef.current) return;
         stopRingingTimeout();
         // Звонок мог успеть создаться на сервере — отменяем, чтобы у собеседника не звонило
@@ -399,7 +371,8 @@ export const useCall = (): UseCallReturn => {
   /**
    * Принятие входящего звонка
    */
-  const acceptCall = useCallback(async (callId: string, participant?: CallData['participant']) => {
+  const acceptCallOnce = useCallback(async (callId: string, participant?: CallData['participant']) => {
+    if (callIdRef.current === String(callId) && engineRef.current) return true;
     const attempt = ++attemptRef.current;
     try {
       const hasPermission = await requestMicrophonePermission();
@@ -409,10 +382,16 @@ export const useCall = (): UseCallReturn => {
           'Нет доступа к микрофону',
           'Разрешите доступ к микрофону в настройках устройства'
         );
+        notifyServer('Отклонение звонка', () => messengerAPI.rejectCall(callId));
+        setState((prev) => ({ ...prev, status: 'error', error: 'Нет доступа к микрофону' }));
+        scheduleIdleReset('error');
         return false;
       }
 
-      callIdRef.current = null;
+      callIdRef.current = String(callId);
+      setState({ status: 'connecting', duration: 0, isMuted: false, isSpeakerOn: false, error: null,
+        callData: { callId: String(callId), channelName: '', token: '', uid: 0,
+          participant: participant ?? { id: 0, name: 'Неизвестный' }, isIncoming: true } });
       const response = await messengerAPI.acceptCall(callId);
       if (attempt !== attemptRef.current) {
         // Пока принимали, звонок отклонили или он завершился — сервер уже считает его принятым
@@ -424,10 +403,8 @@ export const useCall = (): UseCallReturn => {
 
       setState((prev) => ({
         ...prev,
-        status: 'active',
-        callData: prev.callData
-          ? { ...prev.callData, channelName: channel_name, token, uid }
-          : {
+        status: 'connecting',
+        callData: {
               callId: String(callId),
               channelName: channel_name,
               token,
@@ -443,7 +420,8 @@ export const useCall = (): UseCallReturn => {
       await joinChannel(agora_app_id, token, channel_name, uid);
       return true;
     } catch (error: any) {
-      console.error('[Agora] Ошибка принятия звонка:', error, '| response data:', (error as any).response?.data, '| callId was:', callId);
+      console.error('[Agora] Ошибка принятия звонка:', error?.response?.status ?? error?.message);
+      recordCallDiagnostic('accept-failed', { status: error?.response?.status, code: error?.rtcCode, callId: Number(callId) });
       if (attempt !== attemptRef.current) return false;
       // Сервер уже отметил звонок принятым, а подключиться не удалось — завершаем его на сервере
       finishCallOnServer();
@@ -457,6 +435,17 @@ export const useCall = (): UseCallReturn => {
       return false;
     }
   }, []);
+
+  const acceptCall = useCallback((callId: string, participant?: CallData['participant']): Promise<boolean> => {
+    const id = String(callId);
+    if (acceptPromiseRef.current?.id === id) return acceptPromiseRef.current.promise;
+    const promise = acceptCallOnce(id, participant);
+    acceptPromiseRef.current = { id, promise };
+    promise.finally(() => {
+      if (acceptPromiseRef.current?.promise === promise) acceptPromiseRef.current = null;
+    });
+    return promise;
+  }, [acceptCallOnce]);
 
   /**
    * Отклонение звонка
@@ -556,6 +545,14 @@ export const useCall = (): UseCallReturn => {
     }
   }, []);
 
+  const markAccepted = useCallback(() => {
+    if (!callIdRef.current || !connectionRef.current) return;
+    stopRingingTimeout();
+    stopRingback();
+    connectionRef.current.peerAccepted();
+    setState((prev) => prev.status === 'ringing' ? { ...prev, status: 'connecting' } : prev);
+  }, []);
+
   return {
     ...state,
     initiateCall,
@@ -566,5 +563,6 @@ export const useCall = (): UseCallReturn => {
     toggleMute,
     toggleSpeaker,
     clearRingingTimeout,
+    markAccepted,
   };
 };

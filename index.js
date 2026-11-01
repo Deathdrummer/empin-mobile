@@ -77,11 +77,16 @@ if (Platform.OS === 'android') {
       await presentMessagePush(raw, data).catch(() => {});
     }
 
-    if (data.type === 'call_cancelled' || data.type === 'call_ended') {
+    if (['call_cancelled', 'call_ended', 'call_answered_elsewhere'].includes(data.type)) {
       // FCM fallback: скрываем нативное окно звонка если app в killed/background
       // (WebSocket не работает в killed state — foreground обрабатывает через CallContext)
-      await AsyncStorage.removeItem('@pendingCall');
-      RNNotificationCall.hideNotification();
+      const pending = await AsyncStorage.getItem('@pendingCall');
+      let pendingId;
+      try { pendingId = pending ? JSON.parse(pending).callId : null; } catch {}
+      if (!pendingId || String(pendingId) === String(data.call_id)) {
+        await AsyncStorage.removeItem('@pendingCall');
+        RNNotificationCall.hideNotification();
+      }
     }
   });
 }

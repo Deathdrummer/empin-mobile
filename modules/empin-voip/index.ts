@@ -7,7 +7,7 @@ export type VoipTokenEvent = {
 export type VoipCallEvent = {
   eventId: string;
   // redial — нажали звонок приложения в журнале «Недавние» iPhone: callerId — кому звонить
-  type: 'incoming' | 'answer' | 'reject' | 'end' | 'timeout' | 'remoteEnded' | 'busy' | 'redial';
+  type: 'incoming' | 'answer' | 'reject' | 'end' | 'timeout' | 'remoteEnded' | 'busy' | 'redial' | 'answeredElsewhere';
   callId: string;
   callUUID: string;
   callerId?: string;

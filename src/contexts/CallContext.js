@@ -100,6 +100,14 @@ export const CallProvider = ({ children, isLoggedIn }) => {
   const callState = useCall();
 
   useEffect(() => {
+    if (isLoggedIn) return;
+    callStateRef.current?.resetToIdle?.();
+    incomingCallDataRef.current = null;
+    setIncomingCallData(null);
+    setCallModalVisible(false);
+  }, [isLoggedIn]);
+
+  useEffect(() => {
     isLoggedInRef.current = isLoggedIn;
   }, [isLoggedIn]);
 
@@ -171,7 +179,8 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       onCallAccepted: (data) => {
         // Caller получает подтверждение: callee принял звонок — убираем ringing timeout
         console.log('[WS] Call accepted:', data.call_id);
-        callStateRef.current?.clearRingingTimeout?.();
+        if (!isCurrentCall(data.call_id)) return;
+        callStateRef.current?.markAccepted?.();
       },
 
       onCallRejected: (data) => {
@@ -201,7 +210,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
         console.log('[WS] Call ended:', data.call_id);
         endIosSystemCall(data.call_id, 'remoteEnded');
         if (!isCurrentCall(data.call_id)) return;
-        if (callStateRef.current?.status === 'active' || callStateRef.current?.status === 'ringing') {
+        if (['active', 'connecting', 'ringing'].includes(callStateRef.current?.status)) {
           handleEndCallRef.current?.();
         } else if (incomingCallDataRef.current) {
           // Звонящий положил трубку, пока у нас звонило (сервер шлёт call.ended, а не call.cancelled)
@@ -268,6 +277,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       callModalVisible &&
       incomingCallData !== null &&
       callState.status !== 'active' &&
+      callState.status !== 'connecting' &&
       callState.status !== 'ended' &&
       callState.status !== 'error';
 
@@ -288,6 +298,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
     setCallAudioActive(
       callState.status === 'initiating'
         || callState.status === 'ringing'
+        || callState.status === 'connecting'
         || callState.status === 'active'
         || incomingCallData !== null
     );
@@ -301,6 +312,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
 
     const inCall = callState.status === 'initiating'
       || callState.status === 'ringing'
+      || callState.status === 'connecting'
       || callState.status === 'active';
 
     try {
@@ -437,7 +449,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       // Уже идёт другой звонок: приложение ведёт один звонок за раз — отвечаем «занято»,
       // иначе новый звонок затёр бы экран текущего
       const currentStatus = callStateRef.current?.status;
-      if (currentStatus === 'initiating' || currentStatus === 'ringing' || currentStatus === 'active') {
+      if (['initiating', 'ringing', 'connecting', 'active'].includes(currentStatus)) {
         messengerAPI.rejectCall(callId).catch(() => {});
         return;
       }
@@ -476,7 +488,73 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       closeIncomingCall(data.type === 'call_cancelled' ? 'cancelled' : 'ended');
     }
 
+    if (data.type === 'call_accepted' && isCurrentCall(data.call_id)) {
+      callStateRef.current?.markAccepted?.();
+    }
+
+    if (data.type === 'call_answered_elsewhere' && isCurrentCall(data.call_id)
+      && incomingCallDataRef.current && !['connecting', 'active'].includes(callStateRef.current?.status)) {
+      closeIncomingCall('answeredElsewhere');
+    }
+
   }, [isLoggedIn]);
+
+  // В foreground восстанавливаем входящий даже после пропущенного push/переподключения.
+  // Из фона iOS будит PushKit; опрос в фоне не запускается.
+  useEffect(() => {
+    if (!isLoggedIn) return undefined;
+    let stopped = false;
+    let timer;
+    let pending = false;
+    const poll = async () => {
+      if (stopped || pending || AppState.currentState !== 'active') return;
+      pending = true;
+      try {
+        const response = await messengerAPI.getPendingCall();
+        const call = response?.call;
+        if (!stopped && call?.id && !incomingCallDataRef.current) {
+          handlePushNotificationRef.current?.({ request: { content: { data: {
+            type: 'incoming_call', call_id: call.id, caller_id: call.caller?.id,
+            caller_name: [call.caller?.sname, call.caller?.fname].filter(Boolean).join(' '),
+          } } } });
+        }
+      } catch { /* Сеть восстановится — следующий foreground-опрос повторится. */ }
+      finally { pending = false; if (!stopped) timer = setTimeout(poll, 6000); }
+    };
+    poll();
+    const foreground = AppState.addEventListener('change', (state) => {
+      clearTimeout(timer);
+      if (state === 'active') poll();
+    });
+    return () => { stopped = true; clearTimeout(timer); foreground.remove(); };
+  }, [isLoggedIn]);
+
+  // Подтверждение ответа/завершения через API — страховка от потери WebSocket или push.
+  const syncingCallId = callState.callData?.callId;
+  useEffect(() => {
+    if (!isLoggedIn || !syncingCallId || !['ringing', 'connecting', 'active'].includes(callState.status)) return undefined;
+    let stopped = false;
+    let timer;
+    const sync = async () => {
+      try {
+        const response = await messengerAPI.getCallDetails(syncingCallId);
+        if (stopped) return;
+        const call = response?.call;
+        if (call?.status === 'active' && callStateRef.current?.callData?.isIncoming === false) {
+          callStateRef.current?.markAccepted?.();
+        } else if (['completed', 'cancelled', 'rejected', 'missed'].includes(call?.status)) {
+          endIosSystemCall(syncingCallId, 'remoteEnded');
+          callStateRef.current?.resetToIdle?.();
+          incomingCallDataRef.current = null;
+          setIncomingCallData(null);
+          setCallModalVisible(false);
+        }
+      } catch { /* Agora продолжает разговор при временной недоступности HTTP. */ }
+      finally { if (!stopped) timer = setTimeout(sync, 3000); }
+    };
+    timer = setTimeout(sync, 3000);
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [isLoggedIn, syncingCallId, callState.status]);
 
   // Синхронизируем ref с актуальной версией handlePushNotification
   useEffect(() => {
@@ -585,14 +663,14 @@ export const CallProvider = ({ children, isLoggedIn }) => {
 
       iosSystemCallIdRef.current = null;
 
-      if (event.type === 'remoteEnded') {
+      if (event.type === 'remoteEnded' || event.type === 'answeredElsewhere') {
         // Сервер уже знает о завершении — только сбрасываем экран
         callStateRef.current?.resetToIdle?.();
       } else if (event.type === 'timeout') {
         // Не ответили: на сервере звонок станет пропущенным, а не отклонённым
         await messengerAPI.endCall(callData.callId).catch(() => {});
         callStateRef.current?.resetToIdle?.();
-      } else if (event.type === 'end' && (callStateRef.current?.status === 'active' || callStateRef.current?.callData?.isIncoming === false)) {
+      } else if (event.type === 'end' && (['active', 'connecting'].includes(callStateRef.current?.status) || callStateRef.current?.callData?.isIncoming === false)) {
         // Разговор или наш исходящий завершили с системного экрана (плашка звонка, экран блокировки)
         await callStateRef.current?.endCall();
       } else {
@@ -651,7 +729,9 @@ export const CallProvider = ({ children, isLoggedIn }) => {
    * Принятие звонка
    */
   const handleAcceptCall = useCallback(async () => {
+    isAnsweringRef.current = true;
     RNNotificationCall.hideNotification();
+    stopRingtone();
 
     if (callTimeoutId) {
       clearTimeout(callTimeoutId);

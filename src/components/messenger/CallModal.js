@@ -110,6 +110,8 @@ export const CallModal = ({
         return callState.callData?.isIncoming ? 'Входящий звонок' : 'Ожидание ответа...';
       case 'active':
         return 'Разговор';
+      case 'connecting':
+        return 'Соединяем звонок...';
       case 'ended':
         return 'Звонок завершён';
       case 'no_answer':

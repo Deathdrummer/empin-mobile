@@ -53,7 +53,7 @@ export const getRateLimitRemainingMs = () => Math.max(0, _rateLimitPausedUntil -
 api.interceptors.request.use(
   async (config) => {
     const token = await AsyncStorage.getItem('token');
-    if (token) {
+    if (token && config.url !== '/auth/login') {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -77,7 +77,11 @@ export const setUnauthorizedCallback = (callback) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    const currentToken = await AsyncStorage.getItem('token');
+    const authorization = error.config?.headers?.Authorization;
+    // Запоздавший 401 старой сессии не должен выкинуть пользователя после нового входа.
+    if (error.response?.status === 401 && error.config?.url !== '/auth/login'
+      && currentToken && authorization === `Bearer ${currentToken}`) {
       await AsyncStorage.removeItem('token');
       await AsyncStorage.removeItem('user');
       await AsyncStorage.removeItem('permissions');
@@ -93,7 +97,8 @@ api.interceptors.response.use(
 // API методы
 export const authAPI = {
   login: async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
+    const installationId = await getInstallationId();
+    const response = await api.post('/auth/login', { email, password, installation_id: installationId });
     if (response.data.token) {
       const permissions = response.data.user.permissions || [];
       // Сохраняем токен, пользователя и права
@@ -685,7 +690,8 @@ export const messengerAPI = {
   },
 
   acceptCall: async (callId) => {
-    const response = await api.post(`/messenger/calls/${callId}/accept`);
+    const installationId = await getInstallationId();
+    const response = await api.post(`/messenger/calls/${callId}/accept`, { installation_id: installationId });
     return response.data;
   },
 
@@ -706,7 +712,7 @@ export const messengerAPI = {
   },
 
   // Регистрация Expo Push Token
-  registerPushToken: async (token, platform = Platform.OS) => {
+  registerPushToken: async (token, platform = Platform.OS, signal) => {
     const installationId = await getInstallationId();
     const response = await api.post('/messenger/calls/push-token', {
       token,
@@ -716,7 +722,7 @@ export const messengerAPI = {
       // Android сам показывает уведомление о сообщении (с кнопками «Ответить» / «Прочитано»): push — только
       // данными, иначе Firebase покажет ещё и своё, второе (см. messagePush)
       data_only: platform === 'android',
-    });
+    }, { signal });
     return response.data;
   },
 
@@ -728,14 +734,14 @@ export const messengerAPI = {
   },
 
   // Отдельный APNs VoIP token для PushKit/CallKit на iOS
-  registerVoipToken: async (token) => {
+  registerVoipToken: async (token, signal) => {
     const installationId = await getInstallationId();
     const response = await api.post('/messenger/calls/voip-token', {
       token,
       platform: 'ios',
       token_type: 'voip',
       installation_id: installationId,
-    });
+    }, { signal });
     return response.data;
   },
 

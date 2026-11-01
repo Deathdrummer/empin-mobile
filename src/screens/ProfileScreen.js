@@ -18,6 +18,7 @@ import { getUserFacingError } from '../utils/userFacingError';
 import { Avatar } from '../components/chat/Avatar';
 import { ChatBackground } from '../components/chat/ChatBackground';
 import { TabBar, useTabBarHeight } from '../components/TabBar';
+import { shareCallDiagnostics } from '../services/callDiagnostics';
 
 const Row = ({ theme, icon, iconColor, title, subtitle, destructive, onPress, last, accessory }) => (
   <Pressable
@@ -333,11 +334,14 @@ export default function ProfileScreen({ onLogout }) {
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.surface }]}>
+          <Row theme={theme} icon="call-outline" iconColor="#2F8A6C" title="Диагностика звонков"
+            subtitle="Сохранить технический отчёт о подключении"
+            onPress={() => shareCallDiagnostics().catch(() => Toast.show({ type: 'error', text1: 'Не удалось сохранить отчёт', position: 'top' }))} />
           <Row theme={theme} icon="log-out-outline" iconColor="#8A8D94" title="Выйти" destructive onPress={confirmLogout} last />
         </View>
 
         <Text style={[styles.footer, { color: theme.textMuted }]}>
-          Эмпин PRO · версия {Constants.expoConfig?.version ?? '—'}
+          Эмпин PRO · версия {Constants.expoConfig?.version ?? '—'} ({Constants.nativeBuildVersion ?? '—'})
         </Text>
       </ScrollView>
       <TabBar active="profile" />
