@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createIncomingCallEvents, selectIncomingCall } from './incomingCallEvents.js';
+import { createIncomingCallEvents, selectIncomingCall, resolveNativeAnswer, participantFromCaller } from './incomingCallEvents.js';
 
 test('отмена раньше incoming не воскрешает звонок и не блокирует следующий', () => {
   const calls = createIncomingCallEvents();
@@ -38,4 +38,26 @@ test('ответ из старого нативного окна не прини
   assert.equal(selectIncomingCall(276, stored, current), null);
   assert.equal(selectIncomingCall(277, null, current), null);
   assert.equal(selectIncomingCall(null, stored, current), stored);
+});
+
+test('холодный запуск без локальных данных восстанавливает ответ по ID системной кнопки', () => {
+  const calls = createIncomingCallEvents();
+  assert.deepEqual(resolveNativeAnswer('283', null, null, calls.canPresent), { callId: '283', callType: 'audio' });
+  assert.equal(resolveNativeAnswer(undefined, null, null, calls.canPresent), null);
+  assert.equal(resolveNativeAnswer('undefined', null, null, calls.canPresent), null);
+  assert.equal(resolveNativeAnswer('0', null, null, calls.canPresent), null);
+  calls.finish(283);
+  assert.equal(resolveNativeAnswer('283', null, null, calls.canPresent), null);
+});
+
+test('восстановление не подменяет системный ID другим push и не обходит срок действия', () => {
+  const calls = createIncomingCallEvents({ now: () => 1000000 });
+  assert.deepEqual(resolveNativeAnswer(283, { callId: '279' }, null, calls.canPresent), { callId: '283', callType: 'audio' });
+  assert.equal(resolveNativeAnswer(283, { callId: '283', expiresAt: 999 }, null, calls.canPresent), null);
+});
+
+test('данные собеседника после accept берутся из подтверждённого сервером звонка', () => {
+  assert.deepEqual(participantFromCaller({ id: 55, sname: 'Тест', fname: 'Два' }), { id: 55, name: 'Тест Два', avatar: undefined });
+  assert.equal(participantFromCaller(null), null);
+  assert.equal(participantFromCaller({ id: 'wrong' }), null);
 });

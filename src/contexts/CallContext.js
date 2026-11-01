@@ -6,7 +6,7 @@ import { requestRecordingPermissionsAsync, useAudioPlayer } from 'expo-audio';
 import { useCall } from '../services/agora/useCall';
 import { messengerAPI } from '../services/api';
 import { setCallAudioActive } from '../services/callAudioState';
-import { incomingCallEvents, selectIncomingCall } from '../services/incomingCallEvents';
+import { incomingCallEvents, resolveNativeAnswer } from '../services/incomingCallEvents';
 import { recordCallDiagnostic } from '../services/callDiagnostics';
 import { CALL_CAUSES as C } from '../services/callDiagnosticFormat';
 import EmpinCallService from '../../modules/empin-call-service';
@@ -377,13 +377,14 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       } catch (e) { console.log('[CallCtx][answer] AsyncStorage error:', e); }
       if (event?.callUUID && ['initiating', 'ringing', 'connecting', 'active'].includes(callStateRef.current?.status)
         && !isCurrentCall(event.callUUID)) return;
-      const callData = selectIncomingCall(event?.callUUID, storedCall, incomingCallDataRef.current);
+      const callData = resolveNativeAnswer(event?.callUUID, storedCall, incomingCallDataRef.current, incomingCallEvents.canPresent);
       if (!callData || !incomingCallEvents.canPresent(callData.callId, callData.expiresAt)) {
         recordCallDiagnostic('answer-missing-or-stale', { callId: event?.callUUID, cause: C.answerAndroid });
         isAnsweringRef.current = false;
         return;
       }
       if (storedCall?.callId === callData.callId) await AsyncStorage.removeItem('@pendingCall');
+      if (!callData.caller) recordCallDiagnostic('answer-recovered-from-native-id', { callId: callData.callId, cause: C.answerAndroid });
       incomingCallDataRef.current = callData;
       setIncomingCallData(callData);
       handledCallIdRef.current = callData.callId;

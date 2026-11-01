@@ -19,6 +19,7 @@ import { getUserFacingError } from '../../utils/userFacingError';
 import { connectAudio } from './audioConnection';
 import { recordCallDiagnostic } from '../callDiagnostics';
 import { CALL_CAUSES as C } from '../callDiagnosticFormat';
+import { participantFromCaller } from '../incomingCallEvents';
 
 interface UseCallReturn extends CallState {
   initiateCall: (calleeId: number, calleeName: string, calleeAvatar?: string) => Promise<void>;
@@ -428,7 +429,7 @@ export const useCall = (): UseCallReturn => {
               channelName: channel_name,
               token,
               uid,
-              participant: participant ?? {
+              participant: participantFromCaller(response?.call?.caller) ?? participant ?? {
                 id: 0,
                 name: 'Неизвестный',
               },

@@ -31,3 +31,20 @@ export const selectIncomingCall = (eventCallId, storedCall, foregroundCall) => {
   return eventCallId == null ? candidates[0] ?? null
     : candidates.find((call) => String(call.callId) === String(eventCallId)) ?? null;
 };
+
+// После холодного запуска данные push могут уже исчезнуть, но системная кнопка
+// содержит серверный ID. Актуальность и право принять окончательно проверяет accept API.
+export const resolveNativeAnswer = (eventCallId, storedCall, foregroundCall, canPresent) => {
+  const local = selectIncomingCall(eventCallId, storedCall, foregroundCall);
+  if (local) return canPresent(local.callId, local.expiresAt) ? local : null;
+  const id = String(eventCallId ?? '');
+  return /^[1-9]\d{0,14}$/.test(id) && canPresent(id)
+    ? { callId: id, callType: 'audio' } : null;
+};
+
+export const participantFromCaller = (caller) => {
+  const id = Number(caller?.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return null;
+  const name = ['sname', 'fname', 'mname'].map((key) => typeof caller[key] === 'string' ? caller[key] : '').filter(Boolean).join(' ').trim();
+  return { id, name: name || 'Собеседник', avatar: caller.avatar };
+};
