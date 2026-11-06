@@ -6,7 +6,9 @@ const TOOLS_NS = 'http://schemas.android.com/tools';
 const POST_NOTIFICATIONS = 'android.permission.POST_NOTIFICATIONS';
 const READ_EXTERNAL_STORAGE = 'android.permission.READ_EXTERNAL_STORAGE';
 const WRITE_EXTERNAL_STORAGE = 'android.permission.WRITE_EXTERNAL_STORAGE';
+const MEDIA_PLAYBACK_PERMISSION = 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK';
 const MEDIA_PROJECTION_PERMISSION = 'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION';
+const EXPO_AUDIO_CONTROLS_SERVICE = 'expo.modules.audio.service.AudioControlsService';
 const PREVIEW_ACTIVITY = 'androidx.compose.ui.tooling.PreviewActivity';
 const AGORA_SCREEN_CAPTURE_ACTIVITY = 'io.agora.rtc2.extensions.MediaProjectionMgr$LocalScreenCaptureAssistantActivity';
 const AGORA_SCREEN_SHARING_SERVICE = 'io.agora.rtc2.extensions.MediaProjectionMgr$LocalScreenSharingService';
@@ -92,9 +94,12 @@ module.exports = (config) => {
     ensurePermission(manifest, POST_NOTIFICATIONS);
     setPermissionMaxSdk(manifest, WRITE_EXTERNAL_STORAGE, 28);
     setPermissionMaxSdk(manifest, READ_EXTERNAL_STORAGE, 32);
+    // Chat media plays in the app. The lock-screen playback service is unused.
+    removePermission(manifest, MEDIA_PLAYBACK_PERMISSION);
     removePermission(manifest, MEDIA_PROJECTION_PERMISSION);
 
     if (application) {
+      removeApplicationComponent(application, 'service', EXPO_AUDIO_CONTROLS_SERVICE);
       removePreviewActivity(application);
       removeAgoraScreenSharing(application);
     }
