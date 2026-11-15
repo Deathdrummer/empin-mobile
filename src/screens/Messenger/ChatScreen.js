@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,12 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAvoidingView, KeyboardGestureArea } from 'react-native-keyboard-controller';
+import {
+  KeyboardAvoidingView,
+  KeyboardGestureArea,
+  useKeyboardState,
+  useWindowDimensions,
+} from 'react-native-keyboard-controller';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -35,6 +40,7 @@ import { useCallContext } from '../../contexts/CallContext';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAfterModalClose } from '../../hooks/useAfterModalClose';
 import { plainText } from '../../utils/richText';
+import { appendSearchPage, firstSearchPage, searchCursor } from '../../utils/chatSearch';
 import { isReadByOthers, readersOf } from '../../utils/readReceipts';
 import { useTheme, withAlpha } from '../../theme';
 import { getUserFacingError } from '../../utils/userFacingError';
@@ -55,7 +61,7 @@ import { messagesText, shareMediaItem, shareMessages } from '../../services/mess
 import ForwardSheet from './ForwardSheet';
 import ReadersSheet from './ReadersSheet';
 import { TypingDots } from '../../components/chat/TypingDots';
-import { Composer } from '../../components/chat/Composer';
+import { COMPOSER_INPUT_ID, Composer } from '../../components/chat/Composer';
 import { PollCreateModal } from '../../components/chat/PollCreateModal';
 import { VideoViewer } from '../../components/chat/VideoViewer';
 import { ViewerHeader } from '../../components/chat/ViewerHeader';
@@ -81,8 +87,32 @@ const LIST_GAP = 18;
 // Android без панели навигации: низ экрана — зона системного жеста «домой». Поле ввода выше неё,
 // иначе свайп вверх с микрофона (фиксация записи) сворачивал приложение
 const ANDROID_GESTURE_GAP = 16;
+// Окно результатов поиска в чате: зазор до клавиатуры и наименьшая высота (два-три результата)
+const SEARCH_RESULTS_BOTTOM_GAP = 12;
+const SEARCH_RESULTS_MIN_HEIGHT = 160;
+// Поиск в чате: совпадения листаются страницами (как в Telegram), total — сколько всего нашлось
+const SEARCH_CLOSED = { active: false, query: '', loading: false, loadingMore: false, results: [], hasMore: false, total: null };
+const SEARCH_NO_RESULTS = { loading: false, loadingMore: false, results: [], hasMore: false, total: null };
 
 const isServerId = (id) => typeof id === 'number';
+
+/**
+ * Ячейка ленты. Лента перевёрнута: сообщение выше на экране (старее) идёт в дереве позже и рисуется поверх
+ * нижнего — «всплеск» реакции, вылетающий вверх, уходил под предыдущее сообщение. На время всплеска его
+ * ячейка поднимается над соседними. Android — elevation, а не zIndex: zIndex включает свой порядок отрисовки
+ * детей, а он вместе с removeClippedSubviews (у FlatList на Android по умолчанию) уже приводил к падениям.
+ * У прозрачной ячейки elevation не рисует тени.
+ */
+const BurstMessageContext = createContext(null);
+const ChatCell = ({ item, style, onLayout, onFocusCapture, children }) => {
+  const burstMessageId = useContext(BurstMessageContext);
+  const lifted = burstMessageId != null && item?.type === 'message' && item.message.id === burstMessageId;
+  return (
+    <View style={lifted ? [style, styles.cellAbove] : style} onLayout={onLayout} onFocusCapture={onFocusCapture}>
+      {children}
+    </View>
+  );
+};
 
 const sortById = (list) => [...list].sort((a, b) => {
   // Отправляемые (локальные) — всегда ниже серверных
@@ -191,7 +221,7 @@ export default function ChatScreen({ navigation, route }) {
   const [burst, setBurst] = useState(null);
   const [pinnedIndex, setPinnedIndex] = useState(0);
   const [pollVisible, setPollVisible] = useState(false);
-  const [search, setSearch] = useState({ active: false, query: '', loading: false, results: [] });
+  const [search, setSearch] = useState(SEARCH_CLOSED);
   // Непрочитанное при открытии (как в Telegram): разделитель «Непрочитанные сообщения» перед первым из них
   // и кнопка «@» — к сообщениям, где меня упомянули
   const [unreadMark, setUnreadMark] = useState(null);
@@ -1188,20 +1218,33 @@ export default function ChatScreen({ navigation, route }) {
 
   // --- Поиск в чате ---
 
+  // Номер текущего поиска: ответ догрузки по прежнему запросу (текст уже изменили) не смешивается с новым
+  const searchRequestRef = useRef(0);
+  const searchListRef = useRef(null);
+  // Догрузка уже идёт: второй вызов до обновления состояния запросил бы ту же страницу, а пустой по новизне
+  // ответ остановил бы листание (см. appendSearchPage)
+  const searchMoreInFlightRef = useRef(false);
+
   useEffect(() => {
+    searchRequestRef.current += 1;
     const query = search.query.trim();
     if (!search.active || query.length < 2 || !chatId) {
-      setSearch((current) => (current.results.length || current.loading ? { ...current, results: [], loading: false } : current));
+      setSearch((current) => (current.results.length || current.loading || current.loadingMore
+        ? { ...current, ...SEARCH_NO_RESULTS }
+        : current));
       return undefined;
     }
     let cancelled = false;
-    setSearch((current) => ({ ...current, loading: true }));
+    setSearch((current) => ({ ...current, loading: true, loadingMore: false }));
     const timer = setTimeout(async () => {
       try {
         const data = await messengerAPI.search(query, chatId);
-        if (!cancelled) setSearch((current) => ({ ...current, loading: false, results: data.messages || [] }));
+        if (cancelled) return;
+        setSearch((current) => ({ ...current, loading: false, ...firstSearchPage(data) }));
+        // Новый запрос — список с начала
+        searchListRef.current?.scrollToOffset({ offset: 0, animated: false });
       } catch (error) {
-        if (!cancelled) setSearch((current) => ({ ...current, loading: false, results: [] }));
+        if (!cancelled) setSearch((current) => ({ ...current, ...SEARCH_NO_RESULTS }));
       }
     }, 350);
     return () => {
@@ -1210,7 +1253,26 @@ export default function ChatScreen({ navigation, route }) {
     };
   }, [search.active, search.query, chatId]);
 
-  const closeSearch = () => setSearch({ active: false, query: '', loading: false, results: [] });
+  // Долистал до конца найденного — следующая страница, старше самого старого из показанных
+  const loadMoreSearch = useCallback(async () => {
+    const beforeId = searchCursor(search.results);
+    if (!chatId || !search.hasMore || search.loading || searchMoreInFlightRef.current || !beforeId) return;
+    searchMoreInFlightRef.current = true;
+    const request = searchRequestRef.current;
+    setSearch((current) => ({ ...current, loadingMore: true }));
+    try {
+      const data = await messengerAPI.search(search.query.trim(), chatId, { beforeId });
+      if (request !== searchRequestRef.current) return;
+      setSearch((current) => ({ ...current, loadingMore: false, ...appendSearchPage(current.results, data) }));
+    } catch (error) {
+      // Без связи: повтор — прокруткой от конца списка и обратно
+      if (request === searchRequestRef.current) setSearch((current) => ({ ...current, loadingMore: false }));
+    } finally {
+      searchMoreInFlightRef.current = false;
+    }
+  }, [chatId, search]);
+
+  const closeSearch = () => setSearch(SEARCH_CLOSED);
 
   // --- Заголовок ---
 
@@ -1265,6 +1327,15 @@ export default function ChatScreen({ navigation, route }) {
     }
   }, [hasShared, info?.can_write]);
   const bottomGap = Platform.OS === 'android' ? Math.max(insets.bottom, ANDROID_GESTURE_GAP) : insets.bottom;
+  // Окно результатов поиска — от строки поиска до клавиатуры (без неё — до низа экрана), дальше прокрутка
+  const keyboardHeight = useKeyboardState((state) => (state.isVisible ? state.height : 0));
+  const { height: screenHeight } = useWindowDimensions();
+  // Отступ шапки сверху + строка поиска (44) + отступ карточки (8): см. headerBar, glassCapsule, glassCard
+  const searchResultsTop = insets.top + 6 + 44 + 8;
+  const searchResultsMaxHeight = Math.max(
+    SEARCH_RESULTS_MIN_HEIGHT,
+    screenHeight - searchResultsTop - Math.max(keyboardHeight, insets.bottom) - SEARCH_RESULTS_BOTTOM_GAP,
+  );
   const s = screenStyles(theme);
   // Затухание фона чата под «стеклянными» элементами шапки и низа
   const fadeColor = withAlpha(theme.chatBackground, 0.85);
@@ -1275,22 +1346,33 @@ export default function ChatScreen({ navigation, route }) {
       <View style={s.container}>
         {/* Фон не двигается вместе с клавиатурой */}
         <ChatBackground />
-        {/* Клавиатура как в Telegram: лента и поле ввода едут вместе с ней кадр за кадром; прокрутка вниз
-            опускает клавиатуру вслед за пальцем (iOS — keyboardDismissMode, Android — KeyboardGestureArea).
-            Нижний отступ экрана (полоска «домой») — за пределами: при открытой клавиатуре зазора нет */}
-        <KeyboardGestureArea style={[s.flex, { marginBottom: bottomGap }]} interpolator="ios" offset={composerHeight}>
+        {/* Клавиатура как в Telegram и WhatsApp: лента и поле ввода едут вместе с ней кадр за кадром; прокрутка вниз
+            опускает клавиатуру вслед за пальцем, как только палец доходит до верха панели ввода (offset).
+            iOS — keyboardDismissMode="interactive" ленты; зона захвата продлевается невидимой надстройкой
+            над клавиатурой высотой с панель ввода — только для поля с этим nativeID (без него offset на iOS не
+            действовал: лента уезжала под панель, а клавиатура хваталась, лишь когда палец доходил до неё самой).
+            Android — KeyboardGestureArea. Нижний отступ экрана (полоска «домой») — за пределами: при открытой
+            клавиатуре зазора нет */}
+        <KeyboardGestureArea
+          style={[s.flex, { marginBottom: bottomGap }]}
+          interpolator="ios"
+          offset={composerHeight}
+          textInputNativeID={COMPOSER_INPUT_ID}
+        >
         <KeyboardAvoidingView style={s.flex} behavior="translate-with-padding">
           <View style={s.flex}>
 
             {initialLoading ? (
               <ActivityIndicator style={[s.loader, { marginTop: headerHeight + 40 }]} size="large" color={theme.accent} />
             ) : (
+              <BurstMessageContext.Provider value={burst?.messageId ?? null}>
               <FlatList
                 ref={listRef}
                 data={items}
                 inverted
                 keyExtractor={(item) => item.key}
                 renderItem={renderItem}
+                CellRendererComponent={ChatCell}
                 contentContainerStyle={{ paddingTop: composerHeight + LIST_GAP, paddingBottom: headerHeight + 8 }}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="interactive"
@@ -1321,6 +1403,7 @@ export default function ChatScreen({ navigation, route }) {
                 ListHeaderComponent={loadingNewer ? <ActivityIndicator style={s.olderLoader} color={theme.accent} /> : null}
                 ListFooterComponent={loadingOlder ? <ActivityIndicator style={s.olderLoader} color={theme.accent} /> : null}
               />
+              </BurstMessageContext.Provider>
             )}
 
             {/* Пустой чат — поверх ленты, а не внутри: перевёрнутая лента переворачивает и заглушку
@@ -1500,7 +1583,7 @@ export default function ChatScreen({ navigation, route }) {
                 <Pressable
                   onPress={() => {
                     Haptics.selectionAsync().catch(() => {});
-                    setSearch({ active: true, query: '', loading: false, results: [] });
+                    setSearch({ ...SEARCH_CLOSED, active: true });
                   }}
                   hitSlop={6}
                   style={s.headerAction}
@@ -1555,26 +1638,44 @@ export default function ChatScreen({ navigation, route }) {
           ) : null}
 
           {search.active && search.query.trim().length >= 2 ? (
-            <GlassView lite style={[s.glassCard, s.searchResults]}>
-              {search.loading ? <ActivityIndicator style={s.searchLoader} color={theme.accent} /> : null}
-              {!search.loading && !search.results.length ? <Text style={s.searchEmpty}>Ничего не нашли</Text> : null}
-              {search.results.slice(0, 8).map((hit) => (
-                <Pressable
-                  key={hit.message_id}
-                  style={({ pressed }) => [s.searchHit, pressed && { backgroundColor: theme.surfacePressed }]}
-                  onPress={() => {
-                    closeSearch();
-                    Keyboard.dismiss();
-                    jumpToMessage(hit.message_id);
-                  }}
-                >
-                  <View style={s.searchHitTop}>
-                    <Text style={s.searchHitName} numberOfLines={1}>{hit.from_name}</Text>
-                    <Text style={s.searchHitTime}>{formatListTime(hit.created_at)}</Text>
-                  </View>
-                  <Text style={s.searchHitText} numberOfLines={2}>{plainText(hit.text)}</Text>
-                </Pressable>
-              ))}
+            <GlassView lite style={s.glassCard}>
+              {/* Все совпадения чата, как в Telegram: сколько всего нашлось, дальше — догрузка страницами при
+                  прокрутке. Окно не заходит под клавиатуру. Касание по результату срабатывает с первого раза
+                  и при открытой клавиатуре (handled) */}
+              <FlatList
+                ref={searchListRef}
+                style={{ maxHeight: searchResultsMaxHeight }}
+                data={search.results}
+                keyExtractor={(hit) => String(hit.message_id)}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                onEndReached={loadMoreSearch}
+                onEndReachedThreshold={0.5}
+                ListHeaderComponent={search.loading ? (
+                  <ActivityIndicator style={s.searchLoader} color={theme.accent} />
+                ) : !search.results.length ? (
+                  <Text style={s.searchEmpty}>Ничего не нашли</Text>
+                ) : search.total ? (
+                  <Text style={s.searchCount}>{`${search.total} ${plural(search.total, 'совпадение', 'совпадения', 'совпадений')}`}</Text>
+                ) : null}
+                ListFooterComponent={search.loadingMore ? <ActivityIndicator style={s.searchLoader} color={theme.accent} /> : null}
+                renderItem={({ item: hit }) => (
+                  <Pressable
+                    style={({ pressed }) => [s.searchHit, pressed && { backgroundColor: theme.surfacePressed }]}
+                    onPress={() => {
+                      closeSearch();
+                      Keyboard.dismiss();
+                      jumpToMessage(hit.message_id);
+                    }}
+                  >
+                    <View style={s.searchHitTop}>
+                      <Text style={s.searchHitName} numberOfLines={1}>{hit.from_name}</Text>
+                      <Text style={s.searchHitTime}>{formatListTime(hit.created_at)}</Text>
+                    </View>
+                    <Text style={s.searchHitText} numberOfLines={2}>{plainText(hit.text)}</Text>
+                  </Pressable>
+                )}
+              />
             </GlassView>
           ) : null}
         </View>
@@ -1650,6 +1751,7 @@ const styles = StyleSheet.create({
   // Во всю ширину, как в Telegram
   unreadDivider: { marginVertical: 8, paddingVertical: 5, alignItems: 'center' },
   unreadDividerText: { fontSize: 13, fontWeight: '600' },
+  cellAbove: Platform.select({ android: { elevation: 1 }, default: { zIndex: 1 } }),
 });
 
 const screenStyles = (theme) => StyleSheet.create({
@@ -1698,9 +1800,9 @@ const screenStyles = (theme) => StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 16, color: theme.text, paddingVertical: 0 },
   searchCancel: { fontSize: 16, color: theme.accent, paddingHorizontal: 6 },
-  searchResults: { maxHeight: 420 },
   searchLoader: { marginVertical: 14 },
   searchEmpty: { textAlign: 'center', color: theme.textSecondary, fontSize: 15, paddingVertical: 16 },
+  searchCount: { fontSize: 13, fontWeight: '600', color: theme.textSecondary, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 2 },
   searchHit: { paddingHorizontal: 16, paddingVertical: 9 },
   searchHitTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   searchHitName: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.text },
