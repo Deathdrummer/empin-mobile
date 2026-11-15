@@ -9,6 +9,8 @@ import { isCallAudioActive } from './callAudioState';
  * На Android беззвучный режим из Expo не прочитать — звук выключается в профиле («Звуки в чате»).
  */
 const STORAGE_KEY = '@chatSounds';
+// Громкость звука отправки: тихий щелчок, как в WhatsApp (было 0.8 — слишком громко). 0.2 ≈ −12 дБ к прежнему
+const MESSAGE_SENT_VOLUME = 0.2;
 
 let enabled = true;
 let sentPlayer = null;
@@ -51,7 +53,7 @@ export const playMessageSent = async () => {
       await setAudioModeAsync({ playsInSilentMode: false, allowsRecording: false, interruptionMode: 'mixWithOthers' });
     }
     const player = ensurePlayer();
-    player.volume = 0.8;
+    player.volume = MESSAGE_SENT_VOLUME;
     player.seekTo(0);
     player.play();
   } catch (error) {

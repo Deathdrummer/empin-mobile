@@ -10,13 +10,21 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ru.deathdrumer.empinmobile",
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#FFFFFF",
+        "dark": {
+          "backgroundColor": "#0D0D10"
+        }
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "Разрешите доступ к камере, чтобы снимать фото и видео для чатов, комментариев и фото профиля",
         "NSPhotoLibraryUsageDescription": "Разрешите доступ к галерее, чтобы отправлять фото и видео в чаты и комментарии и выбрать фото профиля",
@@ -46,6 +54,15 @@
         "backgroundColor": "#160204"
       },
       "edgeToEdgeEnabled": true,
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#FFFFFF",
+        "dark": {
+          "image": "./assets/splash.png",
+          "backgroundColor": "#0D0D10"
+        }
+      },
       "package": "ru.deathdrumer.empinmobile",
       "versionCode": 11,
       "permissions": [

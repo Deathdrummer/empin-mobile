@@ -454,9 +454,10 @@ export const messengerAPI = {
     return response.data;
   },
 
-  search: async (query, chatId = null) => {
+  // В чате — постранично: beforeId — самое старое из уже показанных совпадений
+  search: async (query, chatId = null, { beforeId } = {}) => {
     const response = await api.get('/messenger/search', {
-      params: { q: query, chat_id: chatId || undefined },
+      params: { q: query, chat_id: chatId || undefined, before_id: beforeId || undefined },
       timeout: MESSAGE_REFRESH_TIMEOUT_MS,
     });
     return response.data;
