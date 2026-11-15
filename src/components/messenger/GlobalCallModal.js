@@ -1,6 +1,8 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { CallModal } from './CallModal';
 import { useCallContext } from '../../contexts/CallContext';
+import { HOLD } from '../../services/callHold';
 import { formatShortName } from '../../utils/formatName';
 
 /**
@@ -18,6 +20,13 @@ export const GlobalCallModal = () => {
     endCall,
     toggleMute,
     toggleSpeaker,
+    waitingCall,
+    parkedCall,
+    holdAndAnswerWaitingCall,
+    endAndAnswerWaitingCall,
+    rejectWaitingCall,
+    endParkedCall,
+    resumeFromHold,
   } = useCallContext();
 
   // Для входящего звонка из polling — формируем "синтетический" callState,
@@ -53,6 +62,8 @@ export const GlobalCallModal = () => {
       || outgoingParticipant
       || { id: null, name: 'Неизвестный', avatar: undefined };
 
+  const holdReasons = callState.holdReasons ?? [];
+
   return (
     <CallModal
       visible={callModalVisible}
@@ -63,6 +74,20 @@ export const GlobalCallModal = () => {
       onEnd={endCall}
       onToggleMute={toggleMute}
       onToggleSpeaker={toggleSpeaker}
+      hold={{
+        me: holdReasons.length > 0,
+        peer: Boolean(callState.peerOnHold),
+        // iPhone: удержание системой можно снять самому, если звонок по сотовой связи уже закончился
+        canResume: Platform.OS === 'ios' && holdReasons.includes(HOLD.system),
+      }}
+      onResumeHold={resumeFromHold}
+      // На iPhone второй звонок показывает системный экран CallKit — свои кнопки только на Android
+      waitingName={Platform.OS === 'ios' || !waitingCall ? null : resolveCallerName(waitingCall.caller)}
+      onWaitingHoldAnswer={holdAndAnswerWaitingCall}
+      onWaitingEndAnswer={endAndAnswerWaitingCall}
+      onWaitingReject={rejectWaitingCall}
+      parkedName={parkedCall ? parkedCall.callData.participant?.name || 'Собеседник' : null}
+      onEndParked={endParkedCall}
     />
   );
 };

@@ -67,7 +67,7 @@ export const getPusher = async () => {
 
 /**
  * Подписаться на канал звонков пользователя.
- * handlers: { onCallAccepted, onCallRejected, onCallCancelled, onCallEnded }
+ * handlers: { onCallAccepted, onCallRejected, onCallCancelled, onCallEnded, onCallHeld }
  */
 export const subscribeToCalls = async (staffId, handlers) => {
   const pusher = await getPusher();
@@ -91,6 +91,10 @@ export const subscribeToCalls = async (staffId, handlers) => {
           break;
         case 'call.ended':
           handlers.onCallEnded?.(data);
+          break;
+        // Собеседник удержал звонок или вернулся к нему
+        case 'call.held':
+          handlers.onCallHeld?.(data);
           break;
         // Мессенджер приходит в тот же личный канал, что и звонки
         case 'message.created':

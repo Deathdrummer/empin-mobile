@@ -66,6 +66,17 @@ export const CallModal = ({
   onEnd,
   onToggleMute,
   onToggleSpeaker,
+  // Удержание: me — у нас (звонок по сотовой связи, второй звонок), peer — у собеседника
+  hold = { me: false, peer: false, canResume: false },
+  onResumeHold,
+  // Второй входящий во время разговора (Android; на iPhone — системный экран CallKit)
+  waitingName = null,
+  onWaitingHoldAnswer,
+  onWaitingEndAnswer,
+  onWaitingReject,
+  // Удержанный звонок, к которому вернёмся после этого
+  parkedName = null,
+  onEndParked,
 }) => {
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(50));
@@ -197,6 +208,17 @@ export const CallModal = ({
               <Text style={styles.headerTitle}>Аудиозвонок</Text>
             </View>
 
+            {/* Удержанный звонок: вернёмся к нему, когда этот закончится */}
+            {parkedName ? (
+              <View style={styles.parkedBar}>
+                <Ionicons name="pause-circle" size={20} color="rgba(255, 255, 255, 0.85)" />
+                <Text style={styles.parkedText} numberOfLines={1}>{`На удержании: ${parkedName}`}</Text>
+                <TouchableOpacity onPress={onEndParked} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Завершить звонок: ${parkedName}`}>
+                  <Text style={styles.parkedEnd}>Завершить</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
             <Animated.View style={[styles.center, { transform: [{ translateY: slideAnim }] }]}>
               {/* Avatar */}
               <View style={styles.avatarRing}>
@@ -215,7 +237,38 @@ export const CallModal = ({
               ) : (
                 <Text style={styles.statusText}>{getStatusText()}</Text>
               )}
+
+              {/* Удержание: у нас — звук выключен до конца другого звонка; у собеседника — он вернётся сам */}
+              {callState.status === 'active' && (hold.me || hold.peer) ? (
+                <View style={styles.holdChip}>
+                  <Ionicons name="pause" size={14} color="#FFFFFF" />
+                  <Text style={styles.holdText}>{hold.me ? 'Звонок на удержании' : 'Собеседник удержал звонок'}</Text>
+                </View>
+              ) : null}
+              {callState.status === 'active' && hold.me && hold.canResume ? (
+                <TouchableOpacity style={styles.resumeButton} onPress={onResumeHold} accessibilityRole="button">
+                  <Text style={styles.resumeText}>Продолжить разговор</Text>
+                </TouchableOpacity>
+              ) : null}
             </Animated.View>
+
+            {/* Второй входящий во время разговора */}
+            {waitingName ? (
+              <View style={styles.waitingCard}>
+                <Text style={styles.waitingTitle} numberOfLines={1}>{`Входящий: ${waitingName}`}</Text>
+                <View style={styles.waitingActions}>
+                  <TouchableOpacity style={[styles.waitingButton, { backgroundColor: DECLINE_COLOR }]} onPress={onWaitingReject} accessibilityRole="button">
+                    <Text style={styles.waitingButtonText}>Отклонить</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.waitingButton} onPress={onWaitingEndAnswer} accessibilityRole="button">
+                    <Text style={styles.waitingButtonText} numberOfLines={2}>Завершить и ответить</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.waitingButton, { backgroundColor: ACCEPT_COLOR }]} onPress={onWaitingHoldAnswer} accessibilityRole="button">
+                    <Text style={styles.waitingButtonText} numberOfLines={2}>Удержать и ответить</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
 
             {/* Action Buttons */}
             <View style={styles.actionsContainer}>{renderActionButtons()}</View>
@@ -306,4 +359,56 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255, 255, 255, 0.85)',
   },
+  parkedBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  parkedText: { flex: 1, fontSize: 15, color: '#FFFFFF' },
+  parkedEnd: { fontSize: 15, fontWeight: '600', color: DECLINE_COLOR },
+  holdChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  holdText: { fontSize: 15, color: '#FFFFFF' },
+  resumeButton: {
+    marginTop: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: ACCEPT_COLOR,
+  },
+  resumeText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  waitingCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  waitingTitle: { fontSize: 16, fontWeight: '600', color: '#FFFFFF', marginBottom: 12, textAlign: 'center' },
+  waitingActions: { flexDirection: 'row', gap: 8 },
+  waitingButton: {
+    flex: 1,
+    minHeight: 44,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  waitingButtonText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', textAlign: 'center' },
 });
