@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppState, Platform } from 'react-native';
+import { AppState, Platform, Vibration } from 'react-native';
 import { requestRecordingPermissionsAsync, useAudioPlayer } from 'expo-audio';
 import { useCall } from '../services/agora/useCall';
 import { messengerAPI } from '../services/api';
 import { setCallAudioActive } from '../services/callAudioState';
+import { HOLD, incomingDuringCall, peerOnHoldFromDetails } from '../services/callHold';
 import { incomingCallEvents, resolveNativeAnswer } from '../services/incomingCallEvents';
 import { recordCallDiagnostic } from '../services/callDiagnostics';
 import { CALL_CAUSES as C } from '../services/callDiagnosticFormat';
@@ -15,9 +16,21 @@ import { presentMessagePush } from '../services/messagePush';
 import {
   endIosSystemCall,
   reportIosOutgoingConnected,
+  setIosCallHeld,
   startIosOutgoingCall,
   startIosVoip,
 } from '../services/iosVoip';
+
+const IN_CALL = ['initiating', 'ringing', 'connecting', 'active'];
+// Второй входящий во время разговора ждёт ответа столько же, сколько обычный
+const WAITING_CALL_TIMEOUT_MS = 30000;
+// iPhone: возврат к удержанному идёт через CallKit (событие unhold); не пришло — возвращаемся сами
+const RESUME_FALLBACK_MS = 1500;
+
+/** Собеседнику — «на удержании». Старый сервер (нет /hold) — удержание только у нас */
+const notifyHold = (callId, onHold) => {
+  messengerAPI.holdCall(callId, onHold).catch(() => {});
+};
 
 const createNoopIncomingCallModule = () => ({
   addEventListener: () => {},
@@ -100,7 +113,76 @@ export const CallProvider = ({ children, isLoggedIn }) => {
 
   const [currentUserStaffId, setCurrentUserStaffId] = useState(null);
 
-  const callState = useCall();
+  const callState = useCall({ onHoldChange: notifyHold });
+
+  // Второй входящий во время разговора: ждёт ответа («Удержать и ответить», «Завершить и ответить», «Отклонить»),
+  // не затирая экран текущего звонка
+  const [waitingCall, setWaitingCall] = useState(null);
+  const waitingCallRef = useRef(null);
+  const waitingTimeoutRef = useRef(null);
+  // Удержанный звонок, из канала которого вышли ради второго: вернёмся к нему, когда второй закончится
+  const [parkedCall, setParkedCall] = useState(null);
+  const parkedCallRef = useRef(null);
+  const resumingRef = useRef(false);
+  // Идёт переход ко второму звонку: пауза без разговора — не повод возвращаться к удержанному
+  const switchingRef = useRef(false);
+  const answerWaitingCallRef = useRef(null);
+  const resumeParkedCallRef = useRef(null);
+  // Второй звонок, на который сейчас отвечаем: закрытие его системного окна — не отказ
+  const answeringSecondIdRef = useRef(null);
+
+  const updateWaitingCall = (call) => {
+    waitingCallRef.current = call;
+    setWaitingCall(call);
+    if (!call) {
+      clearTimeout(waitingTimeoutRef.current);
+      waitingTimeoutRef.current = null;
+    }
+  };
+  const updateParkedCall = (call) => {
+    parkedCallRef.current = call;
+    setParkedCall(call);
+  };
+  const isWaitingCall = (callId) => callId != null && waitingCallRef.current != null
+    && String(waitingCallRef.current.callId) === String(callId);
+  const isParkedCall = (callId) => callId != null && parkedCallRef.current != null
+    && String(parkedCallRef.current.callData.callId) === String(callId);
+
+  /** Второй входящий ждёт ответа; не ответили за 30 секунд — у звонящего «нет ответа», у нас пропущенный */
+  const presentWaitingCall = (callData) => {
+    updateWaitingCall(callData);
+    recordCallDiagnostic('waiting-call', { callId: callData.callId });
+    // Android: свой экран звонка не звонит поверх разговора — короткая вибрация, как вторая линия
+    if (Platform.OS === 'android') Vibration.vibrate([0, 300, 200, 300]);
+    clearTimeout(waitingTimeoutRef.current);
+    waitingTimeoutRef.current = setTimeout(() => {
+      if (!isWaitingCall(callData.callId)) return;
+      updateWaitingCall(null);
+      incomingCallEvents.finish(callData.callId);
+      endIosSystemCall(callData.callId, 'unanswered');
+      messengerAPI.endCall(callData.callId, C.incomingTimeout).catch(() => {});
+    }, WAITING_CALL_TIMEOUT_MS);
+  };
+
+  /** Ожидающий второй звонок закончился без ответа: отклонён здесь (reject) или не дождался (timeout) */
+  const finishWaitingCall = (callId, how) => {
+    if (!isWaitingCall(callId)) return false;
+    updateWaitingCall(null);
+    incomingCallEvents.finish(callId);
+    if (how === 'reject') messengerAPI.rejectCall(callId, C.userReject).catch(() => {});
+    if (how === 'timeout') messengerAPI.endCall(callId, C.incomingTimeout).catch(() => {});
+    return true;
+  };
+
+  /** Удержанный звонок закончился (собеседник положил трубку) или его завершили здесь (end) */
+  const finishParkedCall = (callId, how) => {
+    if (!isParkedCall(callId)) return false;
+    updateParkedCall(null);
+    incomingCallEvents.finish(callId);
+    endIosSystemCall(callId, 'remoteEnded');
+    if (how === 'end') messengerAPI.endCall(callId, C.userHangup).catch(() => {});
+    return true;
+  };
 
   useEffect(() => {
     if (isLoggedIn) return;
@@ -108,6 +190,9 @@ export const CallProvider = ({ children, isLoggedIn }) => {
     incomingCallDataRef.current = null;
     setIncomingCallData(null);
     setCallModalVisible(false);
+    // Второй и удержанный звонки прежнего пользователя — тоже
+    updateWaitingCall(null);
+    updateParkedCall(null);
   }, [isLoggedIn]);
 
   useEffect(() => {
@@ -210,6 +295,8 @@ export const CallProvider = ({ children, isLoggedIn }) => {
         // Callee получает: caller отменил до ответа
         console.log('[WS] Call cancelled:', data.call_id);
         endIosSystemCall(data.call_id, 'remoteEnded');
+        // Отменил тот, кто ждал ответа во время нашего разговора
+        if (finishWaitingCall(data.call_id)) return;
         if (!isCurrentCall(data.call_id)) return;
         closeIncomingCall('cancelled', C.remoteWs);
       },
@@ -220,6 +307,8 @@ export const CallProvider = ({ children, isLoggedIn }) => {
         // Другой участник завершил активный звонок
         console.log('[WS] Call ended:', data.call_id);
         endIosSystemCall(data.call_id, 'remoteEnded');
+        // Положил трубку тот, кто ждал ответа, или собеседник удержанного звонка
+        if (finishWaitingCall(data.call_id) || finishParkedCall(data.call_id)) return;
         if (!isCurrentCall(data.call_id)) return;
         if (['active', 'connecting', 'ringing'].includes(callStateRef.current?.status)) {
           handleEndCallRef.current?.(C.remoteWs);
@@ -227,6 +316,13 @@ export const CallProvider = ({ children, isLoggedIn }) => {
           // Звонящий положил трубку, пока у нас звонило (сервер шлёт call.ended, а не call.cancelled)
           closeIncomingCall('cancelled', C.remoteWs);
         }
+      },
+
+      onCallHeld: (data) => {
+        recordCallDiagnostic(data.on_hold ? 'ws-held' : 'ws-unheld', { callId: data.call_id });
+        // Собеседник удержал разговор (ему звонят по сотовой связи или он ответил на второй) или вернулся
+        if (!isCurrentCall(data.call_id) || callStateRef.current?.callData?.callId == null) return;
+        callStateRef.current?.setPeerOnHold?.(Boolean(data.on_hold));
       },
     });
 
@@ -317,8 +413,9 @@ export const CallProvider = ({ children, isLoggedIn }) => {
         || callState.status === 'connecting'
         || callState.status === 'active'
         || incomingCallData !== null
+        || parkedCall !== null
     );
-  }, [callState.status, incomingCallData]);
+  }, [callState.status, incomingCallData, parkedCall]);
 
   // Android: служба переднего плана на время звонка. С Android 11 без неё свёрнутое приложение
   // или заблокированный экран теряют микрофон — собеседник перестаёт слышать.
@@ -326,10 +423,9 @@ export const CallProvider = ({ children, isLoggedIn }) => {
   useEffect(() => {
     if (Platform.OS !== 'android' || !EmpinCallService) return;
 
-    const inCall = callState.status === 'initiating'
-      || callState.status === 'ringing'
-      || callState.status === 'connecting'
-      || callState.status === 'active';
+    // Пока есть удержанный звонок, служба не останавливается: между разговорами (переход ко второму,
+    // возврат к удержанному) свёрнутое приложение не смогло бы запустить её заново
+    const inCall = IN_CALL.includes(callState.status) || parkedCall !== null;
 
     try {
       if (inCall && !callServiceStartedRef.current) {
@@ -341,7 +437,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
     } catch (error) {
       console.warn('[Call] Служба звонка:', error?.message ?? error);
     }
-  }, [callState.status]);
+  }, [callState.status, parkedCall]);
 
   // Cleanup рингтона при unmount
   useEffect(() => {
@@ -360,8 +456,34 @@ export const CallProvider = ({ children, isLoggedIn }) => {
         return;
       }
 
-      if (event?.callUUID && ['initiating', 'ringing', 'connecting', 'active'].includes(callStateRef.current?.status)
-        && !isCurrentCall(event.callUUID)) return;
+      // Второй звонок, пока идёт разговор: приложение было свёрнуто, push показал системное окно звонка.
+      // «Ответить» — удержать текущий разговор и ответить, как в WhatsApp
+      if (event?.callUUID && IN_CALL.includes(callStateRef.current?.status) && !isCurrentCall(event.callUUID)) {
+        const id = String(event.callUUID);
+        if (!isWaitingCall(id)) {
+          let stored = null;
+          try {
+            const raw = await AsyncStorage.getItem('@pendingCall');
+            stored = raw ? JSON.parse(raw) : null;
+          } catch {}
+          const decision = incomingDuringCall({
+            status: callStateRef.current?.status,
+            waitingCallId: waitingCallRef.current?.callId,
+            parkedCallId: parkedCallRef.current?.callData.callId,
+            callId: id,
+          });
+          if (String(stored?.callId) !== id || !incomingCallEvents.canPresent(id, stored?.expiresAt) || decision !== 'waiting') {
+            RNNotificationCall.hideNotification();
+            if (decision === 'busy') messengerAPI.rejectCall(id, C.busy).catch(() => {});
+            return;
+          }
+          presentWaitingCall(stored);
+        }
+        await AsyncStorage.removeItem('@pendingCall').catch(() => {});
+        RNNotificationCall.backToApp();
+        await answerWaitingCallRef.current?.({ keepCurrent: true });
+        return;
+      }
       isAnsweringRef.current = true;
       // backToApp() до hideNotification() — пока IncomingCallActivity видима,
       // Android 12+ разрешает запуск из фона (нет BAL restriction)
@@ -405,6 +527,24 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       if (!isLoggedInRef.current) {
         RNNotificationCall.hideNotification();
         await AsyncStorage.removeItem('@pendingCall').catch(() => {});
+        return;
+      }
+
+      // Второй звонок, пока идёт разговор: его отклонили в системном окне или окно закрылось само
+      const secondId = event?.callUUID != null ? String(event.callUUID) : null;
+      if (secondId && secondId !== answeringSecondIdRef.current && !isCurrentCall(secondId)
+        && (isWaitingCall(secondId) || IN_CALL.includes(callStateRef.current?.status))) {
+        RNNotificationCall.hideNotification();
+        const how = event?.endAction === 'ACTION_HIDE_CALL' ? 'timeout' : 'reject';
+        if (!finishWaitingCall(secondId, how)) {
+          incomingCallEvents.finish(secondId);
+          if (how === 'timeout') messengerAPI.endCall(secondId, C.incomingTimeout).catch(() => {});
+          else messengerAPI.rejectCall(secondId, C.androidEnd).catch(() => {});
+        }
+        try {
+          const raw = await AsyncStorage.getItem('@pendingCall');
+          if (raw && String(JSON.parse(raw).callId) === secondId) await AsyncStorage.removeItem('@pendingCall');
+        } catch {}
         return;
       }
 
@@ -471,11 +611,26 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       // Не обрабатываем повторно
       if (handledCallIdRef.current === callId) return;
 
-      // Уже идёт другой звонок: приложение ведёт один звонок за раз — отвечаем «занято»,
-      // иначе новый звонок затёр бы экран текущего
-      const currentStatus = callStateRef.current?.status;
-      if (['initiating', 'ringing', 'connecting', 'active'].includes(currentStatus)) {
+      // Уже идёт разговор: второй ждёт ответа («Удержать и ответить», «Завершить и ответить», «Отклонить»),
+      // не затирая экран текущего. Набираем номер сами, уже ждёт другой или есть удержанный — «занято»
+      const decision = incomingDuringCall({
+        status: callStateRef.current?.status,
+        waitingCallId: waitingCallRef.current?.callId,
+        parkedCallId: parkedCallRef.current?.callData.callId,
+        callId,
+      });
+      if (decision === 'duplicate') return;
+      if (decision === 'busy') {
         messengerAPI.rejectCall(callId, C.busy).catch(() => {});
+        return;
+      }
+      if (decision === 'waiting') {
+        presentWaitingCall({
+          callId,
+          caller: { id: data.caller_id, sname: data.caller_name ?? 'Неизвестный', fname: '', mname: '' },
+          callType: 'audio',
+          expiresAt: data.expires_at,
+        });
         return;
       }
 
@@ -513,6 +668,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       recordCallDiagnostic('push-ended', { callId: data.call_id, cause: C.remotePush });
       incomingCallEvents.finish(data.call_id);
       endIosSystemCall(data.call_id, 'remoteEnded');
+      if (finishWaitingCall(data.call_id) || finishParkedCall(data.call_id)) return;
       // Push о прошлом звонке, пришедший с опозданием, не трогает текущий
       if (!isCurrentCall(data.call_id)) return;
       closeIncomingCall(data.type === 'call_cancelled' ? 'cancelled' : 'ended', C.remotePush);
@@ -573,6 +729,10 @@ export const CallProvider = ({ children, isLoggedIn }) => {
         const response = await messengerAPI.getCallDetails(syncingCallId);
         if (stopped || !isCurrentCall(syncingCallId)) return;
         const call = response?.call;
+        // Удержание собеседника — запасной путь, если событие call.held не дошло (старый сервер не сообщает)
+        if (response?.hold && call?.status === 'active' && callStateRef.current?.status === 'active') {
+          callStateRef.current?.setPeerOnHold?.(peerOnHoldFromDetails(response));
+        }
         if (call?.status === 'active' && callStateRef.current?.callData?.isIncoming === false) {
           callStateRef.current?.markAccepted?.();
         } else if (call?.status === 'active' && incomingCallDataRef.current
@@ -673,6 +833,26 @@ export const CallProvider = ({ children, isLoggedIn }) => {
         return;
       }
 
+      // Удержание из CallKit: «Удержать и ответить» на звонок по сотовой связи, из другого мессенджера или
+      // на наш второй, кнопка на системном экране, переключение между двумя звонками
+      if (event.type === 'hold' || event.type === 'unhold') {
+        const onHold = event.type === 'hold';
+        if (isParkedCall(event.callId)) {
+          // Вернуться к удержанному (второй закончился или переключились) — войти в его канал снова
+          if (!onHold) await resumeParkedCallRef.current?.();
+          return;
+        }
+        if (String(callStateRef.current?.callData?.callId) === String(event.callId)) {
+          callStateRef.current?.setHold?.(HOLD.system, onHold);
+        }
+        return;
+      }
+
+      if (event.type === 'audioActivated') {
+        callStateRef.current?.restartAudioAfterHold?.();
+        return;
+      }
+
       const callData = getCallDataFromVoipEvent(event);
       const participant = getCallParticipant(callData);
 
@@ -686,6 +866,24 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       if (event.type === 'incoming') {
         if (!incomingCallEvents.canPresent(callData.callId)) {
           await endIosSystemCall(callData.callId, 'remoteEnded');
+          return;
+        }
+        // Уже идёт разговор: CallKit сам покажет «Удержать и ответить», «Завершить и ответить», «Отклонить»,
+        // а экран текущего звонка не трогаем. Набираем номер сами или есть удержанный — «занято»
+        const decision = incomingDuringCall({
+          status: callStateRef.current?.status,
+          waitingCallId: waitingCallRef.current?.callId,
+          parkedCallId: parkedCallRef.current?.callData.callId,
+          callId: callData.callId,
+        });
+        if (decision === 'duplicate') return;
+        if (decision === 'busy') {
+          await endIosSystemCall(callData.callId, 'declined');
+          messengerAPI.rejectCall(callData.callId, C.busy).catch(() => {});
+          return;
+        }
+        if (decision === 'waiting') {
+          presentWaitingCall(callData);
           return;
         }
         iosSystemCallIdRef.current = callData.callId;
@@ -722,6 +920,12 @@ export const CallProvider = ({ children, isLoggedIn }) => {
           await endIosSystemCall(callData.callId, 'remoteEnded');
           return;
         }
+        // Ответ на второй: «Удержать и ответить» — CallKit уже удержал текущий (событие hold),
+        // «Завершить и ответить» — уже завершил его (событие end). Удерживаем, если он ещё идёт
+        if (isWaitingCall(callData.callId)) {
+          await answerWaitingCallRef.current?.({ keepCurrent: true });
+          return;
+        }
         iosSystemCallIdRef.current = callData.callId;
         handledCallIdRef.current = callData.callId;
         incomingCallDataRef.current = callData;
@@ -737,6 +941,17 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       }
 
       incomingCallEvents.finish(callData.callId);
+      // Второй, ждавший ответа: отклонили на системном экране, не дождался или отменил звонящий
+      if (isWaitingCall(callData.callId)) {
+        const how = event.type === 'reject' || event.type === 'end' ? 'reject' : event.type === 'timeout' ? 'timeout' : null;
+        finishWaitingCall(callData.callId, how);
+        return;
+      }
+      // Удержанный: завершили на системном экране или собеседник положил трубку
+      if (isParkedCall(callData.callId)) {
+        finishParkedCall(callData.callId, event.type === 'end' || event.type === 'reject' ? 'end' : null);
+        return;
+      }
       // Завершение старого CallKit-вызова не должно сбрасывать новый разговор.
       if (!isCurrentCall(callData.callId)) return;
       iosSystemCallIdRef.current = null;
@@ -891,6 +1106,183 @@ export const CallProvider = ({ children, isLoggedIn }) => {
     }
   }, [callState, callTimeoutId, incomingCallData]);
 
+  /**
+   * Ответ на второй звонок во время разговора. keepCurrent — «Удержать и ответить»: сервер отмечает удержание
+   * (собеседник увидит «на удержании» и не завершит разговор, когда мы выйдем из канала), затем выходим из канала
+   * текущего и отвечаем. Иначе («Завершить и ответить» или сервер без удержания) текущий завершается
+   */
+  const answerWaitingCall = async ({ keepCurrent }) => {
+    const waiting = waitingCallRef.current;
+    if (!waiting) return;
+    updateWaitingCall(null);
+    switchingRef.current = true;
+    answeringSecondIdRef.current = String(waiting.callId);
+    RNNotificationCall.hideNotification();
+    stopRingtone();
+    setCallEndReason(null);
+    try {
+      const current = callStateRef.current;
+      const currentId = current?.callData?.callId;
+      if (currentId && ['active', 'connecting'].includes(current.status)) {
+        let parked = null;
+        if (keepCurrent) {
+          try {
+            await messengerAPI.holdCall(currentId, true, C.holdSecondCall);
+            parked = callStateRef.current?.park?.() ?? null;
+          } catch (error) {
+            recordCallDiagnostic('hold-failed', { callId: currentId, status: error?.response?.status ?? 0 });
+          }
+        }
+        if (parked) {
+          updateParkedCall(parked);
+        } else {
+          // Без состояния «завершён»: его обработчик закрыл бы в CallKit уже второй звонок
+          iosSystemCallIdRef.current = null;
+          endIosSystemCall(currentId, 'remoteEnded');
+          messengerAPI.endCall(currentId, C.endAndAnswer).catch(() => {});
+          callStateRef.current?.resetToIdle?.(C.endAndAnswer);
+        }
+      }
+      // Второй — как обычный входящий: экран звонка показывает его
+      handledCallIdRef.current = waiting.callId;
+      isAnsweringRef.current = true;
+      incomingCallDataRef.current = waiting;
+      setIncomingCallData(waiting);
+      setCallModalVisible(true);
+      const accepted = await callStateRef.current?.acceptCall(waiting.callId, getCallParticipant(waiting));
+      // Системный звонок CallKit, который закрывается вместе с этим разговором, — только когда он принят:
+      // раньше обработчик окончания прежнего разговора мог закрыть его вместо прежнего
+      if (Platform.OS === 'ios') {
+        if (accepted) iosSystemCallIdRef.current = waiting.callId;
+        else await endIosSystemCall(waiting.callId, 'failed');
+      }
+    } finally {
+      switchingRef.current = false;
+      answeringSecondIdRef.current = null;
+    }
+    // Второй не соединился — сразу назад к удержанному
+    if (parkedCallRef.current && !IN_CALL.includes(callStateRef.current?.status)) requestResumeParkedCall();
+  };
+
+  /** Кнопка «Отклонить» у второго звонка (Android; на iPhone — системный экран CallKit) */
+  const rejectWaitingCall = () => {
+    const waiting = waitingCallRef.current;
+    if (!waiting) return;
+    RNNotificationCall.hideNotification();
+    endIosSystemCall(waiting.callId, 'declined');
+    finishWaitingCall(waiting.callId, 'reject');
+  };
+
+  /**
+   * Вернуться к удержанному звонку: снять удержание на сервере (он отдаёт новый токен канала) и войти в канал.
+   * Если сейчас идёт другой разговор (переключение на iPhone), он сам встаёт на удержание
+   */
+  const resumeParkedCall = async () => {
+    const parked = parkedCallRef.current;
+    if (!parked || resumingRef.current) return;
+    resumingRef.current = true;
+    const parkedId = parked.callData.callId;
+    let nextParked = null;
+    try {
+      const current = callStateRef.current;
+      const currentId = current?.callData?.callId;
+      if (currentId && IN_CALL.includes(current.status)) {
+        try {
+          await messengerAPI.holdCall(currentId, true, C.holdSecondCall);
+          nextParked = callStateRef.current?.park?.() ?? null;
+        } catch {
+          // Текущий удержать не удалось — остаёмся в нём, к удержанному вернёмся, когда он закончится
+          return;
+        }
+      }
+      const response = await messengerAPI.holdCall(parkedId, false, C.resumeHeld);
+      updateParkedCall(nextParked);
+      // Экран берёт собеседника из звонка, а не из прежнего входящего
+      incomingCallDataRef.current = null;
+      setIncomingCallData(null);
+      setCallEndReason(null);
+      setCallModalVisible(true);
+      const resumed = await callStateRef.current?.resume?.(parked, {
+        appId: response.agora_app_id,
+        token: response.token,
+        channelName: response.channel_name,
+        uid: response.uid,
+        peerOnHold: Boolean(response.hold?.peer),
+      });
+      // Как и при ответе: системный звонок привязываем к разговору, только когда вернулись в канал
+      if (Platform.OS === 'ios') {
+        if (resumed) iosSystemCallIdRef.current = parkedId;
+        else endIosSystemCall(parkedId, 'failed');
+      }
+    } catch (error) {
+      // Удержанный уже завершён (собеседник положил трубку) или сервер недоступен — закрываем его
+      recordCallDiagnostic('resume-failed', { callId: parkedId, status: error?.response?.status ?? 0, cause: C.resumeHeld });
+      if (isParkedCall(parkedId)) updateParkedCall(nextParked);
+      incomingCallEvents.finish(parkedId);
+      endIosSystemCall(parkedId, 'remoteEnded');
+      if (![404, 422].includes(error?.response?.status)) messengerAPI.endCall(parkedId, C.resumeHeld).catch(() => {});
+    } finally {
+      resumingRef.current = false;
+    }
+  };
+
+  /** Удержанный — обратно. iPhone: через CallKit, чтобы системный экран знал, какой звонок идёт */
+  const resumeFallbackRef = useRef(null);
+  const requestResumeParkedCall = () => {
+    const parked = parkedCallRef.current;
+    if (!parked) return;
+    if (Platform.OS !== 'ios') {
+      resumeParkedCall();
+      return;
+    }
+    setIosCallHeld(parked.callData.callId, false);
+    clearTimeout(resumeFallbackRef.current);
+    resumeFallbackRef.current = setTimeout(() => {
+      if (parkedCallRef.current === parked && !IN_CALL.includes(callStateRef.current?.status)) resumeParkedCallRef.current?.();
+    }, RESUME_FALLBACK_MS);
+  };
+
+  /** Завершить удержанный звонок, не трогая текущий */
+  const endParkedCall = () => {
+    const parked = parkedCallRef.current;
+    if (parked) finishParkedCall(parked.callData.callId, 'end');
+  };
+
+  /** iPhone: продолжить разговор, удержанный системой (звонок по сотовой связи уже закончился) */
+  const resumeFromHold = () => {
+    setIosCallHeld(callState.callData?.callId, false);
+  };
+
+  answerWaitingCallRef.current = answerWaitingCall;
+  resumeParkedCallRef.current = resumeParkedCall;
+
+  // Разговор закончился, а удержанный ждёт — возвращаемся к нему, как в WhatsApp
+  useEffect(() => {
+    if (!parkedCall || switchingRef.current || waitingCallRef.current) return;
+    if (IN_CALL.includes(callState.status)) return;
+    requestResumeParkedCall();
+  }, [callState.status, parkedCall]);
+
+  useEffect(() => () => clearTimeout(resumeFallbackRef.current), []);
+
+  // Android: разговор закончился раньше, чем ответили на второй, — второй звонит как обычный входящий
+  // (кнопки ожидания были на экране разговора, а он закрылся). Ждём «idle»: при «завершён» экран ещё
+  // закрывается сам и унёс бы с собой входящий. iPhone: CallKit сам показывает его как обычный входящий
+  useEffect(() => {
+    if (Platform.OS === 'ios' || !waitingCall || callState.status !== 'idle') return;
+    if (switchingRef.current || parkedCallRef.current) return;
+    const waiting = waitingCallRef.current;
+    updateWaitingCall(null);
+    handledCallIdRef.current = null;
+    handlePushNotificationRef.current?.({ request: { content: { data: {
+      type: 'incoming_call',
+      call_id: waiting.callId,
+      caller_id: waiting.caller?.id,
+      caller_name: waiting.caller?.sname,
+      expires_at: waiting.expiresAt,
+    } } } });
+  }, [callState.status, waitingCall]);
+
   // Синхронизируем refs с актуальными версиями обработчиков (избегаем stale closure в event listeners)
   useEffect(() => {
     handleEndCallRef.current = handleEndCall;
@@ -980,6 +1372,14 @@ export const CallProvider = ({ children, isLoggedIn }) => {
     toggleMute: callState.toggleMute,
     toggleSpeaker: callState.toggleSpeaker,
     setCallModalVisible,
+    // Второй звонок во время разговора и удержанный звонок
+    waitingCall,
+    parkedCall,
+    holdAndAnswerWaitingCall: () => answerWaitingCall({ keepCurrent: true }),
+    endAndAnswerWaitingCall: () => answerWaitingCall({ keepCurrent: false }),
+    rejectWaitingCall,
+    endParkedCall,
+    resumeFromHold,
   };
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;

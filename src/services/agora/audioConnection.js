@@ -11,6 +11,8 @@ export const requireRtcSuccess = (result, operation) => {
 export const connectAudio = ({
   engine, appId, token, channelName, uid, sdk,
   onLocalJoined, onConnected, onOffline, onFailure,
+  // Удержание: состояние микрофона (системный звонок забрал его / вернул) и возврат собеседника в канал
+  onLocalAudioState, onPeerRejoined,
   onDiagnostic = (_event, _details = {}) => {}, timeoutMs = 20000,
 }) => {
   if (typeof appId !== 'string' || !/^[a-f0-9]{32}$/i.test(appId)
@@ -57,9 +59,12 @@ export const connectAudio = ({
       finishConnecting();
     }),
     onUserJoined: live((_connection, uid, elapsed) => {
+      const returned = connected;
       peerJoined = true;
       onDiagnostic('peer-joined', { uid, elapsed });
       finishConnecting();
+      // Собеседник выходил из канала, удержав звонок (ответил на второй), и вернулся
+      if (returned) onPeerRejoined?.();
     }),
     onUserOffline: live((_connection, uid, reason) => {
       onDiagnostic('peer-offline', { uid, reason });
@@ -85,7 +90,9 @@ export const connectAudio = ({
       onDiagnostic('local-audio', { state, reason });
       if (state === sdk.audioFailedState && reason === sdk.noAudioPermission) {
         fail('Нет доступа к микрофону. Разрешите его в настройках устройства.', reason);
+        return;
       }
+      onLocalAudioState?.(state, reason);
     }),
     onRemoteAudioStateChanged: live((_connection, uid, state, reason) => {
       onDiagnostic('remote-audio', { uid, state, reason });

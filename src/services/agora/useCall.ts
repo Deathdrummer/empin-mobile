@@ -14,7 +14,15 @@ import {
   LocalAudioStreamReason,
 } from 'react-native-agora';
 import { messengerAPI } from '../api';
-import { CallStatus, CallData, CallState } from './types';
+import { CallStatus, CallData, CallState, ParkedCall, ResumeParams } from './types';
+import {
+  HOLD,
+  holdAudioPlan,
+  isAudioInterrupted,
+  isAudioRecovered,
+  nextHoldReasons,
+  peerOnHoldFromDetails,
+} from '../callHold';
 import { getUserFacingError } from '../../utils/userFacingError';
 import { connectAudio } from './audioConnection';
 import { recordCallDiagnostic } from '../callDiagnostics';
@@ -32,7 +40,33 @@ interface UseCallReturn extends CallState {
   toggleSpeaker: () => void;
   clearRingingTimeout: () => void;
   markAccepted: () => void;
+  /** Удержание разговора по причине из callHold.HOLD (CallKit, прерывание звонком по сотовой связи) */
+  setHold: (reason: string, on: boolean) => void;
+  setPeerOnHold: (onHold: boolean) => void;
+  /** iPhone: CallKit снова отдал звук после удержания — перезапустить звук разговора */
+  restartAudioAfterHold: () => void;
+  /** Выйти из канала, не завершая звонок (сервер уже знает об удержании): ответить на второй */
+  park: () => ParkedCall | null;
+  /** Вернуться в канал удержанного звонка */
+  resume: (parked: ParkedCall, params: ResumeParams) => Promise<boolean>;
 }
+
+interface UseCallOptions {
+  /** Разговор встал на удержание или продолжился: собеседнику — «на удержании» */
+  onHoldChange?: (callId: string, onHold: boolean) => void;
+}
+
+const HOLD_CLEAR = { holdReasons: [] as string[], peerOnHold: false };
+
+/** Удержал ли собеседник звонок, выйдя из канала (ответил на второй). Нет связи или старый сервер — нет */
+const checkPeerOnHold = async (callId: string | null): Promise<boolean> => {
+  if (!callId) return false;
+  try {
+    return peerOnHoldFromDetails(await messengerAPI.getCallDetails(callId));
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Сервер должен узнать о завершении звонка, иначе у собеседника продолжит звонить, а звонок останется
@@ -65,7 +99,7 @@ const getRingbackPath = (): Promise<string | null> => {
   return ringbackPathPromise;
 };
 
-export const useCall = (): UseCallReturn => {
+export const useCall = ({ onHoldChange }: UseCallOptions = {}): UseCallReturn => {
   const [state, setState] = useState<CallState>({
     status: 'idle',
     callData: null,
@@ -73,7 +107,19 @@ export const useCall = (): UseCallReturn => {
     isMuted: false,
     isSpeakerOn: false,
     error: null,
+    ...HOLD_CLEAR,
   });
+  // Актуальное состояние для обработчиков удержания (они вызываются из событий CallKit и Agora)
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const onHoldChangeRef = useRef(onHoldChange);
+  onHoldChangeRef.current = onHoldChange;
+  // Почему разговор на удержании; пусто — идёт
+  const holdReasonsRef = useRef<string[]>([]);
+  // iPhone: звук включён после удержания CallKit — перезапустить, когда iOS вернёт аудиосессию
+  const pendingAudioRestartRef = useRef(false);
+  // Вернулись в канал удержанного звонка: восстановить микрофон и динамик, когда вошли
+  const restoreAudioRef = useRef<{ isMuted: boolean; isSpeakerOn: boolean } | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const ringingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -135,7 +181,7 @@ export const useCall = (): UseCallReturn => {
     setTimeout(() => {
       setState((prev) =>
         prev.status === fromStatus
-          ? { status: 'idle', callData: null, duration: 0, isMuted: false, isSpeakerOn: false, error: null }
+          ? { status: 'idle', callData: null, duration: 0, isMuted: false, isSpeakerOn: false, error: null, ...HOLD_CLEAR }
           : prev
       );
     }, 3000);
@@ -164,6 +210,8 @@ export const useCall = (): UseCallReturn => {
 
   const destroyEngine = (cause: number = C.unknown) => {
     stopRingback();
+    holdReasonsRef.current = [];
+    pendingAudioRestartRef.current = false;
     const engine = engineRef.current;
     const connection = connectionRef.current;
     engineRef.current = null;
@@ -224,15 +272,72 @@ export const useCall = (): UseCallReturn => {
   };
 
   /**
+   * Удержание: причина из callHold.HOLD включена или снята. Звук глушится, пока есть хоть одна причина;
+   * собеседнику сообщаем, только когда разговор встал на удержание или продолжился.
+   */
+  const applyHold = (reason: string, on: boolean) => {
+    const before = holdReasonsRef.current;
+    const after = nextHoldReasons(before, reason, on);
+    if (after.length === before.length && after.every((item) => before.includes(item))) return;
+    holdReasonsRef.current = after;
+    const { isMuted, isSpeakerOn } = stateRef.current;
+    const plan = holdAudioPlan(before, after, isMuted);
+    const steps = plan.steps as Array<[string, boolean?]>;
+    const engine = engineRef.current as any;
+    if (engine) {
+      for (const [method, arg] of steps) {
+        try {
+          if (arg === undefined) engine[method]();
+          else engine[method](arg);
+        } catch (error: any) {
+          recordCallDiagnostic('hold-audio-failed', { code: error?.code, callId: Number(callIdRef.current) });
+        }
+      }
+      if (steps.some(([method]) => method === 'enableAudio')) {
+        try { engine.setEnableSpeakerphone(isSpeakerOn); } catch {}
+        // iOS включает звук разговора, только когда вернёт аудиосессию (событие audioActivated)
+        pendingAudioRestartRef.current = Platform.OS === 'ios';
+      }
+    }
+    recordCallDiagnostic(`hold-${reason}-${on ? 'on' : 'off'}`, { callId: Number(callIdRef.current) });
+    setState((prev) => ({ ...prev, holdReasons: after }));
+    if (plan.changed && callIdRef.current) onHoldChangeRef.current?.(callIdRef.current, plan.held);
+  };
+
+  /**
+   * iPhone: CallKit вернул аудиосессию после удержания. Об окончании прерывания iOS сообщает не всегда —
+   * звук разговора перезапускаем сами, иначе после звонка по сотовой связи разговор шёл бы без звука
+   */
+  const restartAudioAfterHold = () => {
+    const engine = engineRef.current;
+    if (!pendingAudioRestartRef.current || !engine || holdReasonsRef.current.includes(HOLD.system)) return;
+    pendingAudioRestartRef.current = false;
+    const held = holdReasonsRef.current.length > 0;
+    const { isMuted, isSpeakerOn } = stateRef.current;
+    try {
+      engine.disableAudio();
+      engine.enableAudio();
+      engine.muteLocalAudioStream(held || isMuted);
+      engine.muteAllRemoteAudioStreams(held);
+      engine.setEnableSpeakerphone(isSpeakerOn);
+      recordCallDiagnostic('hold-audio-restarted', { callId: Number(callIdRef.current) });
+    } catch (error: any) {
+      recordCallDiagnostic('hold-audio-failed', { code: error?.code, callId: Number(callIdRef.current) });
+    }
+  };
+
+  /**
    * Инициализация Agora engine и подключение к каналу.
    * appId — возвращается бэкендом вместе с токеном.
+   * expectPeer — ждать собеседника в канале (нет — он удержал звонок и вернётся сам).
    */
   const joinChannel = async (
     appId: string,
     token: string,
     channelName: string,
     uid: number,
-    outgoing = false
+    outgoing = false,
+    expectPeer = true
   ): Promise<void> => {
     destroyEngine(C.replaceChannel);
 
@@ -262,6 +367,15 @@ export const useCall = (): UseCallReturn => {
       },
       onLocalJoined: () => {
         if (ringbackRef.current) startRingback();
+        // Вернулись к удержанному звонку: микрофон и динамик — как были до удержания
+        const restore = restoreAudioRef.current;
+        if (restore) {
+          restoreAudioRef.current = null;
+          try {
+            engine.muteLocalAudioStream(restore.isMuted);
+            engine.setEnableSpeakerphone(restore.isSpeakerOn);
+          } catch {}
+        }
       },
       onConnected: () => {
         recordCallDiagnostic('rtc-connected', trace);
@@ -269,13 +383,36 @@ export const useCall = (): UseCallReturn => {
         stopRingingTimeout();
         setState((prev) => ({ ...prev, status: 'active' }));
       },
+      // Микрофон забрал звонок по сотовой связи (Android; на iPhone удержание приходит из CallKit) — разговор
+      // на удержании, пока Agora не сообщит, что захват снова идёт
+      onLocalAudioState: (audioState, reason) => {
+        if (isAudioInterrupted(audioState, reason)) applyHold(HOLD.interruption, true);
+        else if (isAudioRecovered(audioState, reason) && holdReasonsRef.current.includes(HOLD.interruption)) {
+          applyHold(HOLD.interruption, false);
+        }
+      },
+      onPeerRejoined: () => {
+        setState((prev) => (prev.peerOnHold ? { ...prev, peerOnHold: false } : prev));
+      },
       onOffline: () => {
         recordCallDiagnostic('rtc-peer-offline', { ...trace, cause: C.peerOffline });
-        setState((prev) => ({ ...prev, status: 'ended' }));
-        scheduleIdleReset('ended');
-        stopRingingTimeout();
-        finishCallOnServer(C.peerOffline);
-        destroyEngine(C.peerOffline);
+        const callId = callIdRef.current;
+        const attempt = attemptRef.current;
+        // Собеседник мог выйти из канала, удержав звонок (ответил на второй): тогда разговор не завершаем,
+        // он вернётся. Сервер узнаёт об удержании раньше, чем собеседник выходит из канала
+        checkPeerOnHold(callId).then((peerOnHold) => {
+          if (attempt !== attemptRef.current || callIdRef.current !== callId) return;
+          if (peerOnHold) {
+            recordCallDiagnostic('rtc-peer-parked', { ...trace });
+            setState((prev) => ({ ...prev, peerOnHold: true }));
+            return;
+          }
+          setState((prev) => ({ ...prev, status: 'ended' }));
+          scheduleIdleReset('ended');
+          stopRingingTimeout();
+          finishCallOnServer(C.peerOffline);
+          destroyEngine(C.peerOffline);
+        });
       },
       onFailure: (message, code) => {
         recordCallDiagnostic('rtc-failure', { ...trace, code, cause: C.rtcFailure });
@@ -288,7 +425,7 @@ export const useCall = (): UseCallReturn => {
         scheduleIdleReset('error');
       },
     });
-    if (!outgoing) connectionRef.current.peerAccepted();
+    if (!outgoing && expectPeer) connectionRef.current.peerAccepted();
   };
 
   /**
@@ -408,7 +545,7 @@ export const useCall = (): UseCallReturn => {
       }
 
       callIdRef.current = String(callId);
-      setState({ status: 'connecting', duration: 0, isMuted: false, isSpeakerOn: false, error: null,
+      setState({ status: 'connecting', duration: 0, isMuted: false, isSpeakerOn: false, error: null, ...HOLD_CLEAR,
         callData: { callId: String(callId), channelName: '', token: '', uid: 0,
           participant: participant ?? { id: 0, name: 'Неизвестный' }, isIncoming: true } });
       const response = await messengerAPI.acceptCall(callId);
@@ -485,6 +622,7 @@ export const useCall = (): UseCallReturn => {
       isMuted: false,
       isSpeakerOn: false,
       error: null,
+      ...HOLD_CLEAR,
     });
   }, []);
 
@@ -510,6 +648,7 @@ export const useCall = (): UseCallReturn => {
       isMuted: false,
       isSpeakerOn: false,
       error: null,
+      ...HOLD_CLEAR,
     });
     setTimeout(() => {
       setState((prev) => (prev.status === 'ended' ? { ...prev, status: 'idle' } : prev));
@@ -522,7 +661,8 @@ export const useCall = (): UseCallReturn => {
   const toggleMute = useCallback(() => {
     if (!engineRef.current) return;
     const newMuted = !state.isMuted;
-    engineRef.current.muteLocalAudioStream(newMuted);
+    // На удержании микрофон и так заглушён: выбор применится, когда разговор продолжится
+    if (holdReasonsRef.current.length === 0) engineRef.current.muteLocalAudioStream(newMuted);
     setState((prev) => ({ ...prev, isMuted: newMuted }));
   }, [state.isMuted]);
 
@@ -532,7 +672,8 @@ export const useCall = (): UseCallReturn => {
   const toggleSpeaker = useCallback(() => {
     if (!engineRef.current) return;
     const newSpeakerOn = !state.isSpeakerOn;
-    engineRef.current.setEnableSpeakerphone(newSpeakerOn);
+    // Звук выключен удержанием CallKit — динамик включится вместе со звуком
+    if (!holdReasonsRef.current.includes(HOLD.system)) engineRef.current.setEnableSpeakerphone(newSpeakerOn);
     setState((prev) => ({ ...prev, isSpeakerOn: newSpeakerOn }));
   }, [state.isSpeakerOn]);
 
@@ -554,6 +695,7 @@ export const useCall = (): UseCallReturn => {
       isMuted: false,
       isSpeakerOn: false,
       error: null,
+      ...HOLD_CLEAR,
     });
   }, []);
 
@@ -576,6 +718,67 @@ export const useCall = (): UseCallReturn => {
     setState((prev) => prev.status === 'ringing' ? { ...prev, status: 'connecting' } : prev);
   }, []);
 
+  const setPeerOnHold = useCallback((onHold: boolean) => {
+    setState((prev) => (Boolean(prev.peerOnHold) === onHold ? prev : { ...prev, peerOnHold: onHold }));
+  }, []);
+
+  /**
+   * Ответ на второй звонок с удержанием первого: выходим из его канала, не завершая звонок (сервер уже
+   * отметил удержание — собеседник не сочтёт это концом разговора). Возвращает, что нужно для возврата
+   */
+  const park = useCallback((): ParkedCall | null => {
+    const current = stateRef.current;
+    if (!current.callData || !['active', 'connecting'].includes(current.status)) return null;
+    const parked: ParkedCall = {
+      callData: current.callData,
+      duration: current.duration,
+      isMuted: current.isMuted,
+      isSpeakerOn: current.isSpeakerOn,
+    };
+    recordCallDiagnostic('park-command', { callId: Number(current.callData.callId), attempt: attemptRef.current, cause: C.holdSecondCall });
+    attemptRef.current += 1;
+    // Без callId выход из канала не завершает звонок на сервере (см. finishCallOnServer)
+    callIdRef.current = null;
+    stopRingingTimeout();
+    destroyEngine(C.holdSecondCall);
+    setState({ status: 'idle', callData: null, duration: 0, isMuted: false, isSpeakerOn: false, error: null, ...HOLD_CLEAR });
+    return parked;
+  }, []);
+
+  /** Возврат к удержанному звонку: тот же канал, новый токен; длительность продолжается */
+  const resume = useCallback(async (parked: ParkedCall, params: ResumeParams): Promise<boolean> => {
+    const attempt = ++attemptRef.current;
+    const callId = parked.callData.callId;
+    recordCallDiagnostic('resume-command', { callId: Number(callId), attempt, cause: C.resumeHeld });
+    callIdRef.current = callId;
+    restoreAudioRef.current = { isMuted: parked.isMuted, isSpeakerOn: parked.isSpeakerOn };
+    setState({
+      status: 'active',
+      callData: { ...parked.callData, channelName: params.channelName, token: params.token, uid: params.uid },
+      duration: parked.duration,
+      isMuted: parked.isMuted,
+      isSpeakerOn: parked.isSpeakerOn,
+      error: null,
+      holdReasons: [],
+      peerOnHold: params.peerOnHold,
+    });
+    try {
+      // Собеседник сам держит звонок — его не ждём: вернётся в канал, когда продолжит
+      await joinChannel(params.appId, params.token, params.channelName, params.uid, false, !params.peerOnHold);
+      // iPhone: CallKit мог вернуть аудиосессию уже после входа в канал — тогда перезапустить звук (audioActivated)
+      if (attempt === attemptRef.current) pendingAudioRestartRef.current = Platform.OS === 'ios';
+      return attempt === attemptRef.current;
+    } catch (error: any) {
+      recordCallDiagnostic('resume-failed', { callId: Number(callId), code: error?.rtcCode, cause: C.resumeHeld });
+      if (attempt !== attemptRef.current) return false;
+      finishCallOnServer(C.resumeHeld);
+      destroyEngine(C.resumeHeld);
+      setState((prev) => ({ ...prev, status: 'error', error: getUserFacingError(error, 'Не удалось вернуться к звонку.') }));
+      scheduleIdleReset('error');
+      return false;
+    }
+  }, []);
+
   return {
     ...state,
     initiateCall,
@@ -587,5 +790,10 @@ export const useCall = (): UseCallReturn => {
     toggleSpeaker,
     clearRingingTimeout,
     markAccepted,
+    setHold: applyHold,
+    setPeerOnHold,
+    restartAudioAfterHold,
+    park,
+    resume,
   };
 };

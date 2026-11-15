@@ -5,6 +5,8 @@ export const CALL_CAUSES = Object.freeze({
   androidEnd: 14, logout: 15, unmount: 16, replaceChannel: 17, reset: 18,
   lateInitiate: 19, lateAccept: 20, answerUi: 21, answerAndroid: 22,
   answerCallkit: 23, permissionDenied: 30, busy: 31,
+  // Удержание: вышли из канала, чтобы ответить на второй; вернулись к удержанному; «Завершить и ответить»
+  holdSecondCall: 32, resumeHeld: 33, endAndAnswer: 34,
 });
 
 const FIELDS = ['state', 'reason', 'code', 'status', 'callId', 'uid', 'cause', 'attempt', 'elapsed', 'engine', 'session', 'seq'];

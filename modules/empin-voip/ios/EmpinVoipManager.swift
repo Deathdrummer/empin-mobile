@@ -4,7 +4,7 @@ import Foundation
 import Intents
 import PushKit
 
-public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProviderDelegate {
+public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProviderDelegate, CXCallObserverDelegate {
   public static let shared = EmpinVoipManager()
   public static let callEventNotification = Notification.Name("EmpinVoipCallEvent")
   public static let tokenEventNotification = Notification.Name("EmpinVoipTokenEvent")
@@ -13,6 +13,8 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
   private static let eventsStorageKey = "EmpinVoipPendingEvents"
   private static let enabledStorageKey = "EmpinVoipEnabled"
   private static let callTimeout: TimeInterval = 45
+  // Одновременно звонков приложения: идущий и удержанный. Третий получает «занято»
+  private static let maximumCalls = 2
 
   private let lock = NSLock()
   private var registry: PKPushRegistry?
@@ -47,7 +49,9 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
 
     let configuration = CXProviderConfiguration(localizedName: "Эмпин PRO")
     configuration.supportsVideo = false
-    configuration.maximumCallGroups = 1
+    // Два звонка приложения сразу: один на удержании, второй идёт (как в WhatsApp и Telegram).
+    // Каждый — в своей группе: объединения в конференцию нет
+    configuration.maximumCallGroups = Self.maximumCalls
     configuration.maximumCallsPerCallGroup = 1
     configuration.supportedHandleTypes = [.generic]
     // Звонки приложения — в журнале «Недавние» телефона, как у Telegram и WhatsApp
@@ -56,6 +60,9 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     let provider = CXProvider(configuration: configuration)
     provider.setDelegate(self, queue: .main)
     self.provider = provider
+    // Окончание любого звонка телефона (сотовая связь, другой мессенджер, наш второй) — повод вернуть
+    // удержанный разговор
+    callObserver.setDelegate(self, queue: .main)
 
     let registry = PKPushRegistry(queue: .main)
     registry.delegate = self
@@ -132,7 +139,9 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
         update.localizedCallerName = calleeName
         update.hasVideo = false
         update.supportsDTMF = false
-        update.supportsHolding = false
+        // Удержание: при звонке по сотовой связи или из другого мессенджера iPhone предлагает
+        // «Удержать и ответить», а не только «Завершить и ответить»
+        update.supportsHolding = true
         update.supportsGrouping = false
         update.supportsUngrouping = false
         provider.reportCall(with: uuid, updated: update)
@@ -320,7 +329,7 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     update.localizedCallerName = callerName
     update.hasVideo = false
     update.supportsDTMF = false
-    update.supportsHolding = false
+    update.supportsHolding = true
     update.supportsGrouping = false
     update.supportsUngrouping = false
 
@@ -329,9 +338,11 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
       return
     }
 
-    if hasLiveCall() {
-      // Приложение ведёт один звонок за раз. Второй входящий всё равно нужно показать CallKit
+    if liveCallCount() >= Self.maximumCalls {
+      // Уже идёт разговор и ещё один на удержании. Третий входящий всё равно нужно показать CallKit
       // (требование PushKit) — показываем, сразу завершаем, а JS сообщает серверу, что абонент занят.
+      // Второй входящий во время разговора показывается как обычно: iPhone предложит
+      // «Удержать и ответить», «Завершить и ответить» или «Отклонить».
       provider.reportNewIncomingCall(with: callUUID, update: update) { [weak self] error in
         if error == nil {
           provider.reportCall(with: callUUID, endedAt: Date(), reason: .unanswered)
@@ -401,6 +412,22 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     action.fulfill()
   }
 
+  /// Удержание: «Удержать и ответить» на звонок по сотовой связи, из другого мессенджера или на наш второй,
+  /// кнопка удержания на системном экране, переключение между двумя звонками. JS глушит или возвращает звук
+  /// разговора и сообщает собеседнику
+  public func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction) {
+    guard var record = callsByUUID[action.callUUID] else {
+      action.fail()
+      return
+    }
+
+    record.held = action.isOnHold
+    callsById[record.callId] = record
+    callsByUUID[record.uuid] = record
+    enqueueEvent(type: action.isOnHold ? "hold" : "unhold", record: record)
+    action.fulfill()
+  }
+
   public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
     // Голосовой звонок начинается в слуховом динамике, громкую связь включает пользователь
     var options: AVAudioSession.CategoryOptions = []
@@ -411,6 +438,36 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     #endif
     try? audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: options)
     try? audioSession.setActive(true)
+    // Звук вернулся после удержания (закончился звонок по сотовой связи): JS перезапускает звук разговора —
+    // сама iOS об окончании прерывания сообщает не всегда
+    if let active = callsById.values.first(where: { $0.answered && !$0.held }) {
+      enqueueEvent(type: "audioActivated", record: active)
+    }
+  }
+
+  /// Запрос удержания или возврата из приложения: кнопка «Продолжить разговор», возврат к удержанному звонку
+  public func setHeld(callId: String, onHold: Bool) {
+    guard let record = callsById[callId], record.held != onHold else {
+      return
+    }
+    let action = CXSetHeldCallAction(call: record.uuid, onHold: onHold)
+    callController.request(CXTransaction(action: action)) { _ in }
+  }
+
+  /// Закончился звонок (сотовый, другого мессенджера или наш): если других активных звонков на телефоне нет,
+  /// удержанный разговор приложения продолжается сам, как в WhatsApp. Сама iOS делает это не всегда —
+  /// например, если трубку положил собеседник по сотовой связи
+  public func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
+    guard call.hasEnded else {
+      return
+    }
+    let othersActive = callObserver.calls.contains { !$0.hasEnded && !$0.isOnHold && $0.uuid != call.uuid }
+    guard !othersActive,
+          let held = callsById.values.first(where: { $0.held && $0.answered && $0.uuid != call.uuid })
+    else {
+      return
+    }
+    setHeld(callId: held.callId, onHold: false)
   }
 
   public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
@@ -424,16 +481,16 @@ public final class EmpinVoipManager: NSObject, PKPushRegistryDelegate, CXProvide
     callsByUUID.removeAll()
   }
 
-  /// Есть ли звонок, который CallKit ещё показывает. Записи о звонках, которых в CallKit уже нет
+  /// Сколько звонков приложения CallKit ещё показывает. Записи о звонках, которых в CallKit уже нет
   /// (например, завершённых системой), удаляются, чтобы не блокировать новые вызовы.
-  private func hasLiveCall() -> Bool {
+  private func liveCallCount() -> Int {
     let liveUUIDs = Set(callObserver.calls.filter { !$0.hasEnded }.map { $0.uuid })
     // Только что сообщённый звонок может ещё не появиться в CallKit — свежие записи не трогаем
     for record in Array(callsById.values)
     where !liveUUIDs.contains(record.uuid) && Date().timeIntervalSince(record.reportedAt) > 10 {
       cleanupCall(record)
     }
-    return !callsById.isEmpty
+    return callsById.count
   }
 
   /// VoIP-push без данных звонка всё равно нужно показать CallKit (требование PushKit) — показываем и сразу закрываем.
@@ -589,5 +646,7 @@ private struct CallRecord {
   let callerName: String
   let callerAvatar: String?
   var answered: Bool
+  // На удержании в CallKit
+  var held = false
   let reportedAt = Date()
 }

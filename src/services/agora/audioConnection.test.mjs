@@ -43,6 +43,30 @@ test('диагностика различает публикацию микро�
   } finally { session.dispose(); }
 });
 
+test('удержание: возврат собеседника в канал и состояние микрофона передаются экрану звонка', () => {
+  const x = setup();
+  const session = x.open({
+    onPeerRejoined: () => x.events.push('peer-rejoined'),
+    onLocalAudioState: (state, reason) => x.events.push(`audio:${state}:${reason}`),
+  });
+  try {
+    const handler = x.handlers[0];
+    // Первый вход собеседника — соединение, а не «вернулся»
+    handler.onJoinChannelSuccess({}, 1);
+    handler.onUserJoined({}, 55, 1);
+    // Микрофон забрал звонок по сотовой связи, затем вернул
+    handler.onLocalAudioStateChanged({}, 0, 8);
+    handler.onLocalAudioStateChanged({}, 1, 0);
+    // Собеседник удержал звонок, ответил на второй и вернулся в канал
+    handler.onUserJoined({}, 55, 1);
+    assert.deepEqual(x.events, ['connected', 'audio:0:8', 'audio:1:0', 'peer-rejoined']);
+    // Нет разрешения на микрофон — это ошибка звонка, а не удержание
+    handler.onLocalAudioStateChanged({}, 3, 2);
+    assert.equal(x.events.includes('audio:3:2'), false);
+    assert.equal(typeof x.events.at(-1), 'object');
+  } finally { session.dispose(); }
+});
+
 test('ответ API и успешная команда join не означают голосовое соединение', () => {
   const x = setup();
   const session = x.open();
