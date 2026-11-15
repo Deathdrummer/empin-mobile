@@ -55,6 +55,9 @@ const FORMATS = [
   { token: '||', title: 'Скрыть', label: 'Скрытый текст', style: { fontSize: 14 } },
 ];
 
+// nativeID поля ввода: по нему KeyboardGestureArea на iOS продлевает зону захвата клавиатуры до верха панели ввода
+export const COMPOSER_INPUT_ID = 'chat-composer-input';
+
 const isVideoAsset = (asset) => asset.type === 'video' || asset.mimeType?.startsWith('video/');
 const isImageAsset = (asset) => asset.type === 'image' || asset.mimeType?.startsWith('image/');
 
@@ -506,6 +509,7 @@ export const Composer = ({
             <Surface style={[s.inputWrap, !floating && s.inputBackground]}>
               <TextInput
                 ref={inputRef}
+                nativeID={COMPOSER_INPUT_ID}
                 style={s.input}
                 value={value}
                 onChangeText={handleChangeText}
