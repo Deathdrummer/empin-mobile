@@ -79,6 +79,11 @@ public final class EmpinVoipModule: Module {
       EmpinVoipManager.shared.reportOutgoingConnected(callId: callId)
     }.runOnQueue(.main)
 
+    // Удержать звонок или вернуться к нему через CallKit (ответ придёт событием hold / unhold)
+    AsyncFunction("setHeldAsync") { (callId: String, onHold: Bool) in
+      EmpinVoipManager.shared.setHeld(callId: callId, onHold: onHold)
+    }.runOnQueue(.main)
+
     // Виброотклики во время записи голосового (фиксация записи): iOS по умолчанию глушит их,
     // пока аудиосессия пишет с микрофона
     AsyncFunction("allowHapticsDuringRecordingAsync") {

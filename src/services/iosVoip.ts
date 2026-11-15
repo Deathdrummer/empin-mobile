@@ -123,6 +123,12 @@ export const reportIosOutgoingConnected = async (callId: string | number | null 
   await EmpinVoip.reportOutgoingConnectedAsync(String(callId)).catch(() => {});
 };
 
+/** Удержать звонок в CallKit или вернуться к нему: CallKit ответит событием hold / unhold */
+export const setIosCallHeld = async (callId: string | number | null | undefined, onHold: boolean): Promise<void> => {
+  if (!callId || !isIosVoipAvailable() || !EmpinVoip) return;
+  await EmpinVoip.setHeldAsync(String(callId), onHold).catch(() => {});
+};
+
 export const endIosSystemCall = async (
   callId: string | number | null | undefined,
   reason: 'failed' | 'unanswered' | 'timeout' | 'declined' | 'remoteEnded' = 'remoteEnded'

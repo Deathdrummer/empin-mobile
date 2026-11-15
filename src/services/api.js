@@ -73,7 +73,7 @@ export const setUnauthorizedCallback = (callback) => {
 };
 
 const callAction = async (action, callId, data, cause = 0) => {
-  const timeouts = { initiate: 30000, accept: 15000, reject: 10000, end: 10000 };
+  const timeouts = { initiate: 30000, accept: 15000, reject: 10000, end: 10000, hold: 10000 };
   const started = Date.now();
   const numericCause = Number.isInteger(cause) && cause >= 0 && cause <= 99 ? cause : 0;
   const build = String(Constants.nativeBuildVersion ?? '0');
@@ -722,6 +722,12 @@ export const messengerAPI = {
 
   endCall: async (callId, cause = 0) => {
     return callAction('end', callId, undefined, cause);
+  },
+
+  // Удержать звонок или вернуться к нему: собеседник увидит «на удержании». При возврате сервер отдаёт
+  // параметры входа в канал (channel_name, token, uid, agora_app_id) и hold: { me, peer }
+  holdCall: async (callId, onHold, cause = 0) => {
+    return callAction('hold', callId, { on_hold: Boolean(onHold) }, cause);
   },
 
   getCallHistory: async () => {

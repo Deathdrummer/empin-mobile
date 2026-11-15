@@ -6,8 +6,10 @@ export type VoipTokenEvent = {
 
 export type VoipCallEvent = {
   eventId: string;
-  // redial — нажали звонок приложения в журнале «Недавние» iPhone: callerId — кому звонить
-  type: 'incoming' | 'answer' | 'reject' | 'end' | 'timeout' | 'remoteEnded' | 'busy' | 'redial' | 'answeredElsewhere';
+  // redial — нажали звонок приложения в журнале «Недавние» iPhone: callerId — кому звонить.
+  // hold / unhold — CallKit удержал звонок или вернул его; audioActivated — iOS снова отдала звук разговору
+  type: 'incoming' | 'answer' | 'reject' | 'end' | 'timeout' | 'remoteEnded' | 'busy' | 'redial' | 'answeredElsewhere'
+    | 'hold' | 'unhold' | 'audioActivated';
   callId: string;
   callUUID: string;
   callerId?: string;
@@ -30,6 +32,7 @@ declare class EmpinVoipNativeModule extends NativeModule<EmpinVoipEvents> {
   endCallAsync(callId: string, reason: string): Promise<void>;
   startOutgoingCallAsync(callId: string, calleeId: string, calleeName: string): Promise<void>;
   reportOutgoingConnectedAsync(callId: string): Promise<void>;
+  setHeldAsync(callId: string, onHold: boolean): Promise<void>;
   allowHapticsDuringRecordingAsync(): Promise<void>;
 }
 
