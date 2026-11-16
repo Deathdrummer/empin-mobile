@@ -319,7 +319,7 @@ export default function ChatsTab({ archive: archiveMode = false }) {
         accessibilityLabel={`Архив, чатов: ${archivedChats.length}`}
       >
         <View style={[s.archiveIcon, { backgroundColor: theme.textMuted }]}>
-          <Ionicons name="archive" size={26} color="#FFFFFF" />
+          <Ionicons name="archive" size={28} color="#FFFFFF" />
         </View>
         <View style={s.rowBody}>
           <View style={s.rowTop}>
@@ -356,7 +356,7 @@ export default function ChatsTab({ archive: archiveMode = false }) {
     const draft = drafts[chat.chat_id];
     if (draft) {
       return (
-        <Text style={s.previewText} numberOfLines={1}>
+        <Text style={s.previewText} numberOfLines={2}>
           <Text style={{ color: theme.accent }}>Черновик: </Text>
           {plainText(draft).replace(/\s+/g, ' ')}
         </Text>
@@ -384,7 +384,7 @@ export default function ChatsTab({ archive: archiveMode = false }) {
             style={s.previewIcon}
           />
         ) : null}
-        <Text style={s.previewText} numberOfLines={1}>
+        <Text style={s.previewText} numberOfLines={2}>
           {author ? <Text style={{ color: theme.text }}>{`${author}: `}</Text> : null}
           {typeIcon ? <Ionicons name={typeIcon} size={14} color={theme.textSecondary} /> : null}
           {typeIcon ? ' ' : ''}
@@ -416,8 +416,8 @@ export default function ChatsTab({ archive: archiveMode = false }) {
           accessibilityRole="button"
           accessibilityLabel={`${item.title}${unread ? `, непрочитанных ${item.unread_count}` : ''}`}
         >
-          <ChatAvatar chat={item} size={54} />
-          <View style={s.rowBody}>
+          <ChatAvatar chat={item} size={60} />
+          <View style={[s.rowBody, s.chatRowBody]}>
             <View style={s.rowTop}>
               <Text style={s.name} numberOfLines={1}>{item.title}</Text>
               {item.muted ? <Ionicons name="volume-mute" size={14} color={theme.textMuted} /> : null}
@@ -425,19 +425,19 @@ export default function ChatsTab({ archive: archiveMode = false }) {
                 {formatListTime(item.last_message?.created_at ?? item.activity_at)}
               </Text>
             </View>
-            <View style={s.rowBottom}>
+            <View style={[s.rowBottom, s.chatRowBottom]}>
               <View style={s.previewBox}>{renderPreview(item)}</View>
               {item.mentioned ? (
-                <View style={[s.badge, s.mention]}>
+                <View style={[s.badge, s.mention, s.chatMetaBadge]}>
                   <Text style={s.badgeText}>@</Text>
                 </View>
               ) : null}
               {unread ? (
-                <View style={[s.badge, { backgroundColor: item.muted ? theme.textMuted : theme.accent }]}>
+                <View style={[s.badge, s.chatMetaBadge, { backgroundColor: item.muted ? theme.textMuted : theme.accent }]}>
                   <Text style={s.badgeText}>{item.unread_count > 99 ? '99+' : item.unread_count}</Text>
                 </View>
               ) : item.pinned ? (
-                <PinIcon size={16} color={theme.textMuted} style={s.pin} />
+                <PinIcon size={16} color={theme.textMuted} style={[s.pin, s.chatMetaBadge]} />
               ) : null}
             </View>
           </View>
@@ -565,7 +565,7 @@ export default function ChatsTab({ archive: archiveMode = false }) {
           style={s.headerButton}
           accessibilityLabel="Новый чат или группа"
         >
-          <Ionicons name="create-outline" size={25} color={theme.accent} />
+          <Ionicons name="create-outline" size={25} color={theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -597,9 +597,9 @@ export default function ChatsTab({ archive: archiveMode = false }) {
                 <TouchableOpacity
                   key={item.key}
                   onPress={() => setFolder(item.key)}
-                  style={[s.chip, active && { backgroundColor: theme.accentSoft }]}
+                  style={[s.chip, active && { backgroundColor: theme.text }]}
                 >
-                  <Text style={[s.chipText, active && { color: theme.accentText, fontWeight: '600' }]}>{label}</Text>
+                  <Text style={[s.chipText, active && { color: theme.background, fontWeight: '600' }]}>{label}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -687,7 +687,7 @@ const styles = (theme) => StyleSheet.create({
   title: { fontSize: 30, fontWeight: '700', color: theme.text, letterSpacing: 0.2 },
   archiveHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 6 },
   archiveTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: theme.text },
-  archiveIcon: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
+  archiveIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   headerButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   search: {
     flexDirection: 'row',
@@ -706,22 +706,24 @@ const styles = (theme) => StyleSheet.create({
   chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.surfaceAlt },
   chipText: { fontSize: 14, color: theme.textSecondary, fontWeight: '500' },
   loader: { marginTop: 48 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14, gap: 12, backgroundColor: theme.background },
+  row: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, gap: 14, backgroundColor: theme.background },
   rowBody: {
     flex: 1,
     paddingVertical: 10,
-    paddingRight: 14,
+    paddingRight: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.separator,
   },
+  chatRowBody: { paddingVertical: 11 },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { flex: 1, fontSize: 16, fontWeight: '600', color: theme.text },
+  name: { flex: 1, fontSize: 17, lineHeight: 22, fontWeight: '600', color: theme.text },
   time: { fontSize: 13, color: theme.textMuted },
   rowBottom: { flexDirection: 'row', alignItems: 'center', marginTop: 3, gap: 6, minHeight: 22 },
+  chatRowBottom: { alignItems: 'flex-start', minHeight: 38 },
   previewBox: { flex: 1 },
-  preview: { flexDirection: 'row', alignItems: 'center' },
-  previewIcon: { marginRight: 3 },
-  previewText: { flexShrink: 1, fontSize: 15, color: theme.textSecondary },
+  preview: { flexDirection: 'row', alignItems: 'flex-start' },
+  previewIcon: { marginRight: 4, marginTop: 2 },
+  previewText: { flexShrink: 1, fontSize: 15, lineHeight: 19, color: theme.textSecondary },
   badge: {
     minWidth: 22,
     height: 22,
@@ -730,6 +732,7 @@ const styles = (theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  chatMetaBadge: { marginTop: 1 },
   mention: { backgroundColor: theme.accent },
   badgeText: { color: theme.onAccent, fontSize: 12, fontWeight: '700' },
   pin: { marginLeft: 2 },

@@ -214,7 +214,7 @@ export default function ChatScreen({ navigation, route }) {
   const [video, setVideo] = useState(null);
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [newWhileAway, setNewWhileAway] = useState(0);
-  const [headerHeight, setHeaderHeight] = useState(insets.top + 56);
+  const [headerHeight, setHeaderHeight] = useState(insets.top + 64);
   const [composerHeight, setComposerHeight] = useState(64);
   const [highlightId, setHighlightId] = useState(null);
   // Только что поставленная реакция: сообщение и эмодзи для анимации «всплеска»
@@ -1330,8 +1330,8 @@ export default function ChatScreen({ navigation, route }) {
   // Окно результатов поиска — от строки поиска до клавиатуры (без неё — до низа экрана), дальше прокрутка
   const keyboardHeight = useKeyboardState((state) => (state.isVisible ? state.height : 0));
   const { height: screenHeight } = useWindowDimensions();
-  // Отступ шапки сверху + строка поиска (44) + отступ карточки (8): см. headerBar, glassCapsule, glassCard
-  const searchResultsTop = insets.top + 6 + 44 + 8;
+  // Отступ шапки сверху + строка поиска (50) + отступ карточки (8): см. headerBar, glassCapsule, glassCard
+  const searchResultsTop = insets.top + 6 + 50 + 8;
   const searchResultsMaxHeight = Math.max(
     SEARCH_RESULTS_MIN_HEIGHT,
     screenHeight - searchResultsTop - Math.max(keyboardHeight, insets.bottom) - SEARCH_RESULTS_BOTTOM_GAP,
@@ -1556,7 +1556,7 @@ export default function ChatScreen({ navigation, route }) {
             <View style={s.header} pointerEvents="box-none">
               <GlassView lite style={s.glassCircle}>
                 <Pressable onPress={() => navigation.goBack()} hitSlop={8} style={s.glassButton} accessibilityLabel="Назад">
-                  <Ionicons name="chevron-back" size={26} color={theme.accent} style={s.backIcon} />
+                  <Ionicons name="chevron-back" size={29} color={theme.text} style={s.backIcon} />
                 </Pressable>
               </GlassView>
               <GlassView lite style={[s.glassCapsule, s.headerTitleCapsule]}>
@@ -1565,7 +1565,7 @@ export default function ChatScreen({ navigation, route }) {
                   onPress={() => chatId && navigation.navigate('ChatInfo', { chatId, chatType, title })}
                   accessibilityLabel={`${title}, сведения о чате`}
                 >
-                  <ChatAvatar chat={headerChat} size={34} />
+                  <ChatAvatar chat={headerChat} size={38} />
                   <View style={s.headerBody}>
                     <Text style={s.headerName} numberOfLines={1}>{title}</Text>
                     {subtitle ? (
@@ -1585,20 +1585,20 @@ export default function ChatScreen({ navigation, route }) {
                     Haptics.selectionAsync().catch(() => {});
                     setSearch({ ...SEARCH_CLOSED, active: true });
                   }}
-                  hitSlop={6}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                   style={s.headerAction}
                   accessibilityLabel="Поиск в чате"
                 >
-                  <Ionicons name="search-outline" size={22} color={theme.accent} />
+                  <Ionicons name="search-outline" size={25} color={theme.text} />
                 </Pressable>
                 {isDirect ? (
                   <Pressable
                     onPress={() => initiateCall(params.staffId ?? info?.participant?.id, title, info?.participant?.avatar)}
-                    hitSlop={6}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                     style={s.headerAction}
                     accessibilityLabel={`Позвонить: ${title}`}
                   >
-                    <Ionicons name="call-outline" size={22} color={theme.accent} />
+                    <Ionicons name="call-outline" size={25} color={theme.text} />
                   </Pressable>
                 ) : null}
               </GlassView>
@@ -1757,29 +1757,29 @@ const styles = StyleSheet.create({
 const screenStyles = (theme) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.chatBackground },
   flex: { flex: 1 },
-  headerBar: { position: 'absolute', top: 0, left: 0, right: 0, paddingBottom: 8 },
-  // «Стеклянные» элементы шапки и низа (как в Telegram): круг 44 и капсулы той же высоты
+  headerBar: { position: 'absolute', top: 0, left: 0, right: 0, paddingBottom: 10 },
+  // «Стеклянные» элементы шапки и низа (как в Telegram): круг 50 и капсулы той же высоты
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 10,
   },
-  glassCircle: { width: 44, height: 44, borderRadius: 22 },
+  glassCircle: { width: 50, height: 50, borderRadius: 25 },
   glassButton: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // Шеврон визуально смещён вправо — центрируем по кругу
   backIcon: { marginLeft: -2 },
-  glassCapsule: { height: 44, borderRadius: 22, flexDirection: 'row', alignItems: 'center' },
-  glassTextButton: { height: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  glassCapsule: { height: 50, borderRadius: 25, flexDirection: 'row', alignItems: 'center' },
+  glassTextButton: { height: 50, justifyContent: 'center', paddingHorizontal: 8 },
   glassCard: { marginHorizontal: 10, marginTop: 8, borderRadius: 18 },
-  headerTitleCapsule: { flex: 1, paddingLeft: 5, paddingRight: 14 },
-  headerMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, height: 44 },
+  headerTitleCapsule: { flex: 1, paddingLeft: 6, paddingRight: 14 },
+  headerMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, height: 50 },
   headerBody: { flex: 1, justifyContent: 'center' },
   headerName: { fontSize: 16, fontWeight: '600', color: theme.text },
   headerStatusRow: { flexDirection: 'row', alignItems: 'center' },
   headerStatus: { fontSize: 12.5, flexShrink: 1 },
-  headerActions: { paddingHorizontal: 2 },
-  headerAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerActions: { paddingHorizontal: 4, gap: 6, marginRight: 6 },
+  headerAction: { width: 48, height: 50, alignItems: 'center', justifyContent: 'center' },
   pinned: {
     flexDirection: 'row',
     alignItems: 'center',
