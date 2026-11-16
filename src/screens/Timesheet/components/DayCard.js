@@ -2,13 +2,16 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Ionicons } from '@expo/vector-icons';
-import { Can } from '../../../components/Can';
 import { TeamCard } from './TeamCard';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
 import { formatTimesheetDay } from '../../../utils/dateTime';
 import { useTheme, useThemedStyles } from '../../../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Нижние отступы карточки дня (как в styles.contentInner и styles.addTeamButton)
+const CONTENT_BOTTOM_GAP = 16;
+const BUTTON_BOTTOM_GAP = 10;
 
 export const DayCard = ({
   item,
@@ -32,6 +35,11 @@ export const DayCard = ({
   onReplyComment,
   onToggleReaction,
   onCancelReply,
+  // Право добавлять бригаду (проверяется один раз на экране табеля). Кнопка «Добавить бригаду» стоит над
+  // панелью вкладок; без неё отступ — у прокрутки: день уходит под «стекло», последняя бригада докручивается выше
+  showAddTeam = false,
+  // Высота «стеклянной» панели вкладок поверх карточки (iPhone); 0 — панель ниже экрана (Android)
+  bottomInset = 0,
 }) => {
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -61,7 +69,7 @@ export const DayCard = ({
         {/* Поле комментария в развёрнутом объекте прокручивается над клавиатурой */}
         <KeyboardAwareScrollView
           style={styles.content}
-          contentContainerStyle={styles.contentInner}
+          contentContainerStyle={[styles.contentInner, !showAddTeam && bottomInset > 0 && { paddingBottom: CONTENT_BOTTOM_GAP + bottomInset }]}
           nestedScrollEnabled={true}
           directionalLockEnabled={true}
           keyboardShouldPersistTaps='handled'
@@ -101,10 +109,10 @@ export const DayCard = ({
           )}
         </KeyboardAwareScrollView>
 
-        <Can permission="mobile-app-can-create-team:site">
+        {showAddTeam ? (
           <SwipeBlocker>
             <TouchableOpacity
-              style={styles.addTeamButton}
+              style={[styles.addTeamButton, bottomInset > 0 && { marginBottom: BUTTON_BOTTOM_GAP + bottomInset }]}
               onPress={() => onAddTeam(item)}
               activeOpacity={0.8}
             >
@@ -112,7 +120,7 @@ export const DayCard = ({
               <Text style={styles.addTeamButtonText}>Добавить бригаду</Text>
             </TouchableOpacity>
           </SwipeBlocker>
-        </Can>
+        ) : null}
       </View>
     </View>
   );

@@ -2,20 +2,33 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
-import { TabBar } from '../components/TabBar';
 import ChatsTab from './Messenger/ChatsTab';
 import CallHistoryTab from './Messenger/CallHistoryTab';
 
-/** Вкладки «Чаты» и «Звонки»: какая открыта — задаёт параметр маршрута tab */
-export default function MessengerScreen({ route }) {
+const MessengerTabFrame = ({ children }) => {
   const theme = useTheme();
-  const tab = route?.params?.tab === 'calls' ? 'calls' : 'chats';
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-      {tab === 'calls' ? <CallHistoryTab /> : <ChatsTab />}
-      <TabBar active={tab} />
+      {children}
     </SafeAreaView>
+  );
+};
+
+/** Вкладка «Чаты» корневого нативного навигатора вкладок */
+export function ChatsScreen() {
+  return (
+    <MessengerTabFrame>
+      <ChatsTab />
+    </MessengerTabFrame>
+  );
+}
+
+/** Вкладка «Звонки» корневого нативного навигатора вкладок */
+export function CallsScreen() {
+  return (
+    <MessengerTabFrame>
+      <CallHistoryTab />
+    </MessengerTabFrame>
   );
 }
 

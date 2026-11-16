@@ -1,0 +1,30 @@
+diff --git a/node_modules/react-native-bottom-tabs/android/src/main/java/com/rcttabview/RCTTabView.kt b/node_modules/react-native-bottom-tabs/android/src/main/java/com/rcttabview/RCTTabView.kt
+index 66de5d2..0df6457 100644
+--- a/node_modules/react-native-bottom-tabs/android/src/main/java/com/rcttabview/RCTTabView.kt
++++ b/node_modules/react-native-bottom-tabs/android/src/main/java/com/rcttabview/RCTTabView.kt
+@@ -23,6 +23,7 @@ import android.widget.TextView
+ import androidx.core.view.AccessibilityDelegateCompat
+ import androidx.core.view.MenuItemCompat
+ import androidx.core.view.ViewCompat
++import androidx.core.view.WindowInsetsCompat
+ import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+ import androidx.core.view.forEachIndexed
+ import coil3.ImageLoader
+@@ -43,6 +44,17 @@ import com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY
+ import com.google.android.material.transition.platform.MaterialFadeThrough
+ 
+ class ExtendedBottomNavigationView(context: Context) : BottomNavigationView(context) {
++  init {
++    // EMPIN patch: pad only for the system navigation bar. BottomNavigationView pads for
++    // systemWindowInsetBottom, which includes the keyboard in edge-to-edge mode, so the
++    // tab bar grew and jumped above the keyboard. Now the keyboard simply covers it.
++    ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
++      val bars = insets.getInsets(WindowInsetsCompat.Type.navigationBars())
++      view.setPadding(bars.left, view.paddingTop, bars.right, bars.bottom)
++      insets
++    }
++  }
++
+   override fun getMaxItemCount(): Int {
+     return 100
+   }

@@ -17,7 +17,7 @@ import { avatarColor, palettes, setPalettePreference, setThemePreference, useThe
 import { getUserFacingError } from '../utils/userFacingError';
 import { Avatar } from '../components/chat/Avatar';
 import { ChatBackground } from '../components/chat/ChatBackground';
-import { TabBar, useTabBarHeight } from '../components/TabBar';
+import { useTabBarHeight } from '../components/TabBar';
 import { shareCallDiagnostics } from '../services/callDiagnostics';
 
 const Row = ({ theme, icon, iconColor, title, subtitle, destructive, onPress, last, accessory }) => (
@@ -344,7 +344,6 @@ export default function ProfileScreen({ onLogout }) {
           Эмпин PRO · версия {Constants.expoConfig?.version ?? '—'} ({Constants.nativeBuildVersion ?? '—'})
         </Text>
       </ScrollView>
-      <TabBar active="profile" />
     </SafeAreaView>
   );
 }
