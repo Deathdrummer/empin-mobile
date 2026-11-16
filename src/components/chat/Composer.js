@@ -533,10 +533,10 @@ export const Composer = ({
         {recording && locked ? (
           <Pressable
             onPress={() => release(true)}
-            style={({ pressed }) => [s.action, { backgroundColor: pressed ? theme.accentPressed : theme.accent }]}
+            style={({ pressed }) => [s.action, { backgroundColor: pressed ? theme.neutralControlPressed : theme.neutralControl }]}
             accessibilityLabel="Отправить голосовое"
           >
-            <Ionicons name="arrow-up" size={22} color={theme.onAccent} />
+            <Ionicons name="arrow-up" size={22} color={theme.onNeutralControl} />
           </Pressable>
         ) : canSend && !recording ? (
           <Pressable
@@ -557,11 +557,11 @@ export const Composer = ({
             {recording ? (
               <Animated.View
                 pointerEvents="none"
-                style={[s.micHalo, { backgroundColor: theme.accent, transform: [{ scale: level.interpolate({ inputRange: [0, 1], outputRange: [1, 1.75] }) }] }]}
+                style={[s.micHalo, { backgroundColor: theme.neutralControl, transform: [{ scale: level.interpolate({ inputRange: [0, 1], outputRange: [1, 1.75] }) }] }]}
               />
             ) : null}
-            <View pointerEvents="none" style={[s.micCircle, { backgroundColor: theme.accent }]} />
-            <Ionicons name="mic" size={recording ? 28 : 22} color={theme.onAccent} />
+            <View pointerEvents="none" style={[s.micCircle, { backgroundColor: theme.neutralControl }]} />
+            <Ionicons name="mic" size={recording ? 28 : 22} color={theme.onNeutralControl} />
             {recording ? (
               <View style={[s.lockHint, { backgroundColor: theme.sheet, borderColor: theme.separator }]} pointerEvents="none">
                 <Ionicons name="lock-open-outline" size={18} color={theme.textSecondary} />

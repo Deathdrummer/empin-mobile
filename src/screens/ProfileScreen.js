@@ -199,8 +199,8 @@ export default function ProfileScreen({ onLogout }) {
         <View style={[styles.card, styles.profileCard, { backgroundColor: theme.surface }]}>
           <Pressable onPress={editAvatar} disabled={avatarBusy} accessibilityRole="button" accessibilityLabel="Изменить фото профиля">
             <Avatar person={person} id={user?.staff_id} size={64} />
-            <View style={[styles.avatarBadge, { backgroundColor: theme.accent, borderColor: theme.surface }]}>
-              {avatarBusy ? <ActivityIndicator size="small" color={theme.onAccent} /> : <Ionicons name="camera" size={13} color={theme.onAccent} />}
+            <View style={[styles.avatarBadge, { backgroundColor: theme.surfaceAlt, borderColor: theme.surface }]}>
+              {avatarBusy ? <ActivityIndicator size="small" color={theme.text} /> : <Ionicons name="camera" size={13} color={theme.text} />}
             </View>
           </Pressable>
           <View style={styles.profileText}>

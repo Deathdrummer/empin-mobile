@@ -436,7 +436,7 @@ const MessageBubbleComponent = ({
                 styles.reaction,
                 {
                   backgroundColor: reaction.mine ? theme.reactionMine : theme.reactionBackground,
-                  borderColor: reaction.mine ? theme.accent : theme.reactionBorder,
+                  borderColor: theme.reactionBorder,
                 },
               ]}
             >

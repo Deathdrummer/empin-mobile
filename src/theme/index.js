@@ -8,10 +8,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * (app.json: userInterfaceStyle = automatic), переключатель в профиле закрепляет выбор.
  */
 const brand = {
-  accent: '#E3262F',
-  accentPressed: '#C21D25',
+  accent: '#D52433',
+  accentPressed: '#B61D2A',
   onAccent: '#FFFFFF',
-  danger: '#E3262F',
+  danger: '#D52433',
   success: '#2E9E6A',
 };
 
@@ -26,18 +26,18 @@ const light = {
   text: '#14151A',
   textSecondary: '#6B6F76',
   textMuted: '#9A9DA4',
-  accentText: '#C7151E',
-  accentSoft: '#FDE4E5',
+  accentText: '#B61D2A',
+  accentSoft: '#FCE4E6',
   chatBackground: '#EFECEB',
   bubbleIn: '#FFFFFF',
   bubbleInText: '#14151A',
   bubbleInMeta: '#8A8D94',
-  bubbleOut: '#FFE0E2',
+  bubbleOut: '#FFE0E3',
   bubbleOutText: '#14151A',
-  bubbleOutMeta: '#A0414A',
-  bubbleOutAccent: '#C7151E',
-  bubbleOutTrack: 'rgba(160, 65, 74, 0.3)',
-  quoteBackground: 'rgba(227, 38, 47, 0.08)',
+  bubbleOutMeta: '#9E424B',
+  bubbleOutAccent: '#B61D2A',
+  bubbleOutTrack: 'rgba(158, 66, 75, 0.3)',
+  quoteBackground: 'rgba(213, 36, 51, 0.08)',
   dateChip: 'rgba(20, 21, 26, 0.08)',
   dateChipText: '#55585F',
   inputBackground: '#F1F1F4',
@@ -53,7 +53,10 @@ const light = {
   sheet: '#FFFFFF',
   reactionBackground: '#FFFFFF',
   reactionBorder: '#E6E6EA',
-  reactionMine: '#FDE4E5',
+  reactionMine: '#FCE4E6',
+  neutralControl: '#2C2E35',
+  neutralControlPressed: '#14151A',
+  onNeutralControl: '#FFFFFF',
   statusBar: 'dark-content',
 };
 
@@ -68,17 +71,20 @@ const dark = {
   text: '#F2F2F4',
   textSecondary: '#A5A7AE',
   textMuted: '#6E7078',
-  accent: '#FF3B42',
-  accentText: '#FF6A70',
-  accentSoft: '#3A1418',
+  // Фирменный красный тот же, что в светлой теме (#D52433, по ТЗ): белый текст на нём читается лучше,
+  // чем на более светлом красном (контраст 5,1 против 4,2), а на тёмном фоне он заметен (3,8:1)
+  accent: '#D52433',
+  accentPressed: '#B81F2C',
+  accentText: '#FF6B78',
+  accentSoft: '#3A1419',
   chatBackground: '#0D0D10',
   bubbleIn: '#1F1F25',
   bubbleInText: '#F2F2F4',
   bubbleInMeta: '#8D8F96',
-  bubbleOut: '#7D1B22',
+  bubbleOut: '#7A1923',
   bubbleOutText: '#FFFFFF',
-  bubbleOutMeta: '#F3B8BC',
-  bubbleOutAccent: '#FFD2D5',
+  bubbleOutMeta: '#F3B8BE',
+  bubbleOutAccent: '#FFD2D6',
   bubbleOutTrack: 'rgba(255, 210, 213, 0.3)',
   quoteBackground: 'rgba(255, 255, 255, 0.08)',
   dateChip: '#22222A',
@@ -95,7 +101,10 @@ const dark = {
   sheet: '#1B1B20',
   reactionBackground: '#26262D',
   reactionBorder: '#34343C',
-  reactionMine: '#4A1A1F',
+  reactionMine: '#4A181F',
+  neutralControl: '#4A4D57',
+  neutralControlPressed: '#5D606B',
+  onNeutralControl: '#FFFFFF',
   statusBar: 'light-content',
 };
 
@@ -262,7 +271,7 @@ export const useThemedStyles = (factory) => {
 };
 
 // Цвет аватара стабилен для сотрудника: один и тот же человек всегда одного цвета
-const AVATAR_COLORS = ['#E3262F', '#5B6B8C', '#2F8A6C', '#8A5BB0', '#C46A1B', '#1F7FA8', '#B23A6E', '#4E7A2B'];
+const AVATAR_COLORS = ['#D52433', '#5B6B8C', '#2F8A6C', '#8A5BB0', '#C46A1B', '#1F7FA8', '#B23A6E', '#4E7A2B'];
 
 export const avatarColor = (id) => {
   const index = Math.abs(Number(id) || 0) % AVATAR_COLORS.length;
