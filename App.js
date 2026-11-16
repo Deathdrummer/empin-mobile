@@ -10,10 +10,8 @@ import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from './src/screens/LoginScreen';
-import TimesheetScreen from './src/screens/TimesheetScreen';
-import MessengerScreen from './src/screens/MessengerScreen';
+import { MainTabsNavigator } from './src/navigation/MainTabsNavigator';
 import ChatScreen from './src/screens/Messenger/ChatScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
 import ChatInfoScreen from './src/screens/Messenger/ChatInfoScreen';
 import ChatMediaScreen from './src/screens/Messenger/ChatMediaScreen';
 import ChatArchiveScreen from './src/screens/Messenger/ChatArchiveScreen';
@@ -124,7 +122,7 @@ export default function App() {
         restoreChatSounds(),
       ]);
       const loggedIn = !!token;
-      setStartRoute(openChats ? 'Messenger' : 'Timesheet');
+      setStartRoute(openChats ? 'Chats' : 'Timesheet');
       setIsLoggedIn(loggedIn);
     } catch (error) {
       setIsLoggedIn(false);
@@ -167,16 +165,9 @@ export default function App() {
               <View style={[styles.appContainer, { backgroundColor: theme.background }]}>
                 {isLoggedIn ? (
                   <NavigationContainer ref={navigationRef} theme={navigationTheme}>
-                    <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={startRoute}>
-                      {/* Вкладки переключаются без анимации, как в мессенджерах */}
-                      <Stack.Screen name="Timesheet" options={{ animation: 'none' }}>
-                        {props => <TimesheetScreen {...props} onLogout={handleLogout} />}
-                      </Stack.Screen>
-                      <Stack.Screen name="Messenger" options={{ animation: 'none' }} initialParams={{ tab: 'chats' }}>
-                        {props => <MessengerScreen {...props} onLogout={handleLogout} />}
-                      </Stack.Screen>
-                      <Stack.Screen name="Profile" options={{ animation: 'none' }}>
-                        {props => <ProfileScreen {...props} onLogout={handleLogout} />}
+                    <Stack.Navigator screenOptions={{ headerShown: false }}>
+                      <Stack.Screen name="MainTabs">
+                        {() => <MainTabsNavigator initialRouteName={startRoute} onLogout={handleLogout} />}
                       </Stack.Screen>
                       <Stack.Screen name="Chat">
                         {props => <ChatScreen {...props} onLogout={handleLogout} />}

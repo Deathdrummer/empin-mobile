@@ -25,6 +25,8 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
   const flatListRef = useRef(null);
   const isLoadingRef = useRef(false);
   const pendingScrollRef = useRef(null); // Для хранения отложенного скролла
+  // Идёт тихое обновление при возврате на вкладку
+  const focusRefreshRef = useRef(false);
 
   useEffect(() => {
     refreshPermissions().catch(err => {
@@ -43,7 +45,8 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
     }
   }, [filters]);
 
-  const loadDays = async (min = -DAYS_RANGE, max = DAYS_RANGE, preserveScrollPosition = false) => {
+  // silent — тихое обновление (вкладку открыли снова): без сообщения об ошибке сети
+  const loadDays = async (min = -DAYS_RANGE, max = DAYS_RANGE, preserveScrollPosition = false, { silent = false } = {}) => {
     try {
       const indexes = [];
       for (let i = min; i <= max; i++) {
@@ -154,6 +157,7 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
         return;
       }
 
+      if (silent) return;
       Toast.show({
         type: 'error',
         text1: 'Ошибка загрузки',
@@ -174,6 +178,21 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
       await refreshPermissions();
       await loadDays(minIndex, maxIndex, true);
     } catch (error) {
+    }
+  };
+
+  /**
+   * Вкладку «Табель» открыли снова. Она остаётся в памяти, пока открыты другие вкладки (системная нижняя
+   * панель), — показанный диапазон сразу тихо обновляется: без индикатора, тот же день на экране.
+   * Пока идёт другая загрузка, вторую не начинаем
+   */
+  const refreshOnFocus = async () => {
+    if (loading || refreshing || isLoadingRef.current || focusRefreshRef.current) return;
+    focusRefreshRef.current = true;
+    try {
+      await loadDays(minIndex, maxIndex, true, { silent: true });
+    } finally {
+      focusRefreshRef.current = false;
     }
   };
 
@@ -399,6 +418,7 @@ export const useTimesheetData = (onLogout, filters = null, isPrependingRef = nul
     maxIndex,
     loadDays,
     onRefresh,
+    refreshOnFocus,
     loadMoreForward,
     loadMoreBackward,
     handleDateSelect,
