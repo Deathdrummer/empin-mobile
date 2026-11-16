@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, FlatList, Dimensions, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Accelerometer } from 'expo-sensors';
+import { useIsFocused } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { TabBar, useTabBarHeight } from '../../components/TabBar';
+import { useTabBarHeight } from '../../components/TabBar';
+import { usePermissions } from '../../hooks/usePermissions';
 import { useTheme, useThemedStyles } from '../../theme';
 import { DayCard } from './components/DayCard';
 import { StaffModal } from './components/modals/StaffModal';
@@ -27,6 +29,10 @@ function TimesheetScreenContent({ onLogout }) {
   const theme = useTheme();
   const s = useThemedStyles(makeStyles);
   const tabBarHeight = useTabBarHeight();
+  const isFocused = useIsFocused();
+  // Один раз на экран, а не в каждой карточке дня
+  const { can, loading: permissionsLoading } = usePermissions();
+  const canAddTeam = !permissionsLoading && can('mobile-app-can-create-team:site');
   const isPrependingRef = useRef(false);
 
   const {
@@ -53,6 +59,7 @@ function TimesheetScreenContent({ onLogout }) {
     maxIndex,
     loadDays,
     onRefresh,
+    refreshOnFocus,
     loadMoreForward,
     loadMoreBackward,
     handleDateSelect,
@@ -127,6 +134,15 @@ function TimesheetScreenContent({ onLogout }) {
   const lastScrollTime = useRef(0);
   const { flatListRef, scrollEnabled } = useSwipeControl();
 
+  // Вкладку «Табель» открыли снова: экран не пересоздаётся (нижняя панель держит вкладки в памяти) —
+  // табель сразу тихо обновляется, иначе показывал бы данные с первого открытия
+  const wasFocusedRef = useRef(isFocused);
+  useEffect(() => {
+    if (isFocused && !wasFocusedRef.current) refreshOnFocus();
+    wasFocusedRef.current = isFocused;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFocused]);
+
   // Синхронизируем ref из хука с ref из контекста
   React.useEffect(() => {
     if (localFlatListRef.current && flatListRef) {
@@ -137,6 +153,8 @@ function TimesheetScreenContent({ onLogout }) {
   // Встряхивание — обновить табель. Акселерометр, а не DeviceMotion: на iPhone ему не нужно
   // разрешение «Движение и фитнес», и при запуске не всплывает системный запрос
   useEffect(() => {
+    if (!isFocused) return undefined;
+
     const SHAKE_FORCE_G = 2.3; // сильный рывок; телефон в покое — около 1 g
     const PEAK_WINDOW_MS = 600; // два рывка подряд — встряхивание, а не случайный удар
     const SHAKE_COOLDOWN_MS = 2000;
@@ -160,7 +178,7 @@ function TimesheetScreenContent({ onLogout }) {
     });
 
     return () => subscription.remove();
-  }, [onRefresh, refreshing]);
+  }, [isFocused, onRefresh, refreshing]);
 
   const handleCalendarPress = () => {
     setCalendarModalVisible(true);
@@ -254,6 +272,8 @@ function TimesheetScreenContent({ onLogout }) {
       onReplyComment={handleReplyComment}
       onToggleReaction={handleToggleReaction}
       onCancelReply={handleCancelReply}
+      showAddTeam={canAddTeam}
+      bottomInset={tabBarHeight}
     />
   );
 
@@ -289,19 +309,20 @@ function TimesheetScreenContent({ onLogout }) {
 
   if (loading) {
     return (
-      <SafeAreaView style={[s.container, { paddingBottom: tabBarHeight }]} edges={['top']}>
+      <SafeAreaView style={s.container} edges={['top']}>
         {header}
         <View style={s.loadingContainer}>
           <ActivityIndicator size="large" color={theme.accent} />
         </View>
-        <TabBar active="timesheet" />
       </SafeAreaView>
     );
   }
 
   return (
     <AudioPlayerProvider>
-      <SafeAreaView style={[s.container, { paddingBottom: tabBarHeight }]} edges={['top']}>
+      {/* Низ без отступа: на iPhone день прокручивается под «стеклянной» панелью вкладок (iOS 26),
+          отступ на её высоту — внутри карточки дня (см. DayCard, bottomInset) */}
+      <SafeAreaView style={s.container} edges={['top']}>
         {filterLoading && (
           <View style={s.filterLoadingOverlay}>
             <ActivityIndicator size="large" color={theme.accent} />
@@ -473,7 +494,6 @@ function TimesheetScreenContent({ onLogout }) {
           }, 100);
         }}
       />
-      <TabBar active="timesheet" />
       </SafeAreaView>
     </AudioPlayerProvider>
   );

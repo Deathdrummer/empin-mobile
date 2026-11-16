@@ -458,7 +458,7 @@ export default function ChatsTab({ archive: archiveMode = false }) {
         sections={sections}
         keyExtractor={(row, index) => `${row.kind}-${row.chat?.chat_id ?? row.item?.chat_id ?? row.item?.contract_id ?? row.hit?.message_id}-${index}`}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: tabBarHeight + 12 }}
+        contentContainerStyle={{ paddingBottom: bottomPadding + 12 }}
         renderSectionHeader={({ section }) => <Text style={s.sectionTitle}>{section.title}</Text>}
         stickySectionHeadersEnabled={false}
         renderItem={({ item: row }) => {
