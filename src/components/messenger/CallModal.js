@@ -307,7 +307,8 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 76,
     borderWidth: 2,
-    borderColor: 'rgba(255, 59, 66, 0.45)',
+    // Фирменный красный #D52433 (тёмный — чуть плотнее, чтобы кольцо было видно на тёмном фоне)
+    borderColor: 'rgba(213, 36, 51, 0.6)',
     marginBottom: 24,
   },
   participantName: {

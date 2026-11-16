@@ -79,7 +79,7 @@ export function StaffPicker({ visible, title, multiple = false, excludeIds = [],
     <KeyboardAvoidingView style={s.flex} behavior="padding">
       <View style={s.header}>
         <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityLabel="Закрыть">
-          <Text style={s.headerAction}>Отмена</Text>
+          <Text style={[s.headerAction, s.headerCancel]}>Отмена</Text>
         </TouchableOpacity>
         <Text style={s.title} numberOfLines={1}>{title}</Text>
         {multiple ? (
@@ -148,7 +148,7 @@ export function StaffPicker({ visible, title, multiple = false, excludeIds = [],
                       style={s.callButton}
                       accessibilityLabel={`Позвонить: ${fullName(item)}`}
                     >
-                      <Ionicons name="call-outline" size={22} color={theme.accent} />
+                      <Ionicons name="call-outline" size={22} color={theme.text} />
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -208,12 +208,12 @@ export default function NewChatModal({ visible, onClose, onOpenChat, onOpenSaved
               header={(
                 <>
                   <Pressable style={({ pressed }) => [s.row, s.newGroup, pressed && { backgroundColor: theme.surfacePressed }]} onPress={() => setStep('members')}>
-                    <View style={[s.newGroupIcon, { backgroundColor: theme.accentSoft }]}>
-                      <Ionicons name="people" size={22} color={theme.accent} />
+                    <View style={[s.newGroupIcon, { backgroundColor: theme.surfaceAlt }]}>
+                      <Ionicons name="people" size={22} color={theme.text} />
                     </View>
                     <View style={s.rowBody}>
                       <View style={s.rowText}>
-                        <Text style={[s.name, { color: theme.accentText }]}>Новая группа</Text>
+                        <Text style={s.name}>Новая группа</Text>
                         <Text style={s.sub}>Бригада, объект или общий чат</Text>
                       </View>
                     </View>
@@ -221,12 +221,12 @@ export default function NewChatModal({ visible, onClose, onOpenChat, onOpenSaved
                   {/* Чат с самим собой: заметки, пересланное на потом (как «Избранное» в Telegram) */}
                   {onOpenSaved ? (
                     <Pressable style={({ pressed }) => [s.row, s.newGroup, pressed && { backgroundColor: theme.surfacePressed }]} onPress={onOpenSaved}>
-                      <View style={[s.newGroupIcon, { backgroundColor: theme.accent }]}>
-                        <Ionicons name="bookmark" size={20} color={theme.onAccent} />
+                      <View style={[s.newGroupIcon, { backgroundColor: theme.surfaceAlt }]}>
+                        <Ionicons name="bookmark" size={20} color={theme.text} />
                       </View>
                       <View style={s.rowBody}>
                         <View style={s.rowText}>
-                          <Text style={[s.name, { color: theme.accentText }]}>Избранное</Text>
+                          <Text style={s.name}>Избранное</Text>
                           <Text style={s.sub}>Заметки себе и пересланное на потом</Text>
                         </View>
                       </View>
@@ -319,6 +319,7 @@ const styles = (theme) => StyleSheet.create({
   },
   title: { flex: 1, fontSize: 18, fontWeight: '700', color: theme.text, textAlign: 'center' },
   headerAction: { fontSize: 16, color: theme.accent, fontWeight: '500', minWidth: 64 },
+  headerCancel: { color: theme.text },
   headerActionStrong: { fontWeight: '700', textAlign: 'right' },
   headerSpacer: { minWidth: 64 },
   search: {

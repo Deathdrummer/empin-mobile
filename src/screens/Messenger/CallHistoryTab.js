@@ -123,7 +123,7 @@ export default function CallHistoryTab() {
             style={s.callButton}
             accessibilityLabel={`Позвонить: ${name}`}
           >
-            <Ionicons name="call-outline" size={22} color={theme.accent} />
+            <Ionicons name="call-outline" size={22} color={theme.text} />
           </TouchableOpacity>
         </View>
       </Pressable>
@@ -140,7 +140,7 @@ export default function CallHistoryTab() {
           style={s.headerButton}
           accessibilityLabel="Новый звонок"
         >
-          <MaterialCommunityIcons name="phone-plus-outline" size={25} color={theme.accent} />
+          <MaterialCommunityIcons name="phone-plus-outline" size={25} color={theme.text} />
         </TouchableOpacity>
       </View>
 
@@ -151,9 +151,9 @@ export default function CallHistoryTab() {
             <TouchableOpacity
               key={String(filter.key)}
               onPress={() => setOnlyMissed(filter.key)}
-              style={[s.chip, active && { backgroundColor: theme.accentSoft }]}
+              style={[s.chip, active && { backgroundColor: theme.text }]}
             >
-              <Text style={[s.chipText, active && { color: theme.accentText, fontWeight: '600' }]}>{filter.label}</Text>
+              <Text style={[s.chipText, active && { color: theme.background, fontWeight: '600' }]}>{filter.label}</Text>
             </TouchableOpacity>
           );
         })}
