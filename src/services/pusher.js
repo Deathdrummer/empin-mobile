@@ -1,6 +1,7 @@
 import Pusher from '@pusher/pusher-websocket-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { emitMessengerEvent } from './messengerStore';
+import { SERVER_URL } from './api';
 
 const PUSHER_APP_KEY = '88f644943a85b36b115e';
 const PUSHER_CLUSTER = 'eu';
@@ -31,7 +32,8 @@ export const getPusher = async () => {
           const token = await AsyncStorage.getItem('token');
           if (!token) throw new Error('No auth token in storage');
 
-          const response = await fetch('https://empin-pro.ru/broadcasting/auth', {
+          // Тот же сервер, что и API: при локальном EXPO_PUBLIC_API_BASE_URL токен не уходит на боевой домен
+          const response = await fetch(`${SERVER_URL}/broadcasting/auth`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
