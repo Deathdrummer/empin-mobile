@@ -7,12 +7,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { Dialog, DialogButton } from '../../components/ui/Dialog';
 import {
-  cachedTask, emitTasksChanged, forgetTask, productionAPI, saveTask, setCopiedTask,
+  cachedTask, emitTasksChanged, forgetTask, productionAPI, saveTask, setCopiedTask, useToday,
 } from '../../services/production';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
   describeHistoryEntry, executorSubtitle, executorTitle, formatDayShort, formatQuantity, formatReadiness, formatStamp,
-  isOfflineError, objectTitle, relativeDayLabel, shortName, toDateKey, vehicleTitle,
+  isOfflineError, objectTitle, relativeDayLabel, shortName, vehicleTitle,
 } from '../../utils/tasks';
 import { PickerSheet } from './PickerSheet';
 
@@ -34,7 +34,7 @@ export default function TaskScreen({ navigation, route }) {
   const [inviting, setInviting] = useState(false);
   const [staff, setStaff] = useState(null);
   const [scrolled, setScrolled] = useState(false);
-  const today = toDateKey(new Date());
+  const today = useToday();
 
   const apply = useCallback((data) => {
     setTask(data.task);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
+import { currentToday, parseDateKey, toDateKey } from '../utils/tasks';
 
 /**
  * Производственный модуль (ТЗ ЭМПИН-pro): запросы к /api/production и состояние вне React-дерева —
@@ -133,7 +134,9 @@ export const resetProductionState = () => {
   clearTimeout(saveTimer);
   cache = null;
   loading = null;
+  serverDay = null;
   setMe(null);
+  setNotices([]);
   setCopiedTask(null);
 };
 
@@ -152,6 +155,7 @@ export const refreshMe = async () => {
     const me = await productionAPI.me();
     setMe(me);
     saveMe(me);
+    noteServerToday(me?.time?.today);
     return me;
   } catch {
     if (!meValue) setMe(await cachedMe());
@@ -166,6 +170,74 @@ export const useProductionMe = () => {
     if (meValue) setValue(meValue);
     else refreshMe();
     return () => meListeners.delete(setValue);
+  }, []);
+  return value;
+};
+
+// ---- Сегодня по серверу в часовом поясе организации (п. 9.2), а не по часам телефона ----
+
+let serverDay = null;
+const dayListeners = new Set();
+
+/** Дата «сегодня» из ответа сервера; запоминается вместе с датой телефона, чтобы после полуночи сдвинуться самой */
+export const noteServerToday = (today) => {
+  if (!parseDateKey(today)) return;
+  const next = { today, phoneDay: toDateKey(new Date()) };
+  if (serverDay?.today === next.today && serverDay?.phoneDay === next.phoneDay) return;
+  serverDay = next;
+  dayListeners.forEach((listener) => listener(getToday()));
+};
+
+export const getToday = () => currentToday(serverDay, toDateKey(new Date()));
+
+export const useToday = () => {
+  const [value, setValue] = useState(getToday);
+  useEffect(() => {
+    dayListeners.add(setValue);
+    setValue(getToday());
+    return () => dayListeners.delete(setValue);
+  }, []);
+  return value;
+};
+
+// ---- Уведомления до ручного закрытия: плашки на экране текущего дня и список (п. 6.6, п. 9.3, инт. 9.36) ----
+
+let notices = [];
+const noticeListeners = new Set();
+
+const setNotices = (items) => {
+  notices = items;
+  noticeListeners.forEach((listener) => listener(notices));
+};
+
+/** С сервера; без связи — последние полученные (они висят до закрытия, и без связи тоже) */
+export const loadNotifications = async () => {
+  try {
+    const items = (await productionAPI.notifications()).items || [];
+    setNotices(items);
+    const store = await loadCache();
+    store.notices = items;
+    scheduleSave();
+  } catch {
+    if (!notices.length) setNotices((await loadCache()).notices || []);
+  }
+};
+
+/** Закрытие персональное: у других получателей уведомление остаётся. Нужна связь — иначе ошибка наверх */
+export const closeNotification = async (id) => {
+  await productionAPI.closeNotification(id);
+  setNotices(notices.filter((item) => item.id !== id));
+  const store = await loadCache();
+  store.notices = notices;
+  scheduleSave();
+};
+
+export const useNotifications = () => {
+  const [value, setValue] = useState(notices);
+  useEffect(() => {
+    noticeListeners.add(setValue);
+    setValue(notices);
+    return () => noticeListeners.delete(setValue);
   }, []);
   return value;
 };

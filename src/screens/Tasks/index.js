@@ -3,13 +3,14 @@ import { Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View } from '
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useActionSheet } from '@expo/react-native-action-sheet';
+import { Accelerometer } from 'expo-sensors';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { useTabBarHeight } from '../../components/TabBar';
 import { useTheme, useThemedStyles } from '../../theme';
 import {
-  cachedDays, emitTasksChanged, forgetTask, productionAPI, refreshMe, saveDays, setCopiedTask, subscribeTasksChanged,
-  useCopiedTask, useProductionMe,
+  cachedDays, closeNotification, emitTasksChanged, forgetTask, getToday, loadNotifications, noteServerToday, productionAPI,
+  refreshMe, saveDays, setCopiedTask, subscribeTasksChanged, useCopiedTask, useNotifications, useProductionMe, useToday,
 } from '../../services/production';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
@@ -29,8 +30,6 @@ const WINDOW_DAYS = 365;
 // Сколько дней по сторонам от открытого подгружать заранее (и держать для работы без связи)
 const PRELOAD_DAYS = 3;
 
-const phoneToday = () => toDateKey(new Date());
-
 /**
  * Календарь заданий (п. 6.4): один день — один экран, листание по дням, фильтры, уведомления.
  * Заменяет прототип «Табель»: те же записи план-графика ERP, но с правами и журналом ТЗ.
@@ -46,9 +45,11 @@ export default function TasksScreen() {
   const me = useProductionMe();
   const copied = useCopiedTask();
 
-  const [today, setToday] = useState(phoneToday);
-  const [center, setCenter] = useState(phoneToday);
-  const [current, setCurrent] = useState(phoneToday);
+  // «Сегодня» — по серверу в часовом поясе организации (п. 9.2), до первого ответа — по телефону
+  const today = useToday();
+  const notices = useNotifications();
+  const [center, setCenter] = useState(getToday);
+  const [current, setCurrent] = useState(getToday);
   const [filters, setFilters] = useState({});
   const [entries, setEntries] = useState({});
   const [refreshing, setRefreshing] = useState(false);
@@ -56,8 +57,8 @@ export default function TasksScreen() {
   const [calendarDates, setCalendarDates] = useState(null);
   const [filterVisible, setFilterVisible] = useState(false);
   const [notificationsVisible, setNotificationsVisible] = useState(false);
-  const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [closingNotice, setClosingNotice] = useState(null);
   const [pasting, setPasting] = useState(false);
   const [deleting, setDeleting] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -65,6 +66,8 @@ export default function TasksScreen() {
   const listRef = useRef(null);
   const filtersRef = useRef(filters);
   const loadingRef = useRef(new Set());
+  // Пользователь сам листал или выбирал дату — не перескакиваем на «сегодня» по ответу сервера
+  const movedRef = useRef(false);
   filtersRef.current = filters;
 
   const days = useMemo(() => dayRange(addDays(center, -WINDOW_DAYS), addDays(center, WINDOW_DAYS)), [center]);
@@ -85,7 +88,7 @@ export default function TasksScreen() {
     try {
       const data = await productionAPI.tasks({ from, to, ...filtersToParams(currentFilters) });
       if (filtersKey(filtersRef.current) !== key) return;
-      if (data.today) setToday(data.today);
+      noteServerToday(data.today);
       const byDate = Object.fromEntries(dayRange(from, to).map((date) => [date, []]));
       (data.items || []).forEach((task) => { (byDate[task.date] ||= []).push(task); });
       setEntries((prev) => {
@@ -127,20 +130,23 @@ export default function TasksScreen() {
     setRefreshing(false);
   }, [current, load, around]);
 
-  const loadNotifications = useCallback(async () => {
+  const reloadNotifications = useCallback(async () => {
     setNotificationsLoading(true);
-    try {
-      setNotifications((await productionAPI.notifications()).items || []);
-    } catch {
-      // Без связи — покажем прежний список
-    } finally {
-      setNotificationsLoading(false);
-    }
+    await loadNotifications();
+    setNotificationsLoading(false);
   }, []);
 
   useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
+    reloadNotifications();
+  }, [reloadNotifications]);
+
+  // Телефон думал, что сегодня другой день (часы, часовой пояс): сервер поправил — открываем его «сегодня»
+  useEffect(() => {
+    if (movedRef.current || current === today) return;
+    setCenter(today);
+    setCurrent(today);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today]);
 
   // Вкладку открыли снова или вернулись из карточки: тихо обновляем открытые дни, права и уведомления
   const wasFocused = useRef(isFocused);
@@ -148,7 +154,7 @@ export default function TasksScreen() {
     if (isFocused && !wasFocused.current) {
       load(around(current), { force: true });
       refreshMe();
-      loadNotifications();
+      reloadNotifications();
     }
     wasFocused.current = isFocused;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -163,6 +169,7 @@ export default function TasksScreen() {
   // ---- Листание и переход к дате ----
 
   const goTo = useCallback((date) => {
+    movedRef.current = true;
     if (Math.abs(daysBetween(center, date)) > WINDOW_DAYS - 7) {
       setCenter(date);
       setCurrent(date);
@@ -174,7 +181,10 @@ export default function TasksScreen() {
 
   const onMomentumScrollEnd = (event) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-    if (days[index] && days[index] !== current) setCurrent(days[index]);
+    if (days[index] && days[index] !== current) {
+      movedRef.current = true;
+      setCurrent(days[index]);
+    }
   };
 
   const openCalendar = async () => {
@@ -217,13 +227,15 @@ export default function TasksScreen() {
     });
   };
 
+  // Вставка переносит только объект и исполнителя (П-ЗД-04) — сразу открываем новое задание, чтобы дописать остальное
   const paste = async (date) => {
     if (!copied) return;
     setPasting(true);
     try {
-      await productionAPI.copyTask(copied.id, date);
+      const data = await productionAPI.copyTask(copied.id, date);
       emitTasksChanged([date]);
-      Toast.show({ type: 'success', text1: 'Задание вставлено', text2: objectTitle(copied.object), position: 'top' });
+      Toast.show({ type: 'success', text1: 'Задание вставлено', text2: 'Допишите, что сделать, или вернитесь назад', position: 'top' });
+      if (data?.task?.abilities?.edit) navigation.navigate('TaskForm', { task: data.task });
     } catch (error) {
       Toast.show({
         type: 'error',
@@ -272,14 +284,54 @@ export default function TasksScreen() {
     }, (index) => actions[index]?.run());
   };
 
-  const openNotification = (item) => {
-    setNotificationsVisible(false);
-    navigation.navigate('Task', { taskId: item.task_id });
+  const closeNotice = async (item) => {
+    setClosingNotice(item.id);
+    try {
+      await closeNotification(item.id);
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Не удалось закрыть уведомление',
+        text2: isOfflineError(error) ? 'Закрыть можно при связи' : getUserFacingError(error, 'Попробуйте ещё раз.'),
+        position: 'top',
+      });
+    } finally {
+      setClosingNotice(null);
+    }
   };
+
+  // Прежний исполнитель доступ к заданию теряет (П-ЗД-32): его уведомление — только для прочтения
+  const openNotice = (item) => (item.task_id && item.kind !== 'task_executor_changed'
+    ? () => { setNotificationsVisible(false); navigation.navigate('Task', { taskId: item.task_id }); }
+    : undefined);
+
+  // Встряхивание — обновить день, как в прежнем «Табеле». Акселерометр: на iPhone не нужно разрешение «Движение»
+  useEffect(() => {
+    if (!isFocused) return undefined;
+    const SHAKE_FORCE_G = 2.3;
+    const PEAK_WINDOW_MS = 600;
+    const SHAKE_COOLDOWN_MS = 2000;
+    let lastPeak = 0;
+    let lastShake = 0;
+    Accelerometer.setUpdateInterval(100);
+    const subscription = Accelerometer.addListener(({ x, y, z }) => {
+      if (Math.sqrt(x * x + y * y + z * z) < SHAKE_FORCE_G) return;
+      const now = Date.now();
+      if (now - lastShake < SHAKE_COOLDOWN_MS) return;
+      if (now - lastPeak > 80 && now - lastPeak < PEAK_WINDOW_MS) {
+        lastShake = now;
+        lastPeak = 0;
+        refresh();
+      } else {
+        lastPeak = now;
+      }
+    });
+    return () => subscription.remove();
+  }, [isFocused, refresh]);
 
   const tags = filterTags(filters);
   const filtered = tags.length > 0;
-  const notificationsCount = notifications.length;
+  const notificationsCount = notices.length;
 
   const renderDay = ({ item: date }) => (
     <TaskDayPage
@@ -295,6 +347,10 @@ export default function TasksScreen() {
       onPaste={paste}
       onOpenTask={openTask}
       onTaskMenu={taskMenu}
+      notices={date === today ? notices : null}
+      closingNotice={closingNotice}
+      onCloseNotice={closeNotice}
+      onOpenNotice={openNotice}
       bottomInset={tabBarHeight}
     />
   );
@@ -306,7 +362,7 @@ export default function TasksScreen() {
         <View style={s.actions}>
           <TouchableOpacity
             style={s.actionButton}
-            onPress={() => { setNotificationsVisible(true); loadNotifications(); }}
+            onPress={() => { setNotificationsVisible(true); reloadNotifications(); }}
             hitSlop={6}
             accessibilityLabel={notificationsCount ? `Уведомления: ${notificationsCount}` : 'Уведомления'}
           >
@@ -340,7 +396,7 @@ export default function TasksScreen() {
         data={days}
         renderItem={renderDay}
         keyExtractor={(date) => date}
-        extraData={[entries, today, me, copied, refreshing, pasting, current]}
+        extraData={[entries, today, me, copied, refreshing, pasting, current, notices, closingNotice]}
         initialScrollIndex={indexOf(current)}
         getItemLayout={(_, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
         horizontal
@@ -368,11 +424,12 @@ export default function TasksScreen() {
 
       <NotificationsSheet
         visible={notificationsVisible}
-        items={notifications}
+        items={notices}
         loading={notificationsLoading}
+        closingId={closingNotice}
         onClose={() => setNotificationsVisible(false)}
-        onClosed={(id) => setNotifications((list) => list.filter((item) => item.id !== id))}
-        onOpenTask={openNotification}
+        onCloseNotice={closeNotice}
+        onOpenNotice={openNotice}
       />
 
       <Dialog

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, useThemedStyles } from '../../theme';
 import { formatDay } from '../../utils/tasks';
 import { TaskCard } from './TaskCard';
+import { NoticeCard } from './NoticeCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CONTENT_BOTTOM_GAP = 16;
@@ -26,6 +27,11 @@ export const TaskDayPage = ({
   onPaste,
   onOpenTask,
   onTaskMenu,
+  // Уведомления до ручного закрытия — плашками над заданиями текущего дня (п. 6.4, инт. 9.36); на других днях null
+  notices = null,
+  closingNotice = null,
+  onCloseNotice,
+  onOpenNotice,
   bottomInset = 0,
 }) => {
   const theme = useTheme();
@@ -66,6 +72,15 @@ export const TaskDayPage = ({
         contentContainerStyle={[s.contentInner, !showButtons && bottomInset > 0 && { paddingBottom: CONTENT_BOTTOM_GAP + bottomInset }]}
         refreshControl={<RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={theme.accent} colors={[theme.accent]} />}
       >
+        {(notices || []).map((notice) => (
+          <NoticeCard
+            key={`notice-${notice.id}`}
+            notice={notice}
+            closing={closingNotice === notice.id}
+            onClose={() => onCloseNotice(notice)}
+            onPress={onOpenNotice(notice)}
+          />
+        ))}
         {!entry?.items && !entry?.offline ? (
           <ActivityIndicator style={s.loader} color={theme.accent} />
         ) : items.length ? (

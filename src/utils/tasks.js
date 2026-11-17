@@ -70,6 +70,15 @@ export const relativeDayLabel = (key, todayKey) => {
   return formatDayShort(key, todayKey);
 };
 
+/**
+ * Сегодня по серверу (п. 9.2): последняя присланная сервером дата, сдвинутая на столько дней, сколько прошло по
+ * телефону с её получения (приложение могло пережить полночь). Сервер ещё не отвечал — дата телефона.
+ */
+export const currentToday = (serverDay, phoneToday) => {
+  if (!serverDay?.today || !serverDay?.phoneDay) return phoneToday;
+  return addDays(serverDay.today, Math.max(0, daysBetween(serverDay.phoneDay, phoneToday)));
+};
+
 /** Окно дней пейджера: от from до to включительно */
 export const dayRange = (from, to) => {
   const days = [];

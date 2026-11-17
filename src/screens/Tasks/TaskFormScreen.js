@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { usePreventRemove } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Toast from 'react-native-toast-message';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { Dialog, DialogButton } from '../../components/ui/Dialog';
 import { CalendarModal } from '../Timesheet/components/modals/CalendarModal';
-import { emitTasksChanged, productionAPI } from '../../services/production';
+import { emitTasksChanged, productionAPI, useToday } from '../../services/production';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
   addDays, buildTaskPayload, dayRange, driverForVehicle, executorSubtitle, executorTitle, formatDay, formatDayShort, formatQuantity,
@@ -32,9 +33,12 @@ export default function TaskFormScreen({ navigation, route }) {
   const { task: original = null, date: initialDate } = route.params || {};
   const theme = useTheme();
   const s = styles(theme);
-  const today = toDateKey(new Date());
-  const [form, setForm] = useState(() => formFromTask(original, initialDate || today));
+  const today = useToday();
+  const [initialForm] = useState(() => formFromTask(original, initialDate || today));
+  const [form, setForm] = useState(initialForm);
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [leaveAction, setLeaveAction] = useState(null);
   const [picker, setPicker] = useState(null);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [foreignObject, setForeignObject] = useState(null);
@@ -53,6 +57,13 @@ export default function TaskFormScreen({ navigation, route }) {
   const { closeThen, onDismiss } = useAfterModalClose();
 
   const set = (patch) => setForm((current) => ({ ...current, ...patch }));
+
+  // Выход «назад» с несохранёнными изменениями — спросить, а не терять введённое молча
+  const dirty = !saved && JSON.stringify(form) !== JSON.stringify(initialForm);
+  usePreventRemove(dirty, ({ data }) => setLeaveAction(data.action));
+  useEffect(() => {
+    if (saved) navigation.goBack();
+  }, [saved, navigation]);
   const failLoad = (e) => setError(isOfflineError(e) ? 'Нет связи: ставить и изменять задания можно только при связи' : getUserFacingError(e, 'Не удалось загрузить данные'));
 
   // ---- Справочники ERP: объекты, исполнители, техника, план объекта ----
@@ -204,7 +215,8 @@ export default function TaskFormScreen({ navigation, route }) {
     }
     const body = buildTaskPayload(form, original);
     if (original && !Object.keys(body).length) {
-      navigation.goBack();
+      // Сохранять нечего (например, «100» и «100,0» — одно и то же): просто закрываем без вопроса
+      setSaved(true);
       return;
     }
     setSaving(true);
@@ -218,7 +230,8 @@ export default function TaskFormScreen({ navigation, route }) {
         text2: warnings.join('. ') || undefined,
         position: 'top',
       });
-      navigation.goBack();
+      // Закрываем форму после того, как снят запрет выхода с несохранёнными изменениями
+      setSaved(true);
     } catch (e) {
       Toast.show({
         type: 'error',
@@ -591,6 +604,23 @@ export default function TaskFormScreen({ navigation, route }) {
         hasActiveFilters={!!allowedDates}
         onClose={() => setCalendarVisible(false)}
         onDateSelect={(date) => { setCalendarVisible(false); set({ date: toDateKey(date) }); }}
+      />
+
+      <Dialog
+        visible={!!leaveAction}
+        onClose={() => setLeaveAction(null)}
+        title="Выйти без сохранения?"
+        message="Введённое в задании не сохранится."
+        buttons={(
+          <>
+            <DialogButton title="Остаться" onPress={() => setLeaveAction(null)} />
+            <DialogButton
+              title="Выйти"
+              variant="danger"
+              onPress={() => { const action = leaveAction; setLeaveAction(null); navigation.dispatch(action); }}
+            />
+          </>
+        )}
       />
 
       <Dialog
