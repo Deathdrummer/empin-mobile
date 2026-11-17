@@ -15,6 +15,9 @@ import ChatScreen from './src/screens/Messenger/ChatScreen';
 import ChatInfoScreen from './src/screens/Messenger/ChatInfoScreen';
 import ChatMediaScreen from './src/screens/Messenger/ChatMediaScreen';
 import ChatArchiveScreen from './src/screens/Messenger/ChatArchiveScreen';
+import TaskScreen from './src/screens/Tasks/TaskScreen';
+import TaskFormScreen from './src/screens/Tasks/TaskFormScreen';
+import { PRODUCTION_CACHE_KEY, resetProductionState } from './src/services/production';
 import { clearDrafts, DRAFTS_STORAGE_KEY } from './src/services/drafts';
 import { clearPendingReplies } from './src/services/messageActions';
 import { authAPI, setUnauthorizedCallback } from './src/services/api';
@@ -80,11 +83,13 @@ export default function App() {
       await Promise.allSettled([
         disconnectPusher(),
         disableIosVoip(),
-        AsyncStorage.multiRemove(['token', 'user', 'permissions', '@pendingCall', DRAFTS_STORAGE_KEY, START_SCREEN_STORAGE_KEY]),
+        AsyncStorage.multiRemove(['token', 'user', 'permissions', '@pendingCall', DRAFTS_STORAGE_KEY, START_SCREEN_STORAGE_KEY, PRODUCTION_CACHE_KEY]),
         // Неотправленные ответы из уведомлений не должны уйти от имени следующего пользователя
         clearPendingReplies(),
       ]);
       clearDrafts();
+      // Задания и права прежнего сотрудника не должны остаться в памяти
+      resetProductionState();
       // Следующий пользователь на этом телефоне начинает с табеля
       setStartRoute('Timesheet');
       setIsLoggedIn(false);
@@ -175,6 +180,8 @@ export default function App() {
                       <Stack.Screen name="ChatInfo" component={ChatInfoScreen} />
                       <Stack.Screen name="ChatMedia" component={ChatMediaScreen} />
                       <Stack.Screen name="ChatArchive" component={ChatArchiveScreen} />
+                      <Stack.Screen name="Task" component={TaskScreen} />
+                      <Stack.Screen name="TaskForm" component={TaskFormScreen} />
                     </Stack.Navigator>
                   </NavigationContainer>
                 ) : (

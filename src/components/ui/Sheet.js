@@ -16,11 +16,12 @@ import { STATUS_BAR_HIDDEN } from '../../utils/statusBar';
 
 /**
  * Нижняя шторка со списком: заголовок, крестик, тап по затемнению закрывает.
+ * onDismiss — шторка закрылась (iOS): следующее окно открывать после него (см. useAfterModalClose).
  * keyboard — внутри есть поле ввода: шторка поднимается над клавиатурой. На обеих платформах —
  * по событиям клавиатуры: на Android от края до края (edge-to-edge, Android 15+) окно Modal
  * под клавиатуру не сжимается, и шторка оказывалась под ней целиком.
  */
-export const Sheet = ({ visible, onClose, title, children, keyboard = false }) => {
+export const Sheet = ({ visible, onClose, onDismiss, title, children, keyboard = false }) => {
   const theme = useTheme();
   const s = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
@@ -31,6 +32,7 @@ export const Sheet = ({ visible, onClose, title, children, keyboard = false }) =
       transparent
       animationType="slide"
       onRequestClose={onClose}
+      onDismiss={onDismiss}
       statusBarTranslucent
     >
       <StatusBar hidden={STATUS_BAR_HIDDEN} />

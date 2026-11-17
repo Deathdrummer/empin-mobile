@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { createNativeBottomTabNavigator } from '@bottom-tabs/react-navigation';
 import { useTheme } from '../theme';
 import { useTotalUnread } from '../services/messengerStore';
-import TimesheetScreen from '../screens/TimesheetScreen';
+import TasksScreen from '../screens/Tasks';
 import { ChatsScreen, CallsScreen } from '../screens/MessengerScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
@@ -75,13 +75,13 @@ export const MainTabsNavigator = ({ initialRouteName = 'Timesheet', onLogout }) 
       <Tab.Screen
         name="Timesheet"
         options={{
-          title: 'Табель',
-          tabBarLabel: 'Табель',
+          // Календарь заданий (ТЗ, п. 6.4); «Табель» в ТЗ — это ТУРВ, отдельный экран
+          title: 'Задания',
+          tabBarLabel: 'Задания',
           tabBarIcon: iconFor('timesheet'),
         }}
-      >
-        {() => <TimesheetScreen onLogout={onLogout} />}
-      </Tab.Screen>
+        component={TasksScreen}
+      />
 
       <Tab.Screen
         name="Chats"

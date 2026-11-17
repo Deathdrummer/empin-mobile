@@ -316,7 +316,7 @@ export default function ProfileScreen({ onLogout }) {
               icon="chatbubbles"
               iconColor="#1F7FA8"
               title="При открытии показывать чаты"
-              subtitle="Иначе приложение открывается на табеле"
+              subtitle="Иначе приложение открывается на заданиях"
               onPress={openChats === null ? undefined : () => toggleOpenChats(!openChats)}
               last
               accessory={(
