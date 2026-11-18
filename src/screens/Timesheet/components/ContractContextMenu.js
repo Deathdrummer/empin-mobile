@@ -3,80 +3,24 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme, useThemedStyles } from '../../../theme';
 
-export const ContractContextMenu = ({ position, isExpanded, onDelete, onCopyNumber, onCopyTitle, onCopyTitul, onCopyAllData }) => {
+/**
+ * Меню долгого нажатия на объекте плана-графика: копирование данных договора и действия с заданием.
+ * items: [{ key, label, icon, onPress, danger }] — в меню только то, на что у сотрудника есть право (п. 4.4).
+ */
+export const ContractContextMenu = ({ position, items }) => {
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
   return (
     <View style={[styles.container, { top: position.top }]}>
-      {!isExpanded ? (
-        // Меню для свернутого договора
-        <>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onCopyAllData}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="content-copy" size={20} color={theme.textSecondary} />
-            <Text style={styles.menuItemText}>Скопировать данные договора</Text>
+      {items.map((item, index) => (
+        <React.Fragment key={item.key}>
+          {index > 0 ? <View style={styles.separator} /> : null}
+          <TouchableOpacity style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
+            <MaterialCommunityIcons name={item.icon} size={20} color={item.danger ? theme.danger : theme.textSecondary} />
+            <Text style={[styles.menuItemText, item.danger && styles.dangerText]}>{item.label}</Text>
           </TouchableOpacity>
-
-          <View style={styles.separator} />
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onDelete}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="delete-outline" size={20} color={theme.danger} />
-            <Text style={[styles.menuItemText, styles.dangerText]}>Удалить</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        // Меню для развернутого договора
-        <>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onCopyNumber}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="content-copy" size={20} color={theme.textSecondary} />
-            <Text style={styles.menuItemText}>Скопировать номер объекта</Text>
-          </TouchableOpacity>
-
-          <View style={styles.separator} />
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onCopyTitle}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="content-copy" size={20} color={theme.textSecondary} />
-            <Text style={styles.menuItemText}>Скопировать название объекта</Text>
-          </TouchableOpacity>
-
-          <View style={styles.separator} />
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onCopyTitul}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="content-copy" size={20} color={theme.textSecondary} />
-            <Text style={styles.menuItemText}>Скопировать титул</Text>
-          </TouchableOpacity>
-
-          <View style={styles.separator} />
-
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onDelete}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="delete-outline" size={20} color={theme.danger} />
-            <Text style={[styles.menuItemText, styles.dangerText]}>Удалить</Text>
-          </TouchableOpacity>
-        </>
-      )}
+        </React.Fragment>
+      ))}
     </View>
   );
 };

@@ -38,6 +38,45 @@ const appendMediaExtras = (formData, mediaArray) => {
   });
 };
 
+const MIME_TYPES = {
+  // Изображения
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp',
+  // Видео
+  mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', mkv: 'video/x-matroska',
+  // Документы
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Архивы
+  zip: 'application/zip', rar: 'application/x-rar-compressed', '7z': 'application/x-7z-compressed',
+  // Текст
+  txt: 'text/plain', csv: 'text/csv',
+  // Аудио
+  mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', aac: 'audio/aac', flac: 'audio/flac', m4a: 'audio/x-m4a',
+};
+
+/**
+ * Комментарий план-графика с вложениями: поля + media[] + сведения о вложениях (волна, длительность, кадр видео).
+ * Общая для старого API табеля и переписки задания (/production/tasks/{id}/comments).
+ */
+export const commentFormData = (fields, mediaArray) => {
+  const formData = new FormData();
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) formData.append(key, value);
+  });
+  mediaArray.forEach((media) => {
+    const fileName = media.name || media.fileName || media.uri.split('/').pop();
+    const mimeType = media.mimeType || MIME_TYPES[fileName.split('.').pop().toLowerCase()] || 'application/octet-stream';
+    formData.append('media[]', { uri: media.uri, name: fileName, type: mimeType });
+  });
+  appendMediaExtras(formData, mediaArray);
+  return formData;
+};
+
 // Создаем экземпляр axios
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -253,74 +292,7 @@ export const timesheetAPI = {
   addComment: async (timesheetContractId, message, replyToId = null, mediaArray = []) => {
     // Если есть медиа, используем FormData
     if (mediaArray && mediaArray.length > 0) {
-      const formData = new FormData();
-      formData.append('timesheet_contract_id', timesheetContractId);
-      formData.append('message', message);
-      if (replyToId) {
-        formData.append('reply_to_id', replyToId);
-      }
-
-      // Добавляем все медиа файлы в FormData
-      mediaArray.forEach((media, index) => {
-
-        // Извлекаем имя файла и расширение из URI или name
-        const fileName = media.name || media.fileName || media.uri.split('/').pop();
-
-        // Используем mimeType из media, если есть, иначе определяем по расширению
-        let mimeType = media.mimeType;
-
-        if (!mimeType) {
-          const extension = fileName.split('.').pop().toLowerCase();
-          const mimeTypes = {
-            // Изображения
-            jpg: 'image/jpeg',
-            jpeg: 'image/jpeg',
-            png: 'image/png',
-            gif: 'image/gif',
-            bmp: 'image/bmp',
-            webp: 'image/webp',
-            // Видео
-            mp4: 'video/mp4',
-            mov: 'video/quicktime',
-            avi: 'video/x-msvideo',
-            mkv: 'video/x-matroska',
-            // Документы
-            pdf: 'application/pdf',
-            doc: 'application/msword',
-            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            xls: 'application/vnd.ms-excel',
-            xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ppt: 'application/vnd.ms-powerpoint',
-            pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            // Архивы
-            zip: 'application/zip',
-            rar: 'application/x-rar-compressed',
-            '7z': 'application/x-7z-compressed',
-            // Текст
-            txt: 'text/plain',
-            csv: 'text/csv',
-            // Аудио
-            mp3: 'audio/mpeg',
-            wav: 'audio/wav',
-            ogg: 'audio/ogg',
-            aac: 'audio/aac',
-            flac: 'audio/flac',
-            m4a: 'audio/x-m4a',
-          };
-          mimeType = mimeTypes[extension] || 'application/octet-stream';
-        }
-
-        const mediaFile = {
-          uri: media.uri,
-          name: fileName,
-          type: mimeType,
-        };
-
-        // Используем media[] для отправки массива
-        formData.append('media[]', mediaFile);
-      });
-      appendMediaExtras(formData, mediaArray);
-
+      const formData = commentFormData({ timesheet_contract_id: timesheetContractId, message, reply_to_id: replyToId }, mediaArray);
       const response = await api.post('/timesheet/comment', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',

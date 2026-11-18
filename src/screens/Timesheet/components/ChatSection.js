@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SERVER_URL } from '../../../services/api';
+import { resolveMediaUri } from '../../../utils/mediaUri';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,7 +18,6 @@ import { allowHapticsDuringRecording } from '../../../services/iosVoip';
 import { buildWaveform, levelFromDb } from '../../../utils/waveform';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useActionSheet } from '@expo/react-native-action-sheet';
-import { Can } from '../../../components/Can';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { formatShortName } from '../../../utils/formatName';
 import { EmojiPicker } from './EmojiPicker';
@@ -44,6 +43,15 @@ const RECORDING_OPTIONS = { ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled:
 const SCREEN_PADDING = 20; // Отступ от края экрана
 const EMOJI_OFFSET = 60; // EmojiPicker находится на 60px выше комментария
 const MENU_OFFSET = 10; // CommentContextMenu находится на 10px ниже комментария
+
+// «изм. 14:05 · » — по полю правки edited_at (API план-графика); старый сервер — по времени изменения записи
+const editedLabel = (comment) => {
+  if (comment.deleted_at) return '';
+  if (comment.edited_at !== undefined) {
+    return comment.edited_at ? `изм. ${formatEditTime(comment.created_at, comment.edited_at)} · ` : '';
+  }
+  return isCommentEdited(comment.created_at, comment.updated_at) ? `изм. ${formatEditTime(comment.created_at, comment.updated_at)} · ` : '';
+};
 
 // Функция проверки, был ли комментарий отредактирован
 const isCommentEdited = (createdAt, updatedAt) => {
@@ -159,6 +167,11 @@ export const ChatSection = ({
   onReplyComment,
   onToggleReaction,
   onCancelReply,
+  // Переписка задания: писать может каждый, кто видит задание (П-ЗД-23). Не задано — по старому праву табеля
+  canWrite,
+  // Сообщения, ждущие связи или не принятые сервером (ИС-ЗД-16): повторить или убрать
+  onRetryPending,
+  onDiscardPending,
 }) => {
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -174,6 +187,13 @@ export const ChatSection = ({
   const [recordingDuration, setRecordingDuration] = React.useState(0);
   const { can } = usePermissions();
   const { showActionSheetWithOptions } = useActionSheet();
+  const writeAllowed = canWrite ?? can('mobile-app-can-create-comment:site');
+  // Менять и удалять — по признаку сервера can_edit (своё, не удалено, срок не вышел); старый сервер его не присылает
+  const canEditComment = (comment) => {
+    if (!comment || comment._status || comment.deleted_at) return false;
+    if (comment.can_edit !== undefined) return !!comment.can_edit;
+    return !!comment.self && (canWrite !== undefined || can('mobile-app-can-edit-comment:site'));
+  };
   const inputRef = React.useRef(null);
   // Замер громкости — «волна» голосового (видна в чате объекта, как в мессенджере)
   const audioRecorder = useAudioRecorder(RECORDING_OPTIONS);
@@ -459,7 +479,8 @@ export const ChatSection = ({
       setLastTap(null); // Сброс чтобы следующий клик был первым
 
       // Проверяем права на редактирование
-      if (!can('mobile-app-can-edit-comment:site')) {
+      if (!canEditComment(comment)) {
+        if (!comment.self || comment.deleted_at || comment._status) return;
         Toast.show({
           type: 'error',
           text1: 'Нет прав',
@@ -830,7 +851,7 @@ export const ChatSection = ({
                   comment.media && comment.media.length > 0 && styles.chatMessageWide,
                 ]}
                 onPress={() => handleDoubleTap(comment)}
-                onLongPress={(event) => handleCommentLongPress(comment, event)}
+                onLongPress={(event) => (comment._status || comment.deleted_at ? null : handleCommentLongPress(comment, event))}
                 activeOpacity={0.7}
               >
                 {!comment.self && (
@@ -844,8 +865,9 @@ export const ChatSection = ({
 
                   const hasText = parentComment.message && parentComment.message.trim();
                   const hasMedia = parentComment.media && parentComment.media.length > 0;
+                  const parentDeleted = !!parentComment.deleted_at;
 
-                  if (!hasText && !hasMedia) return null;
+                  if (!hasText && !hasMedia && !parentDeleted) return null;
 
                   return (
                     <View style={[
@@ -856,12 +878,15 @@ export const ChatSection = ({
                         {formatShortName(parentComment.from)}
                       </Text>
                       <Text style={[styles.replyQuoteText, comment.self && styles.replyQuoteTextSelf]} numberOfLines={1}>
-                        {hasText ? plainText(parentComment.message) : 'Вложение'}
+                        {parentDeleted ? 'Сообщение удалено' : hasText ? plainText(parentComment.message) : 'Вложение'}
                       </Text>
                     </View>
                   );
                 })()}
-                {comment.message && comment.message.trim() && (
+                {comment.deleted_at ? (
+                  <Text style={[styles.chatText, styles.chatDeleted, comment.self && styles.chatTextSelf]}>Сообщение удалено</Text>
+                ) : null}
+                {!comment.deleted_at && comment.message && comment.message.trim() && (
                   // Ссылки, телефоны и форматирование — как в чатах
                   <RichText
                     text={comment.message}
@@ -870,9 +895,9 @@ export const ChatSection = ({
                     codeBackground={theme.quoteBackground}
                   />
                 )}
-                {comment.media && comment.media.length > 0 && (() => {
+                {!comment.deleted_at && comment.media && comment.media.length > 0 && (() => {
                   const mappedMedia = comment.media.map(m => ({
-                    uri: `${SERVER_URL}${m.path}`,
+                    uri: resolveMediaUri(m.path),
                     path: m.path,
                     name: m.name,
                     mimeType: m.mime_type,
@@ -936,17 +961,30 @@ export const ChatSection = ({
                     </View>
                   )}
                   <Text style={[styles.chatMeta, comment.self && styles.chatMetaSelf]}>
-                    {isCommentEdited(comment.created_at, comment.updated_at)
-                      ? `изм. ${formatEditTime(comment.created_at, comment.updated_at)} · `
-                      : ''}
+                    {comment._status === 'pending' ? 'ждёт связи · ' : ''}
+                    {editedLabel(comment)}
                     {formatDateTime(comment.created_at)}
                   </Text>
                 </View>
+                {comment._status === 'failed' ? (
+                  <View style={styles.failedRow}>
+                    <Text style={styles.failedText}>{`Не отправлено: ${comment._error || 'сервер не принял сообщение'}`}</Text>
+                    <View style={styles.failedActions}>
+                      <TouchableOpacity onPress={() => onRetryPending?.(comment)} hitSlop={6}>
+                        <Text style={styles.failedAction}>Повторить</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => onDiscardPending?.(comment)} hitSlop={6}>
+                        <Text style={[styles.failedAction, { color: theme.danger }]}>Убрать</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : null}
               </TouchableOpacity>
             </View>
         ))}
 
-      <Can permission="mobile-app-can-create-comment:site">
+      {writeAllowed ? (
+      <>
         {replyingToComment && (
           <View style={styles.replyBanner}>
             <Ionicons name="arrow-undo" size={18} color={theme.accent} />
@@ -1097,7 +1135,8 @@ export const ChatSection = ({
             </TouchableOpacity>
           )}
         </View>
-      </Can>
+      </>
+      ) : null}
 
       {/* Модальное окно с меню и эмоджи */}
       <Modal
@@ -1120,7 +1159,7 @@ export const ChatSection = ({
                   onEdit={handleMenuEdit}
                   onDelete={handleMenuDelete}
                   onCopy={handleMenuCopy}
-                  isSelf={selectedComment?.self}
+                  isSelf={canEditComment(selectedComment)}
                 />
               </>
             )}
@@ -1196,6 +1235,27 @@ const makeStyles = (theme) => StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 6,
     marginTop: 3,
+  },
+  chatDeleted: {
+    fontStyle: 'italic',
+    color: theme.textMuted,
+  },
+  failedRow: {
+    marginTop: 6,
+    gap: 4,
+  },
+  failedText: {
+    fontSize: 12,
+    color: theme.danger,
+  },
+  failedActions: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  failedAction: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.accentText,
   },
   chatMeta: {
     marginLeft: 'auto',

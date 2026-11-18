@@ -1,100 +1,57 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, useThemedStyles } from '../../../theme';
-import { Can } from '../../../components/Can';
 import { ContractCard } from './ContractCard';
-import { formatShortName } from '../../../utils/formatName';
 import { SwipeBlocker } from '../../../components/SwipeBlocker';
+import { shortName } from '../../../utils/tasks';
 
-export const TeamCard = ({
-  team,
-  expandedContract,
-  commentText,
-  addingComment,
-  replyingToComment,
-  deletingTeam,
-  deletingContract,
-  deletingComment,
-  onDeleteTeam,
-  onAddContract,
-  onDeleteContract,
-  onDeleteContractDirect,
-  onToggleChat,
-  onCommentChange,
-  onAddComment,
-  onDeleteComment,
-  onEditComment,
-  onReplyComment,
-  onToggleReaction,
-  onCancelReply,
-}) => {
+/**
+ * Исполнитель на день и его задания — «карточки объектов для бригад» (инт., блок 7): бригада или сотрудник,
+ * под ним объекты. «+ Объект» — новое задание этому исполнителю (право «Создавать задания», не прошедший день).
+ */
+export const TeamCard = ({ group, canAdd, onAddObject, chat, deletingTask, onOpenTask, onEditTask, onCopyTask, onDeleteTask }) => {
   const theme = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const masterName = formatShortName(team.master);
-  const isDeletingThisTeam = deletingTeam === team.id;
+  const { executor, tasks } = group;
+  const isBrigade = executor?.type === 'brigade';
+  const name = isBrigade ? executor.name || 'Бригада' : shortName(executor?.name) || 'Сотрудник';
 
   return (
     <View style={styles.teamWrapper}>
-      {isDeletingThisTeam && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={theme.accent} />
-        </View>
-      )}
-      <TouchableOpacity
-        style={styles.team}
-        activeOpacity={0.7}
-        onLongPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-          onDeleteTeam(team.id, masterName);
-        }}
-      >
-        <View style={styles.teamHeader}>
-        <Ionicons name="people" size={18} color={theme.textSecondary} />
-        <Text style={styles.masterName} numberOfLines={2}>
-          {masterName}
-        </Text>
-        <Can permission="mobile-app-can-create-contract:site">
+      <View style={styles.teamHeader}>
+        <Ionicons name={isBrigade ? 'people' : 'person'} size={18} color={theme.textSecondary} />
+        <Text style={styles.masterName} numberOfLines={2}>{name}</Text>
+        {canAdd ? (
           <SwipeBlocker>
             <TouchableOpacity
               style={styles.addButton}
-              onPress={() => onAddContract(team.id)}
+              onPress={() => onAddObject(executor)}
               activeOpacity={0.7}
-              accessibilityLabel={`Добавить объект: ${masterName}`}
+              accessibilityLabel={`Добавить объект: ${name}`}
             >
               <Ionicons name="add" size={18} color={theme.accentText} />
               <Text style={styles.addButtonText}>Объект</Text>
             </TouchableOpacity>
           </SwipeBlocker>
-        </Can>
+        ) : null}
       </View>
+      {isBrigade && executor.foreman?.name ? (
+        <Text style={styles.foreman}>{`Бригадир: ${shortName(executor.foreman.name)}`}</Text>
+      ) : null}
 
-      {team.contracts && team.contracts.length > 0 && (
-        team.contracts.map((contract) => (
-          <ContractCard
-            key={contract.timesheet_contract_id}
-            contract={contract}
-            expandedContract={expandedContract}
-            commentText={commentText}
-            addingComment={addingComment}
-            replyingToComment={replyingToComment}
-            deletingContract={deletingContract}
-            deletingComment={deletingComment}
-            onToggleChat={() => onToggleChat(contract.timesheet_contract_id)}
-            onDeleteContract={onDeleteContract}
-            onDeleteContractDirect={onDeleteContractDirect}
-            onCommentChange={onCommentChange}
-            onAddComment={onAddComment}
-            onDeleteComment={onDeleteComment}
-            onEditComment={onEditComment}
-            onReplyComment={onReplyComment}
-            onToggleReaction={onToggleReaction}
-            onCancelReply={onCancelReply}
-          />
-        ))
-      )}
-    </TouchableOpacity>
+      {tasks.map((task) => (
+        <ContractCard
+          key={task.id}
+          task={task}
+          chat={chat}
+          deleting={deletingTask === task.id}
+          onOpenTask={onOpenTask}
+          onEditTask={onEditTask}
+          onCopyTask={onCopyTask}
+          onDeleteTask={onDeleteTask}
+        />
+      ))}
     </View>
   );
 };
@@ -103,20 +60,6 @@ const makeStyles = (theme) => StyleSheet.create({
   teamWrapper: {
     position: 'relative',
     marginBottom: 22,
-  },
-  team: {
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: theme.veil,
-    borderRadius: 14,
-    zIndex: 10,
   },
   teamHeader: {
     flexDirection: 'row',
@@ -130,6 +73,12 @@ const makeStyles = (theme) => StyleSheet.create({
     fontWeight: '700',
     color: theme.text,
     flex: 1,
+  },
+  foreman: {
+    fontSize: 13,
+    color: theme.textSecondary,
+    paddingHorizontal: 30,
+    marginTop: 1,
   },
   addButton: {
     flexDirection: 'row',

@@ -18,6 +18,7 @@ import ChatArchiveScreen from './src/screens/Messenger/ChatArchiveScreen';
 import TaskScreen from './src/screens/Tasks/TaskScreen';
 import TaskFormScreen from './src/screens/Tasks/TaskFormScreen';
 import { PRODUCTION_CACHE_KEY, resetProductionState } from './src/services/production';
+import { clearTaskChatOutbox } from './src/services/taskChat';
 import { clearDrafts, DRAFTS_STORAGE_KEY } from './src/services/drafts';
 import { clearPendingReplies } from './src/services/messageActions';
 import { authAPI, setUnauthorizedCallback } from './src/services/api';
@@ -86,6 +87,8 @@ export default function App() {
         AsyncStorage.multiRemove(['token', 'user', 'permissions', '@pendingCall', DRAFTS_STORAGE_KEY, START_SCREEN_STORAGE_KEY, PRODUCTION_CACHE_KEY]),
         // Неотправленные ответы из уведомлений не должны уйти от имени следующего пользователя
         clearPendingReplies(),
+        // Неотправленная переписка заданий не должна уйти от имени следующего сотрудника
+        clearTaskChatOutbox(),
       ]);
       clearDrafts();
       // Задания и права прежнего сотрудника не должны остаться в памяти

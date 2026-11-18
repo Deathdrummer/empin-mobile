@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePreventRemove } from '@react-navigation/native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -12,17 +12,12 @@ import { emitTasksChanged, productionAPI, useToday } from '../../services/produc
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
   addDays, buildTaskPayload, dayRange, driverForVehicle, executorSubtitle, executorTitle, formatDay, formatDayShort, formatQuantity,
-  formatReadiness, formFromTask, isDriverAssigned, isOfflineError, parseDateKey, relativeDayLabel, shortName, toDateKey,
+  formFromTask, isDriverAssigned, isOfflineError, parseDateKey, relativeDayLabel, shortName, toDateKey,
   unseenWarnings, validateForm, vehicleTitle,
 } from '../../utils/tasks';
 import { PickerSheet } from './PickerSheet';
+import { ExecutorPickerSheet, ForeignObjectDialog, ObjectPickerSheet, objectSubtitle } from './pickers';
 import { useAfterModalClose } from '../../hooks/useAfterModalClose';
-
-const objectSubtitle = (object) => [
-  object.locality,
-  object.responsible?.name ? `отв. ${shortName(object.responsible.name)}` : 'без ответственного',
-  formatReadiness(object.readiness),
-].filter(Boolean).join(' · ');
 
 /**
  * Создание и изменение задания (п. 6.4). Только при связи (п. 9.1): без связи сервер не ответит, форма останется
@@ -45,14 +40,8 @@ export default function TaskFormScreen({ navigation, route }) {
   const [acknowledged, setAcknowledged] = useState([]);
   const [error, setError] = useState(null);
 
-  const [objects, setObjects] = useState({ items: null, loading: false });
-  const [objectQuery, setObjectQuery] = useState('');
-  const [brigadeFilter, setBrigadeFilter] = useState(null);
-  const [executors, setExecutors] = useState(null);
-  const [executorType, setExecutorType] = useState(original?.executor?.type || 'brigade');
   const [fleet, setFleet] = useState(null);
   const [plan, setPlan] = useState(null);
-  const searchTimer = useRef(null);
   // Следующее окно — после закрытия шторки: на iOS иначе оно не появится
   const { closeThen, onDismiss } = useAfterModalClose();
 
@@ -67,32 +56,6 @@ export default function TaskFormScreen({ navigation, route }) {
   const failLoad = (e) => setError(isOfflineError(e) ? 'Нет связи: ставить и изменять задания можно только при связи' : getUserFacingError(e, 'Не удалось загрузить данные'));
 
   // ---- Справочники ERP: объекты, исполнители, техника, план объекта ----
-
-  const loadObjects = async (query, brigade) => {
-    setObjects((current) => ({ ...current, loading: true }));
-    try {
-      const params = {};
-      if (query.trim()) params.q = query.trim();
-      if (brigade) params.brigade_id = brigade.id;
-      const data = await productionAPI.objects(params);
-      setObjects({ items: data.items || [], loading: false });
-    } catch (e) {
-      setObjects({ items: [], loading: false });
-      failLoad(e);
-    }
-  };
-
-  const ensureExecutors = async () => {
-    if (executors) return executors;
-    try {
-      const data = await productionAPI.executors();
-      setExecutors(data);
-      return data;
-    } catch (e) {
-      failLoad(e);
-      return null;
-    }
-  };
 
   const ensureFleet = async () => {
     if (fleet) return fleet;
@@ -113,29 +76,8 @@ export default function TaskFormScreen({ navigation, route }) {
     productionAPI.plan(objectId).then(setPlan).catch(() => setPlan({ items: [], failed: true }));
   }, [objectId]);
 
-  useEffect(() => () => clearTimeout(searchTimer.current), []);
-
-  const openObjects = () => {
-    setPicker('object');
-    setObjectQuery('');
-    loadObjects('', brigadeFilter);
-    ensureExecutors();
-  };
-
-  const searchObjects = (text) => {
-    setObjectQuery(text);
-    clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => loadObjects(text, brigadeFilter), 300);
-  };
-
-  const filterByBrigade = (brigade) => {
-    setBrigadeFilter(brigade);
-    loadObjects(objectQuery, brigade);
-  };
-
   // Чужой объект или без ответственного — предупреждение с возможностью продолжить (П-ЗД-08, ИС-ЗД-03)
-  const pickObject = (item) => {
-    const { object } = item;
+  const pickObject = (object) => {
     closeThen(() => setPicker(null), () => (object.own ? chooseObject(object) : setForeignObject(object)));
   };
 
@@ -150,14 +92,9 @@ export default function TaskFormScreen({ navigation, route }) {
     }));
   };
 
-  const openExecutors = async () => {
-    setPicker('executor');
-    await ensureExecutors();
-  };
-
-  const pickExecutor = (item) => {
+  const pickExecutor = (executor) => {
     setPicker(null);
-    set({ executor: item.executor });
+    set({ executor });
   };
 
   const openVehicles = async () => {
@@ -245,61 +182,6 @@ export default function TaskFormScreen({ navigation, route }) {
   };
 
   // ---- Списки для шторок ----
-
-  const objectSections = useMemo(() => {
-    const items = objects.items || [];
-    const row = (object) => ({
-      key: object.id,
-      object,
-      meta: object.number,
-      title: object.title || 'Объект',
-      subtitle: objectSubtitle(object),
-      selected: Number(form.object?.id) === Number(object.id),
-    });
-    if (objectQuery.trim()) return [{ key: 'found', title: null, data: items.map(row) }];
-    return [
-      { key: 'recent', title: 'Недавние', data: items.filter((o) => o.group === 'recent').map(row) },
-      { key: 'mine', title: 'Мои объекты', data: items.filter((o) => o.group === 'mine').map(row) },
-      { key: 'other', title: brigadeFilter ? 'Объекты бригады' : null, data: items.filter((o) => !o.group).map(row) },
-    ];
-  }, [objects.items, objectQuery, brigadeFilter, form.object]);
-
-  const executorSections = useMemo(() => {
-    if (!executors) return [];
-    if (executorType === 'brigade') {
-      return [{
-        key: 'brigades',
-        title: null,
-        data: (executors.brigades || []).map((brigade) => {
-          const executor = { type: 'brigade', brigade_id: brigade.id, name: brigade.name, foreman: brigade.foreman };
-          return {
-            key: `b${brigade.id}`,
-            executor,
-            title: brigade.name,
-            subtitle: [executorSubtitle(executor), (() => {
-              // Бригадир уже назван выше — в составе только остальные
-              const others = (brigade.members || []).filter((m) => Number(m.id) !== Number(brigade.foreman?.id));
-              return others.length ? `состав: ${others.map((m) => shortName(m.name)).join(', ')}` : 'других членов нет';
-            })()].join(' · '),
-            search: `${brigade.name} ${brigade.foreman?.name || ''} ${(brigade.members || []).map((m) => m.name).join(' ')}`,
-            selected: form.executor?.type === 'brigade' && Number(form.executor.brigade_id) === Number(brigade.id),
-          };
-        }),
-      }];
-    }
-    return [{
-      key: 'staff',
-      title: null,
-      data: (executors.staff || []).map((person) => ({
-        key: `s${person.id}`,
-        executor: { type: 'staff', staff_id: person.id, name: person.name },
-        title: person.name,
-        subtitle: person.position,
-        search: person.name,
-        selected: form.executor?.type === 'staff' && Number(form.executor.staff_id) === Number(person.id),
-      })),
-    }];
-  }, [executors, executorType, form.executor]);
 
   const vehicleSections = useMemo(() => {
     const drivers = fleet?.drivers || [];
@@ -390,7 +272,7 @@ export default function TaskFormScreen({ navigation, route }) {
             value={form.object ? `${form.object.number ? `${form.object.number} · ` : ''}${form.object.title || ''}` : null}
             hint={form.object ? objectSubtitle(form.object) : null}
             placeholder="Выберите объект"
-            onPress={() => { setError(null); openObjects(); }}
+            onPress={() => { setError(null); setPicker('object'); }}
           />
           <FieldRow
             s={s}
@@ -413,7 +295,7 @@ export default function TaskFormScreen({ navigation, route }) {
             value={form.executor ? executorTitle(form.executor) : null}
             hint={form.executor ? executorSubtitle(form.executor) : null}
             placeholder="Бригада или сотрудник"
-            onPress={() => { setError(null); openExecutors(); }}
+            onPress={() => { setError(null); setPicker('executor'); }}
           />
         </View>
 
@@ -514,53 +396,20 @@ export default function TaskFormScreen({ navigation, route }) {
         <Text style={s.sectionHint}>Одну машину и водителя можно указать в нескольких заданиях на одну дату.</Text>
       </KeyboardAwareScrollView>
 
-      <PickerSheet
+      <ObjectPickerSheet
         visible={picker === 'object'}
-        title="Объект"
-        sections={objectSections}
-        loading={objects.loading && !objects.items?.length}
-        searchPlaceholder="Номер, название, титул, населённый пункт"
-        emptyText={objectQuery.trim() ? 'Не найдено. Объекты в архиве не ищутся' : 'Подсказок нет — найдите объект поиском'}
-        onSearch={searchObjects}
-        onSelect={pickObject}
+        selectedId={form.object?.id}
+        onPick={pickObject}
         onClose={() => setPicker(null)}
         onDismiss={onDismiss}
-        header={executors?.brigades?.length ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipsScroll} contentContainerStyle={s.chips} keyboardShouldPersistTaps="handled">
-            {[null, ...executors.brigades].map((brigade) => {
-              const active = Number(brigadeFilter?.id ?? -1) === Number(brigade?.id ?? -1);
-              return (
-                <TouchableOpacity key={brigade?.id ?? 'all'} onPress={() => filterByBrigade(brigade)} style={[s.chip, active && { backgroundColor: theme.text }]}>
-                  <Text style={[s.chipText, active && { color: theme.background, fontWeight: '600' }]}>{brigade ? brigade.name : 'Все бригады'}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        ) : null}
       />
 
-      <PickerSheet
+      <ExecutorPickerSheet
         visible={picker === 'executor'}
-        title="Исполнитель"
-        sections={executorSections}
-        loading={!executors}
-        searchPlaceholder={executorType === 'brigade' ? 'Бригада, бригадир или член бригады' : 'Фамилия или имя'}
-        emptyText={executorType === 'brigade' ? 'Бригад нет' : 'Нет сотрудников с учётной записью'}
-        onSelect={pickExecutor}
+        selected={form.executor}
+        onPick={pickExecutor}
         onClose={() => setPicker(null)}
         onDismiss={onDismiss}
-        header={(
-          <View style={s.segment}>
-            {[{ key: 'brigade', label: 'Бригада' }, { key: 'staff', label: 'Сотрудник' }].map((item) => {
-              const active = executorType === item.key;
-              return (
-                <TouchableOpacity key={item.key} onPress={() => setExecutorType(item.key)} style={[s.segmentItem, active && s.segmentActive]}>
-                  <Text style={[s.segmentText, active && s.segmentTextActive]}>{item.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
       />
 
       <PickerSheet
@@ -623,21 +472,7 @@ export default function TaskFormScreen({ navigation, route }) {
         )}
       />
 
-      <Dialog
-        visible={!!foreignObject}
-        onClose={() => setForeignObject(null)}
-        icon={<Ionicons name="warning" size={34} color={theme.accent} />}
-        title="Чужой объект"
-        message={foreignObject?.responsible?.name
-          ? `Ответственный за объект: ${shortName(foreignObject.responsible.name)}\nЗадание будет вашим: об отчёте по нему уведомят вас, а не ответственного.`
-          : 'У объекта нет ответственного начальника участка.\nЗадание будет вашим.'}
-        buttons={(
-          <>
-            <DialogButton title="Отмена" onPress={() => setForeignObject(null)} />
-            <DialogButton title="Продолжить" variant="primary" onPress={() => chooseObject(foreignObject)} />
-          </>
-        )}
-      />
+      <ForeignObjectDialog object={foreignObject} onCancel={() => setForeignObject(null)} onContinue={chooseObject} />
     </SafeAreaView>
   );
 }
@@ -694,13 +529,4 @@ const styles = (theme) => StyleSheet.create({
     paddingVertical: 6,
   },
   unit: { minWidth: 24, fontSize: 14, color: theme.textSecondary },
-  chipsScroll: { flexGrow: 0, flexShrink: 0 },
-  chips: { gap: 8, paddingHorizontal: 16, paddingVertical: 8 },
-  chip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.inputBackground },
-  chipText: { fontSize: 14, color: theme.textSecondary, fontWeight: '500' },
-  segment: { flexDirection: 'row', marginHorizontal: 16, marginVertical: 8, padding: 3, borderRadius: 12, backgroundColor: theme.inputBackground },
-  segmentItem: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 10 },
-  segmentActive: { backgroundColor: theme.sheet, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
-  segmentText: { fontSize: 15, fontWeight: '500', color: theme.textSecondary },
-  segmentTextActive: { color: theme.text, fontWeight: '600' },
 });

@@ -84,6 +84,7 @@ const scheduleSave = () => {
     if (!cache) return;
     prune(cache.days, MAX_DAYS);
     prune(cache.tasks, MAX_TASKS);
+    prune(cache.chats || {}, MAX_TASKS);
     AsyncStorage.setItem(PRODUCTION_CACHE_KEY, JSON.stringify(cache)).catch(() => {});
   }, 500);
 };
@@ -109,6 +110,16 @@ export const saveDays = async (entries) => {
   const store = await loadCache();
   const savedAt = Date.now();
   Object.entries(entries).forEach(([key, items]) => { store.days[key] = { items, savedAt }; });
+  scheduleSave();
+};
+
+/** Переписка задания — для просмотра без связи (п. 9.1) */
+export const cachedChat = async (taskId) => ((await loadCache()).chats || {})[String(taskId)] || null;
+
+export const saveChat = async (taskId, items) => {
+  const store = await loadCache();
+  store.chats = store.chats || {};
+  store.chats[String(taskId)] = { items, savedAt: Date.now() };
   scheduleSave();
 };
 

@@ -155,6 +155,28 @@ export const formatReadiness = (readiness) => {
   return `${String(value).replace('.', ',')} %`;
 };
 
+/** Ключ исполнителя: бригада или сотрудник */
+export const executorKey = (executor) => (executor?.type === 'brigade' ? `b${executor.brigade_id}` : `s${executor?.staff_id}`);
+
+/**
+ * Задания дня по исполнителям — «карточки объектов для бригад», как в прежнем «Табеле»: порядок исполнителей —
+ * по первому заданию, задания внутри — в порядке сервера.
+ */
+export const groupByExecutor = (tasks) => {
+  const groups = [];
+  const byKey = new Map();
+  (tasks || []).forEach((task) => {
+    const key = executorKey(task.executor);
+    if (!byKey.has(key)) {
+      const group = { key, executor: task.executor, tasks: [] };
+      byKey.set(key, group);
+      groups.push(group);
+    }
+    byKey.get(key).tasks.push(task);
+  });
+  return groups;
+};
+
 // ---- История задания (журнал изменений, п. 6.6) ----
 
 const FIELD_LABELS = {
