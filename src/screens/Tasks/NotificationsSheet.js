@@ -5,10 +5,7 @@ import { Sheet } from '../../components/ui/Sheet';
 import { useTheme, useThemedStyles } from '../../theme';
 import { NoticeCard } from './NoticeCard';
 
-/**
- * Список уведомлений раздела (п. 6.4): те же плашки, что вверху экрана текущего дня, — все сразу, когда их много.
- * Каждое закрывается вручную.
- */
+/** Список уведомлений раздела (п. 6.4): те же плашки, что вверху экрана текущего дня, — все сразу, когда их много */
 export const NotificationsSheet = ({ visible, items, loading, closingId, onClose, onCloseNotice, onOpenNotice }) => {
   const theme = useTheme();
   const s = useThemedStyles(makeStyles);

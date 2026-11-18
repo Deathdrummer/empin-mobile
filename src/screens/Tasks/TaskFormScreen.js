@@ -19,11 +19,7 @@ import { PickerSheet } from './PickerSheet';
 import { ExecutorPickerSheet, ForeignObjectDialog, ObjectPickerSheet, objectSubtitle } from './pickers';
 import { useAfterModalClose } from '../../hooks/useAfterModalClose';
 
-/**
- * Создание и изменение задания (п. 6.4). Только при связи (п. 9.1): без связи сервер не ответит, форма останется
- * открытой с введённым. Объект, дата и исполнитель обязательны; содержание — текст и/или виды работ из плана
- * объекта; техника с водителем — по желанию. О чужом объекте и незакреплённом водителе — предупреждение.
- */
+/** Создание и изменение задания (п. 6.4) */
 export default function TaskFormScreen({ navigation, route }) {
   const { task: original = null, date: initialDate } = route.params || {};
   const theme = useTheme();

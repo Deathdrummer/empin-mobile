@@ -8,10 +8,7 @@ const ICONS = {
   task_executor_changed: 'swap-horizontal',
 };
 
-/**
- * Плашка-уведомление вверху экрана текущего дня (инт. 9.36: «в виде таблички, пока не закроют»; п. 9.3).
- * Висит, пока сотрудник сам её не закроет; закрытие — только его (другим получателям она остаётся).
- */
+/** Плашка-уведомление вверху экрана текущего дня (инт. 9.36: «в виде таблички, пока не закроют»; п. 9.3) */
 export const NoticeCard = ({ notice, closing, onClose, onPress }) => {
   const theme = useTheme();
   const s = useThemedStyles(makeStyles);

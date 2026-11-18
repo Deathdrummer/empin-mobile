@@ -7,8 +7,8 @@ import { SwipeBlocker } from '../../../components/SwipeBlocker';
 import { shortName } from '../../../utils/tasks';
 
 /**
- * Исполнитель на день и его задания — «карточки объектов для бригад» (инт., блок 7): бригада или сотрудник,
- * под ним объекты. «+ Объект» — новое задание этому исполнителю (право «Создавать задания», не прошедший день).
+ * Исполнитель на день и его задания — «карточки объектов для бригад» (инт., блок 7): бригада или сотрудник, под ним
+ * объекты
  */
 export const TeamCard = ({ group, canAdd, onAddObject, chat, deletingTask, onOpenTask, onEditTask, onCopyTask, onDeleteTask }) => {
   const theme = useTheme();

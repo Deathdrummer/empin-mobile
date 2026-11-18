@@ -1,7 +1,6 @@
 /**
- * Логика экранов заданий (ТЗ, раздел 6) без React: даты дня, права для кнопок, подписи плашек, история,
- * фильтры календаря и тело запроса формы. Окончательно права проверяет сервер (п. 4.4): здесь только решается,
- * какие кнопки показать.
+ * Логика экранов заданий (ТЗ, раздел 6) без React: даты дня, права для кнопок, подписи плашек, история, фильтры
+ * календаря и тело запроса формы
  */
 
 const MONTHS_GENITIVE = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
@@ -72,7 +71,7 @@ export const relativeDayLabel = (key, todayKey) => {
 
 /**
  * Сегодня по серверу (п. 9.2): последняя присланная сервером дата, сдвинутая на столько дней, сколько прошло по
- * телефону с её получения (приложение могло пережить полночь). Сервер ещё не отвечал — дата телефона.
+ * телефону с её получения (приложение могло пережить полночь)
  */
 export const currentToday = (serverDay, phoneToday) => {
   if (!serverDay?.today || !serverDay?.phoneDay) return phoneToday;
@@ -92,7 +91,7 @@ export const dayRange = (from, to) => {
 
 export const hasRight = (me, right) => Array.isArray(me?.rights) && me.rights.some((grant) => Number(grant.right) === right);
 
-/** «Добавить задание» и «Вставить»: право 1 и не прошедшая дата (П-ЗД-05). Объект и прочее проверит сервер */
+/** «Добавить задание» и «Вставить»: право 1 и не прошедшая дата (П-ЗД-05) */
 export const canCreateOn = (me, dateKey, todayKey) => hasRight(me, RIGHT.TASK_CREATE) && daysBetween(todayKey, dateKey) >= 0;
 
 /** Справочники формы задания открыты обладателю прав 1, 2 или 4 (п. 5.2) */
@@ -202,10 +201,7 @@ const fieldValue = (field, value, todayKey) => {
   }
 };
 
-/**
- * Запись истории для карточки: заголовок, кто и подробности «было → стало».
- * Формулировки без рода («Создание задания», «Изменение: …»), чтобы не угадывать пол сотрудника.
- */
+/** Запись истории для карточки: заголовок, кто и подробности «было → стало» */
 export const describeHistoryEntry = (entry, todayKey) => {
   const actor = entry?.actor?.name ? shortName(entry.actor.name) : 'Система';
   switch (entry?.action) {
@@ -310,7 +306,7 @@ const worksPayload = (works) => (works || []).map((work) => ({ work_type_id: wor
 
 const sameWorks = (a, b) => JSON.stringify(worksPayload(a)) === JSON.stringify(worksPayload(b));
 
-/** Что не так в форме — первым сообщением; null, если можно сохранять. Объект, дата и исполнитель обязательны (ИС-ЗД-01) */
+/** Что не так в форме — первым сообщением; null, если можно сохранять */
 export const validateForm = (form) => {
   if (!form.object) return 'Выберите объект';
   if (!form.date) return 'Выберите дату';
@@ -321,10 +317,7 @@ export const validateForm = (form) => {
   return null;
 };
 
-/**
- * Тело запроса: для нового задания — всё; для правки — только изменённые поля (сервер пишет их в журнал).
- * Техника и водитель отправляются вместе: машина без водителя допустима, водитель без машины — нет.
- */
+/** Тело запроса: для нового задания — всё; для правки — только изменённые поля (сервер пишет их в журнал) */
 export const buildTaskPayload = (form, original = null) => {
   const body = {};
   const executorBody = form.executor?.type === 'brigade'

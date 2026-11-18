@@ -59,10 +59,7 @@ const MIME_TYPES = {
   mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', aac: 'audio/aac', flac: 'audio/flac', m4a: 'audio/x-m4a',
 };
 
-/**
- * Комментарий план-графика с вложениями: поля + media[] + сведения о вложениях (волна, длительность, кадр видео).
- * Общая для старого API табеля и переписки задания (/production/tasks/{id}/comments).
- */
+/** Комментарий план-графика с вложениями: поля + media[] + сведения о вложениях (волна, длительность, кадр видео) */
 export const commentFormData = (fields, mediaArray) => {
   const formData = new FormData();
   Object.entries(fields).forEach(([key, value]) => {

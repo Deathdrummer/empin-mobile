@@ -4,12 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Sheet } from '../../components/ui/Sheet';
 import { useTheme, useThemedStyles } from '../../theme';
 
-/**
- * Шторка выбора из списка в стиле приложения (как «Добавить объект» в табеле): поиск, группы, отметка выбранного.
- * Поиск по умолчанию — по строке `search` у элемента; onSearch — поиск на сервере (выбор объекта).
- *
- * sections: [{ key, title, data: [{ key, title, subtitle, meta, selected, search }] }]
- */
+/** Шторка выбора из списка в стиле приложения (как «Добавить объект» в табеле): поиск, группы, отметка выбранного */
 export const PickerSheet = ({
   visible,
   title,

@@ -234,7 +234,7 @@ export const loadNotifications = async () => {
   }
 };
 
-/** Закрытие персональное: у других получателей уведомление остаётся. Нужна связь — иначе ошибка наверх */
+/** Закрытие персональное: у других получателей уведомление остаётся */
 export const closeNotification = async (id) => {
   await productionAPI.closeNotification(id);
   setNotices(notices.filter((item) => item.id !== id));
