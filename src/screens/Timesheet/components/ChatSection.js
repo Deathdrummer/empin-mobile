@@ -483,8 +483,9 @@ export const ChatSection = ({
         if (!comment.self || comment.deleted_at || comment._status) return;
         Toast.show({
           type: 'error',
-          text1: 'Нет прав',
-          text2: 'У вас нет прав для редактирования комментария',
+          text1: comment.can_edit === false ? 'Изменить нельзя' : 'Нет прав',
+          // can_edit = false у своего сообщения — вышел срок, который задаёт админ (API план-графика)
+          text2: comment.can_edit === false ? 'Срок, когда сообщение можно изменить, прошёл' : 'У вас нет прав для редактирования комментария',
           position: 'top',
           visibilityTime: 3000,
         });

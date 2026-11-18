@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import { cachedChat, saveChat } from '../../../services/production';
 import {
@@ -26,7 +27,15 @@ const pendingAsComment = (item) => ({
  * Мини-чат задания в карточке плана-графика (п. 6.4): одно раскрытое задание за раз, как в прежнем «Табеле».
  * Писать может каждый, кто видит задание (П-ЗД-23); без связи сообщения копятся и уходят сами (ИС-ЗД-16).
  */
-export const useTaskChat = (staffId) => {
+export const useTaskChat = (meStaffId) => {
+  // Сотрудник — из «кто я»; без связи при первом запуске «кто я» ещё нет — из сохранённой учётной записи
+  const [storedStaffId, setStoredStaffId] = useState(null);
+  useEffect(() => {
+    AsyncStorage.getItem('user')
+      .then((raw) => setStoredStaffId(raw ? JSON.parse(raw)?.staff_id ?? null : null))
+      .catch(() => {});
+  }, []);
+  const staffId = meStaffId ?? storedStaffId;
   const [expandedTask, setExpandedTask] = useState(null);
   const [chats, setChats] = useState({});
   const [commentText, setCommentText] = useState('');
@@ -67,8 +76,15 @@ export const useTaskChat = (staffId) => {
     load(taskId);
   }, [load]);
 
-  // Сообщение из очереди дошло до сервера — обновить переписку этого задания, если она открыта
-  useEffect(() => subscribeTaskMessageSent((taskId) => {
+  // Сообщение из очереди дошло до сервера — сразу в ленту (без мигания) и обновить переписку, если она открыта
+  useEffect(() => subscribeTaskMessageSent((taskId, saved) => {
+    if (saved?.id) {
+      setChats((prev) => {
+        const entry = prev[taskId];
+        if (!entry || entry.items.some((item) => item.id === saved.id)) return prev;
+        return { ...prev, [taskId]: { ...entry, items: [...entry.items, saved] } };
+      });
+    }
     if (Number(taskId) === Number(expandedRef.current)) load(taskId);
   }), [load]);
 
