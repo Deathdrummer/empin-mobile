@@ -126,7 +126,7 @@ export const ContractCard = ({ task, chat, onOpenTask, onEditTask, onCopyTask, o
           {isExpanded ? (
             <>
               {state?.offline ? (
-                <Text style={styles.chatNotice}>Нет связи — показана сохранённая переписка. Новые сообщения уйдут, когда связь появится.</Text>
+                <Text style={styles.chatNotice}>Нет связи — показана сохранённая переписка</Text>
               ) : null}
               {state?.gone ? (
                 <Text style={styles.chatNotice}>Доступа к заданию больше нет</Text>

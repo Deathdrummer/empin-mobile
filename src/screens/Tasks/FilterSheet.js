@@ -95,7 +95,7 @@ export const FilterSheet = ({ visible, filters, onApply, onClose }) => {
       title="Фильтр"
       sections={sections}
       loading={!data && !error}
-      emptyText={error || 'В видимых вам заданиях вариантов нет'}
+      emptyText={error || 'Вариантов нет'}
       header={header}
       footer={footer}
       onSelect={toggle}

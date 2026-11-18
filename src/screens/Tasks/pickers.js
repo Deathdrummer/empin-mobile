@@ -16,7 +16,7 @@ export const objectSubtitle = (object) => [
 ].filter(Boolean).join(' · ');
 
 const loadError = (error) => (isOfflineError(error)
-  ? 'Нет связи: ставить и изменять задания можно только при связи'
+  ? 'Нет связи'
   : getUserFacingError(error, 'Не удалось загрузить список'));
 
 // Бригады и сотрудники меняются в ERP редко — один запрос на открытие экрана, а не на каждую шторку
@@ -107,7 +107,7 @@ export const ObjectPickerSheet = ({ visible, selectedId, initialBrigade = null, 
       sections={sections}
       loading={loading && !items?.length}
       searchPlaceholder="Номер, название, титул, населённый пункт"
-      emptyText={error || (query.trim() ? 'Не найдено. Объекты в архиве не ищутся' : 'Подсказок нет — найдите объект поиском')}
+      emptyText={error || (query.trim() ? 'Не найдено' : 'Подсказок нет')}
       onSearch={search}
       onSelect={(item) => onPick(item.object)}
       onClose={onClose}
@@ -184,7 +184,7 @@ export const ExecutorPickerSheet = ({ visible, selected, onPick, onClose, onDism
       title="Исполнитель"
       sections={sections}
       loading={!data}
-      searchPlaceholder={type === 'brigade' ? 'Бригада, бригадир или член бригады' : 'Фамилия или имя'}
+      searchPlaceholder={type === 'brigade' ? 'Поиск' : 'Поиск'}
       emptyText={error || (type === 'brigade' ? 'Бригад нет' : 'Нет сотрудников с учётной записью')}
       onSelect={(item) => onPick(item.executor)}
       onClose={onClose}
@@ -215,8 +215,8 @@ export const ForeignObjectDialog = ({ object, onCancel, onContinue }) => {
       icon={<Ionicons name="warning" size={34} color={theme.accent} />}
       title="Чужой объект"
       message={object?.responsible?.name
-        ? `Ответственный за объект: ${shortName(object.responsible.name)}\nЗадание будет вашим: об отчёте по нему уведомят вас, а не ответственного.`
-        : 'У объекта нет ответственного начальника участка.\nЗадание будет вашим.'}
+        ? `Ответственный: ${shortName(object.responsible.name)}`
+        : 'Ответственного нет'}
       buttons={(
         <>
           <DialogButton title="Отмена" onPress={onCancel} />

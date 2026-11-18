@@ -297,7 +297,7 @@ function PlanScreenContent() {
       Toast.show({
         type: 'error',
         text1: 'Не удалось поставить задание',
-        text2: isOfflineError(error) ? 'Ставить задания можно только при связи' : getUserFacingError(error, 'Попробуйте ещё раз.'),
+        text2: isOfflineError(error) ? 'Нет связи' : getUserFacingError(error, 'Попробуйте ещё раз.'),
         position: 'top',
       });
     }
@@ -318,7 +318,6 @@ function PlanScreenContent() {
     Toast.show({
       type: 'success',
       text1: 'Задание скопировано',
-      text2: 'Откройте нужный день и нажмите «Вставить»: перенесутся объект и исполнитель',
       position: 'top',
     });
   };
@@ -330,13 +329,13 @@ function PlanScreenContent() {
     try {
       const data = await productionAPI.copyTask(copied.id, date);
       emitTasksChanged([date]);
-      Toast.show({ type: 'success', text1: 'Задание вставлено', text2: 'Допишите, что сделать, или вернитесь назад', position: 'top' });
+      Toast.show({ type: 'success', text1: 'Задание вставлено', position: 'top' });
       if (data?.task?.abilities?.edit) navigation.navigate('TaskForm', { task: data.task });
     } catch (error) {
       Toast.show({
         type: 'error',
         text1: 'Не удалось вставить',
-        text2: isOfflineError(error) ? 'Вставить задание можно только при связи' : getUserFacingError(error, 'Попробуйте ещё раз.'),
+        text2: isOfflineError(error) ? 'Нет связи' : getUserFacingError(error, 'Попробуйте ещё раз.'),
         position: 'top',
       });
     } finally {
@@ -356,7 +355,7 @@ function PlanScreenContent() {
       Toast.show({
         type: 'error',
         text1: 'Не удалось удалить',
-        text2: isOfflineError(error) ? 'Удалить задание можно только при связи' : getUserFacingError(error, 'Попробуйте ещё раз.'),
+        text2: isOfflineError(error) ? 'Нет связи' : getUserFacingError(error, 'Попробуйте ещё раз.'),
         position: 'top',
       });
     } finally {
@@ -374,7 +373,7 @@ function PlanScreenContent() {
       Toast.show({
         type: 'error',
         text1: 'Не удалось закрыть уведомление',
-        text2: isOfflineError(error) ? 'Закрыть можно при связи' : getUserFacingError(error, 'Попробуйте ещё раз.'),
+        text2: isOfflineError(error) ? 'Нет связи' : getUserFacingError(error, 'Попробуйте ещё раз.'),
         position: 'top',
       });
     } finally {
@@ -538,7 +537,7 @@ function PlanScreenContent() {
           visible={!!deleting}
           onClose={() => setDeleting(null)}
           title="Удалить задание?"
-          message={deleting ? `${objectTitle(deleting.object)}. Задание удалится вместе с перепиской.` : ''}
+          message={deleting ? objectTitle(deleting.object) : ''}
           buttons={(
             <>
               <DialogButton title="Отмена" onPress={() => setDeleting(null)} />

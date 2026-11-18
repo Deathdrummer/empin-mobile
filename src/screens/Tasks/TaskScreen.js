@@ -76,7 +76,7 @@ export default function TaskScreen({ navigation, route }) {
 
   const copy = () => {
     setCopiedTask(task);
-    Toast.show({ type: 'success', text1: 'Задание скопировано', text2: 'Откройте нужный день и нажмите «Вставить»', position: 'top' });
+    Toast.show({ type: 'success', text1: 'Задание скопировано', position: 'top' });
   };
 
   const remove = async () => {
@@ -88,7 +88,7 @@ export default function TaskScreen({ navigation, route }) {
       setDeleting(false);
       navigation.goBack();
     } catch (error) {
-      showError('Не удалось удалить', error, 'Удалить задание можно только при связи');
+      showError('Не удалось удалить', error, 'Нет связи');
     } finally {
       setBusy(false);
     }
@@ -101,7 +101,7 @@ export default function TaskScreen({ navigation, route }) {
       setStaff((await productionAPI.executors()).staff || []);
     } catch (error) {
       setInviting(false);
-      showError('Не удалось загрузить сотрудников', error, 'Пригласить можно только при связи');
+      showError('Не удалось загрузить сотрудников', error, 'Нет связи');
     }
   };
 
@@ -113,7 +113,7 @@ export default function TaskScreen({ navigation, route }) {
       setInvites(data.invites || []);
       load();
     } catch (error) {
-      showError('Не удалось пригласить', error, 'Пригласить можно только при связи');
+      showError('Не удалось пригласить', error, 'Нет связи');
     } finally {
       setBusy(false);
     }
@@ -126,7 +126,7 @@ export default function TaskScreen({ navigation, route }) {
       setInvites(data.invites || []);
       load();
     } catch (error) {
-      showError('Не удалось отозвать', error, 'Отозвать приглашение можно только при связи');
+      showError('Не удалось отозвать', error, 'Нет связи');
     } finally {
       setBusy(false);
     }
@@ -192,7 +192,7 @@ export default function TaskScreen({ navigation, route }) {
         {offline ? (
           <View style={s.notice}>
             <Ionicons name="cloud-offline-outline" size={18} color={theme.textSecondary} />
-            <Text style={s.noticeText}>Нет связи — показана сохранённая версия. Изменять задание можно только при связи.</Text>
+            <Text style={s.noticeText}>Нет связи — показана сохранённая версия</Text>
           </View>
         ) : null}
 
@@ -297,7 +297,6 @@ export default function TaskScreen({ navigation, route }) {
                 </Pressable>
               ) : null}
             </View>
-            <Text style={s.sectionHint}>Приглашённый видит только это задание и может писать в переписку.</Text>
           </>
         ) : null}
 
@@ -359,7 +358,7 @@ export default function TaskScreen({ navigation, route }) {
         visible={deleting}
         onClose={() => setDeleting(false)}
         title="Удалить задание?"
-        message={`${objectTitle(object)}. Задание удалится вместе с перепиской.`}
+        message={objectTitle(object)}
         buttons={(
           <>
             <DialogButton title="Отмена" onPress={() => setDeleting(false)} />

@@ -53,7 +53,7 @@ export default function TaskFormScreen({ navigation, route }) {
   useEffect(() => {
     if (saved) navigation.goBack();
   }, [saved, navigation]);
-  const failLoad = (e) => setError(isOfflineError(e) ? 'Нет связи: ставить и изменять задания можно только при связи' : getUserFacingError(e, 'Не удалось загрузить данные'));
+  const failLoad = (e) => setError(isOfflineError(e) ? 'Нет связи' : getUserFacingError(e, 'Не удалось загрузить данные'));
 
   // ---- Справочники ERP: объекты, исполнители, техника, план объекта ----
 
@@ -173,7 +173,7 @@ export default function TaskFormScreen({ navigation, route }) {
       Toast.show({
         type: 'error',
         text1: original ? 'Не удалось изменить' : 'Не удалось создать',
-        text2: isOfflineError(e) ? 'Нет связи. Ставить и изменять задания можно только при связи' : getUserFacingError(e, 'Попробуйте ещё раз.'),
+        text2: isOfflineError(e) ? 'Нет связи' : getUserFacingError(e, 'Попробуйте ещё раз.'),
         position: 'top',
       });
     } finally {
@@ -352,7 +352,7 @@ export default function TaskFormScreen({ navigation, route }) {
               </Text>
             </Pressable>
           ) : (
-            <Text style={s.cardHint}>{plan.failed ? 'Не удалось загрузить план объекта' : 'У объекта нет плана работ — задание ставится текстом'}</Text>
+            <Text style={s.cardHint}>{plan.failed ? 'Не удалось загрузить план объекта' : 'У объекта нет плана работ'}</Text>
           )}
         </View>
 
@@ -393,7 +393,6 @@ export default function TaskFormScreen({ navigation, route }) {
             </>
           ) : null}
         </View>
-        <Text style={s.sectionHint}>Одну машину и водителя можно указать в нескольких заданиях на одну дату.</Text>
       </KeyboardAwareScrollView>
 
       <ObjectPickerSheet
