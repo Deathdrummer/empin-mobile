@@ -102,8 +102,8 @@ export default function ChatInfoScreen({ navigation, route }) {
 
   const removeMember = (member) => {
     const [question, details, action] = isObject
-      ? [`Убрать ${fullName(member)} из чата объекта?`, 'Чат вернётся к нему, только если объект снова поставят его бригаде.', 'Убрать']
-      : [`Исключить ${fullName(member)}?`, 'Участник больше не увидит переписку группы.', 'Исключить'];
+      ? [`Убрать ${fullName(member)} из чата объекта?`, '', 'Убрать']
+      : [`Исключить ${fullName(member)}?`, '', 'Исключить'];
     const remove = isObject ? messengerAPI.removeObjectMember : messengerAPI.removeGroupMember;
     Alert.alert(question, details, [
       { text: 'Отмена', style: 'cancel' },
@@ -118,8 +118,8 @@ export default function ChatInfoScreen({ navigation, route }) {
 
   const leave = () => {
     const [question, details] = isObject
-      ? ['Покинуть чат объекта?', 'Объект пропадёт из ваших чатов, пока его снова не поставят вашей бригаде.']
-      : ['Покинуть группу?', 'Переписка группы пропадёт из ваших чатов.'];
+      ? ['Покинуть чат объекта?', '']
+      : ['Покинуть группу?', ''];
     Alert.alert(question, details, [
       { text: 'Отмена', style: 'cancel' },
       {
@@ -147,7 +147,7 @@ export default function ChatInfoScreen({ navigation, route }) {
 
   const subtitle = (() => {
     if (chatType === 'direct' && info?.participant) return formatLastSeen(info.participant.online, info.participant.last_seen_at);
-    if (chatType === 'saved') return 'Заметки себе и пересланное на потом';
+    if (chatType === 'saved') return '';
     if (hasMembers && info) {
       const count = info.members_count || 0;
       return `${count} ${plural(count, 'участник', 'участника', 'участников')}${info.online_count ? `, ${info.online_count} в сети` : ''}`;
@@ -204,7 +204,6 @@ export default function ChatInfoScreen({ navigation, route }) {
                 </View>
                 <View style={s.rowBody}>
                   <Text style={s.rowTitle}>Без звука</Text>
-                  <Text style={s.rowSub}>Без уведомлений, кроме упоминаний</Text>
                 </View>
                 <Switch
                   value={Boolean(info.muted)}
@@ -227,7 +226,6 @@ export default function ChatInfoScreen({ navigation, route }) {
               </View>
               <View style={s.rowBody}>
                 <Text style={s.rowTitle}>Медиа, файлы и ссылки</Text>
-                <Text style={s.rowSub}>Фото, видео, документы, голосовые</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
             </Pressable>

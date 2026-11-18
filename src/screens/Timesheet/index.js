@@ -528,7 +528,7 @@ function PlanScreenContent() {
         <DeleteConfirmModal
           visible={!!chat.deleteTarget}
           title="Удалить сообщение?"
-          message="Сообщение пропадёт из переписки задания."
+          message=""
           onCancel={chat.cancelDelete}
           onConfirm={chat.confirmDeleteComment}
         />

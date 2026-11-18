@@ -79,7 +79,7 @@ export const PollCreateModal = ({ visible, onClose, onCreate }) => {
               <Text style={s.label}>Вопрос</Text>
               <TextInput
                 style={[s.input, s.question]}
-                placeholder="Например: Кто завтра выходит на ТП-9?"
+                placeholder="Вопрос"
                 placeholderTextColor={theme.textMuted}
                 value={question}
                 onChangeText={setQuestion}

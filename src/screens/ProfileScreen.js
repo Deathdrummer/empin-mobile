@@ -182,7 +182,7 @@ export default function ProfileScreen({ onLogout }) {
   };
 
   const confirmLogout = () => {
-    Alert.alert('Выйти из аккаунта?', 'Звонки и сообщения перестанут приходить на этот телефон.', [
+    Alert.alert('Выйти из аккаунта?', '', [
       { text: 'Отмена', style: 'cancel' },
       { text: 'Выйти', style: 'destructive', onPress: () => onLogout?.() },
     ]);
@@ -266,7 +266,6 @@ export default function ProfileScreen({ onLogout }) {
               icon="flash"
               iconColor="#C46A1B"
               title="Чаты объектов без звука"
-              subtitle="Автоматически добавляемые чаты объектов — сразу без звука. Остальные чаты со звуком"
               onPress={muteObjects === null ? undefined : () => toggleMuteObjects(!muteObjects)}
               accessory={(
                 <Switch
@@ -284,7 +283,6 @@ export default function ProfileScreen({ onLogout }) {
               icon="volume-high"
               iconColor="#2F8A6C"
               title="Звуки в чате"
-              subtitle="Короткий звук, когда сообщение отправлено"
               onPress={() => toggleChatSounds(!chatSounds)}
               accessory={(
                 <Switch
@@ -301,7 +299,6 @@ export default function ProfileScreen({ onLogout }) {
               icon="notifications"
               iconColor={theme.accent}
               title="Уведомления телефона"
-              subtitle="Звонки и сообщения — в настройках телефона"
               onPress={() => Linking.openSettings()}
               last
             />

@@ -59,14 +59,14 @@ export const IncomingShare = ({ isLoggedIn }) => {
 
   useEffect(() => {
     if (content && !isLoggedIn) {
-      Toast.show({ type: 'info', text1: 'Войдите, чтобы отправить', text2: 'После входа выберете чат', position: 'top' });
+      Toast.show({ type: 'info', text1: 'Вы не вошли', position: 'top' });
     }
   }, [content, isLoggedIn]);
 
   useEffect(() => {
     if (!error) return;
     console.warn('[Share] Не удалось получить файл:', error);
-    Toast.show({ type: 'error', text1: 'Не удалось получить файл', text2: 'Попробуйте поделиться ещё раз', position: 'top' });
+    Toast.show({ type: 'error', text1: 'Не удалось получить файл', text2: 'Попробуйте ещё раз', position: 'top' });
   }, [error]);
 
   const pick = async (item) => {
@@ -78,7 +78,7 @@ export const IncomingShare = ({ isLoggedIn }) => {
       }
       resetShareIntent();
     } catch {
-      Toast.show({ type: 'error', text1: 'Не удалось открыть чат', text2: 'Проверьте интернет и попробуйте ещё раз', position: 'top' });
+      Toast.show({ type: 'error', text1: 'Не удалось открыть чат', text2: 'Попробуйте ещё раз', position: 'top' });
     }
   };
 

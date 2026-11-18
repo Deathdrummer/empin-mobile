@@ -35,18 +35,18 @@ export const getUserFacingError = (error, fallback = 'Не удалось вып
   }
 
   if (!error?.response && (error?.request || error?.message === 'Network Error')) {
-    return 'Нет связи с сервером. Проверьте интернет-соединение.';
+    return 'Нет связи с сервером';
   }
 
   switch (status) {
     case 401:
-      return 'Сессия истекла. Войдите заново.';
+      return 'Сессия истекла';
     case 403:
-      return 'Недостаточно прав для этого действия.';
+      return 'Недостаточно прав';
     case 404:
-      return 'Запрошенные данные не найдены.';
+      return 'Данные не найдены';
     case 422:
-      return 'Проверьте введённые данные.';
+      return 'Неверные данные';
     case 429:
       return 'Слишком много запросов. Попробуйте немного позже.';
     default:

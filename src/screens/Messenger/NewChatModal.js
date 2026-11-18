@@ -214,7 +214,6 @@ export default function NewChatModal({ visible, onClose, onOpenChat, onOpenSaved
                     <View style={s.rowBody}>
                       <View style={s.rowText}>
                         <Text style={s.name}>Новая группа</Text>
-                        <Text style={s.sub}>Бригада, объект или общий чат</Text>
                       </View>
                     </View>
                   </Pressable>
@@ -227,7 +226,6 @@ export default function NewChatModal({ visible, onClose, onOpenChat, onOpenSaved
                       <View style={s.rowBody}>
                         <View style={s.rowText}>
                           <Text style={s.name}>Избранное</Text>
-                          <Text style={s.sub}>Заметки себе и пересланное на потом</Text>
                         </View>
                       </View>
                     </Pressable>
@@ -271,7 +269,7 @@ export default function NewChatModal({ visible, onClose, onOpenChat, onOpenSaved
                 </View>
                 <TextInput
                   style={s.titleInput}
-                  placeholder="Название, например «Бригада Иванова»"
+                  placeholder="Название"
                   placeholderTextColor={theme.textMuted}
                   value={title}
                   onChangeText={setTitle}

@@ -603,7 +603,6 @@ export const ChatSection = ({
         Toast.show({
           type: 'info',
           text1: 'Идёт звонок',
-          text2: 'Голосовое сообщение можно записать после звонка',
           position: 'top',
           visibilityTime: 2500,
         });
@@ -1126,7 +1125,7 @@ export const ChatSection = ({
               onPressIn={handleStartRecording}
               onPressOut={handleStopRecording}
               activeOpacity={0.7}
-              accessibilityLabel="Удерживайте, чтобы записать голосовое"
+              accessibilityLabel="Записать голосовое"
             >
               <Ionicons
                 name={isRecording ? 'mic' : 'mic-outline'}

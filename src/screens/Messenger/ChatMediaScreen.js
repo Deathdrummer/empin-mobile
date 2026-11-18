@@ -31,10 +31,10 @@ import { linkHref } from '../../utils/richText';
 import { getUserFacingError } from '../../utils/userFacingError';
 
 const TABS = [
-  { key: 'media', label: 'Медиа', empty: 'Фото и видео из этого чата появятся здесь' },
-  { key: 'files', label: 'Файлы', empty: 'Документы и файлы из этого чата появятся здесь' },
-  { key: 'voice', label: 'Голосовые', empty: 'Голосовые сообщения из этого чата появятся здесь' },
-  { key: 'links', label: 'Ссылки', empty: 'Ссылки из сообщений этого чата появятся здесь' },
+  { key: 'media', label: 'Медиа', empty: 'Нет фото и видео' },
+  { key: 'files', label: 'Файлы', empty: 'Нет файлов' },
+  { key: 'voice', label: 'Голосовые', empty: 'Нет голосовых' },
+  { key: 'links', label: 'Ссылки', empty: 'Нет ссылок' },
 ];
 const COLUMNS = 3;
 const GAP = 2;

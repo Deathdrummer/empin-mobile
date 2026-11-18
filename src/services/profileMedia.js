@@ -5,7 +5,7 @@ import { restoreStatusBar } from '../utils/statusBar';
 
 const AVATAR_SIZE = 512;
 
-const openSettingsAlert = (title) => Alert.alert(title, 'Разрешите доступ в настройках телефона.', [
+const openSettingsAlert = (title) => Alert.alert(title, '', [
   { text: 'Отмена', style: 'cancel' },
   { text: 'Настройки', onPress: () => Linking.openSettings() },
 ]);

@@ -222,13 +222,13 @@ export const Composer = ({
 
   const startRecording = async () => {
     if (isCallAudioActive()) {
-      Toast.show({ type: 'info', text1: 'Идёт звонок', text2: 'Голосовое можно записать после звонка', position: 'top' });
+      Toast.show({ type: 'info', text1: 'Идёт звонок', position: 'top' });
       return false;
     }
 
     const permission = await AudioModule.requestRecordingPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Доступ к микрофону', 'Разрешите доступ к микрофону в настройках телефона, чтобы записывать голосовые.', [
+      Alert.alert('Доступ к микрофону', 'Нет доступа к микрофону', [
         { text: 'Отмена', style: 'cancel' },
         { text: 'Настройки', onPress: () => Linking.openSettings() },
       ]);
@@ -552,7 +552,7 @@ export const Composer = ({
             hitSlop={MIC_HIT_SLOP}
             style={[s.action, recording && s.actionRecording]}
             accessibilityRole="button"
-            accessibilityLabel="Удерживайте, чтобы записать голосовое"
+            accessibilityLabel="Записать голосовое"
           >
             {recording ? (
               <Animated.View

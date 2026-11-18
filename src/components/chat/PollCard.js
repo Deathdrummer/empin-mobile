@@ -78,7 +78,6 @@ export const PollCard = ({ message, myStaffId, colors, theme, onVote }) => {
 
       <Text style={[styles.footer, { color: colors.meta }]}>
         {total ? `${total} ${plural(total, 'голос', 'голоса', 'голосов')}` : 'Голосов пока нет'}
-        {voted ? ' · нажмите свой ответ, чтобы отменить' : ''}
       </Text>
     </View>
   );

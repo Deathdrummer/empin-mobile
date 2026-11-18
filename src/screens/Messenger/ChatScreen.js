@@ -328,7 +328,7 @@ export default function ChatScreen({ navigation, route }) {
         Toast.show({
           type: 'error',
           text1: 'Не удалось загрузить чат',
-          text2: getUserFacingError(error, 'Проверьте интернет и попробуйте ещё раз.'),
+          text2: getUserFacingError(error, 'Попробуйте ещё раз.'),
           position: 'top',
         });
       }
@@ -672,7 +672,7 @@ export default function ChatScreen({ navigation, route }) {
       Toast.show({
         type: 'error',
         text1: 'Сообщение не отправлено',
-        text2: error?.response?.status === 403 ? getUserFacingError(error, 'Нет прав') : 'Нажмите на него, чтобы повторить',
+        text2: error?.response?.status === 403 ? getUserFacingError(error, 'Нет прав') : '',
         position: 'top',
       });
     }
@@ -858,16 +858,16 @@ export default function ChatScreen({ navigation, route }) {
     const title = several ? `Удалить ${count} ${plural(count, 'сообщение', 'сообщения', 'сообщений')}?` : 'Удалить сообщение?';
     if (!forEveryone) {
       Alert.alert(title, several
-        ? 'Сообщения пропадут только у вас — у остальных участников останутся.'
-        : 'Сообщение пропадёт только у вас — у остальных участников останется.', [
+        ? ''
+        : '', [
         { text: 'Отмена', style: 'cancel' },
         { text: 'Удалить у меня', style: 'destructive', onPress: run(hideForMe) },
       ]);
       return;
     }
     Alert.alert(title, isObject
-      ? '«У всех» — комментарий удалится и из табеля. «У меня» — пропадёт только у вас.'
-      : '«У всех» — пропадёт у всех участников чата. «У меня» — только у вас.', [
+      ? ''
+      : '', [
       { text: 'Отмена', style: 'cancel' },
       { text: 'Удалить у меня', onPress: run(hideForMe) },
       { text: 'Удалить у всех', style: 'destructive', onPress: run(removeForEveryone) },
@@ -1033,7 +1033,7 @@ export default function ChatScreen({ navigation, route }) {
     const item = items[index];
     if (item.type === 'video') {
       if (isCallAudioActive()) {
-        Toast.show({ type: 'info', text1: 'Идёт звонок', text2: 'Видео можно посмотреть после звонка', position: 'top' });
+        Toast.show({ type: 'info', text1: 'Идёт звонок', position: 'top' });
         return;
       }
       setVideo(item);
@@ -1289,7 +1289,7 @@ export default function ChatScreen({ navigation, route }) {
       const members = `${count} ${plural(count, 'участник', 'участника', 'участников')}${online ? `, ${online} в сети` : ''}`;
       return { text: isObject ? `Чат объекта · ${members}` : members };
     }
-    if (isObject) return { text: 'Чат объекта · комментарии табеля' };
+    if (isObject) return { text: 'Чат объекта' };
     return null;
   })();
 
@@ -1411,7 +1411,7 @@ export default function ChatScreen({ navigation, route }) {
             {!initialLoading && !items.length ? (
               <View pointerEvents="none" style={[s.empty, { paddingTop: headerHeight, paddingBottom: composerHeight + LIST_GAP }]}>
                 <Text style={[s.emptyText, { backgroundColor: theme.dateChip, color: theme.dateChipText }]}>
-                  {isObject ? 'Комментариев к объекту пока нет' : isSaved ? 'Пишите себе заметки и пересылайте сюда то, что пригодится позже' : 'Сообщений пока нет. Напишите первым'}
+                  {isObject ? 'Сообщений нет' : isSaved ? 'Сообщений нет' : 'Сообщений нет'}
                 </Text>
               </View>
             ) : null}
@@ -1500,7 +1500,7 @@ export default function ChatScreen({ navigation, route }) {
                 />
               ) : (
                 <GlassView lite style={s.glassCard}>
-                  <Text style={s.readOnly}>Писать в чат объекта может сотрудник с правом комментировать в табеле</Text>
+                  <Text style={s.readOnly}>Нет права писать в чат объекта</Text>
                 </GlassView>
               )}
             </View>

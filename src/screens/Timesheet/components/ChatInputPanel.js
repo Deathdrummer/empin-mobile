@@ -340,7 +340,6 @@ export const ChatInputPanel = ({
         Toast.show({
           type: 'info',
           text1: 'Идёт звонок',
-          text2: 'Голосовое сообщение можно записать после звонка',
           position: 'top',
           visibilityTime: 2500,
         });

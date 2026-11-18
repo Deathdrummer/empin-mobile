@@ -183,8 +183,7 @@ export default function CallHistoryTab() {
           ListEmptyComponent={(
             <View style={s.empty}>
               <Ionicons name="call-outline" size={56} color={theme.textMuted} />
-              <Text style={s.emptyTitle}>{onlyMissed ? 'Пропущенных нет' : 'Звонков пока не было'}</Text>
-              {!onlyMissed ? <Text style={s.emptyText}>Позвонить можно кнопкой вверху, из чата или списка сотрудников</Text> : null}
+              <Text style={s.emptyTitle}>{onlyMissed ? 'Пропущенных нет' : 'Звонков нет'}</Text>
             </View>
           )}
         />

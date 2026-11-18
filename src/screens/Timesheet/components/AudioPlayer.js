@@ -89,7 +89,6 @@ export const AudioPlayer = ({ audioUri, fileName }) => {
         Toast.show({
           type: 'info',
           text1: 'Идёт звонок',
-          text2: 'Голосовое сообщение можно прослушать после звонка',
           position: 'top',
           visibilityTime: 2500,
         });

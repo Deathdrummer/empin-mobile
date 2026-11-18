@@ -144,7 +144,7 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
     const checked = isSelected(item);
     const title = itemTitle(item);
     const sub = item.kind === 'saved'
-      ? 'Себе — заметки и пересланное на потом'
+      ? ''
       : item.kind === 'chat' && item.chat.type === 'group'
         ? `${item.chat.members_count || 0} ${plural(item.chat.members_count || 0, 'участник', 'участника', 'участников')}`
         : null;
@@ -213,7 +213,7 @@ export default function ForwardSheet({ visible, sourceChatId, messageIds, onClos
                 renderItem={renderItem}
                 keyboardShouldPersistTaps="handled"
                 keyboardDismissMode="on-drag"
-                ListEmptyComponent={<Text style={s.empty}>{query.trim() ? 'Ничего не нашли' : 'Чатов пока нет — найдите сотрудника поиском'}</Text>}
+                ListEmptyComponent={<Text style={s.empty}>{query.trim() ? 'Ничего не нашли' : 'Чатов нет'}</Text>}
               />
             )}
 

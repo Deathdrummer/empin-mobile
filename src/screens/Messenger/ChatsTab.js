@@ -210,7 +210,7 @@ export default function ChatsTab({ archive: archiveMode = false }) {
       const data = await messengerAPI.getSavedChat();
       openChat({ chatType: 'saved', chatId: data.chat_id, title: data.title });
     } catch (error) {
-      Toast.show({ type: 'error', text1: 'Не удалось открыть «Избранное»', text2: 'Проверьте интернет и попробуйте ещё раз', position: 'top' });
+      Toast.show({ type: 'error', text1: 'Не удалось открыть «Избранное»', text2: 'Попробуйте ещё раз', position: 'top' });
     }
   };
 
@@ -263,8 +263,7 @@ export default function ChatsTab({ archive: archiveMode = false }) {
         if (archived) {
           Toast.show({
             type: 'info',
-            text1: 'Чат в архиве — нажмите, чтобы вернуть',
-            text2: chat.muted ? 'Без звука: останется в архиве' : 'Вернётся сам при новом сообщении',
+            text1: 'Чат в архиве',
             position: 'top',
             visibilityTime: 3500,
             onPress: () => {
@@ -275,7 +274,7 @@ export default function ChatsTab({ archive: archiveMode = false }) {
         }
       }
     } catch (error) {
-      Toast.show({ type: 'error', text1: 'Не получилось', text2: 'Проверьте интернет и попробуйте ещё раз', position: 'top' });
+      Toast.show({ type: 'error', text1: 'Не получилось', text2: 'Попробуйте ещё раз', position: 'top' });
     }
     loadChats();
   };
@@ -510,9 +509,9 @@ export default function ChatsTab({ archive: archiveMode = false }) {
   const emptyTitle = {
     all: 'Начните первый чат',
     unread: 'Всё прочитано',
-    direct: 'Личных чатов пока нет',
+    direct: 'Личных чатов нет',
     group: 'Групп пока нет',
-    object: 'Здесь появятся объекты вашей бригады',
+    object: 'Чатов объектов нет',
     'no-objects': 'Начните первый чат',
   }[folder];
 
@@ -546,7 +545,7 @@ export default function ChatsTab({ archive: archiveMode = false }) {
             )}
             ListFooterComponent={visibleChats.length ? (
               <Text style={s.footer}>
-                {`${visibleChats.length} ${plural(visibleChats.length, 'чат', 'чата', 'чатов')} в архиве · смахните влево — вернуть в список`}
+                {`${visibleChats.length} ${plural(visibleChats.length, 'чат', 'чата', 'чатов')} в архиве`}
               </Text>
             ) : null}
           />
@@ -649,7 +648,7 @@ export default function ChatsTab({ archive: archiveMode = false }) {
               )}
               ListFooterComponent={visibleChats.length ? (
                 <Text style={s.footer}>
-                  {`${visibleChats.length} ${plural(visibleChats.length, 'чат', 'чата', 'чатов')} · смахните влево — закрепить, без звука или в архив`}
+                  {`${visibleChats.length} ${plural(visibleChats.length, 'чат', 'чата', 'чатов')}`}
                 </Text>
               ) : null}
             />

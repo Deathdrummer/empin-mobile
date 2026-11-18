@@ -74,7 +74,7 @@ export const connectAudio = ({
       onDiagnostic('connection', { state, reason });
       if (state === sdk.failedState) fail(`Не удалось подключиться к серверу звонков (Agora ${reason})`, reason);
       if (state === sdk.reconnectingState && !joinTimer) {
-        joinTimer = setTimeout(() => fail('Связь во время звонка потеряна. Повторите вызов.', undefined, 'rtc-reconnect-timeout'), timeoutMs);
+        joinTimer = setTimeout(() => fail('Связь во время звонка потеряна', undefined, 'rtc-reconnect-timeout'), timeoutMs);
       }
       if (state === sdk.connectedState && localJoined) {
         clearTimeout(joinTimer);
@@ -89,7 +89,7 @@ export const connectAudio = ({
     onLocalAudioStateChanged: live((_connection, state, reason) => {
       onDiagnostic('local-audio', { state, reason });
       if (state === sdk.audioFailedState && reason === sdk.noAudioPermission) {
-        fail('Нет доступа к микрофону. Разрешите его в настройках устройства.', reason);
+        fail('Нет доступа к микрофону', reason);
         return;
       }
       onLocalAudioState?.(state, reason);
@@ -118,7 +118,7 @@ export const connectAudio = ({
     // уже идущего звонка; до подключения он мог не примениться.
     const routeResult = engine.setDefaultAudioRouteToSpeakerphone(false);
     if (routeResult !== 0) onDiagnostic('audio-route', { code: routeResult });
-    joinTimer = setTimeout(() => fail('Не удалось соединить звонок. Проверьте сеть и повторите вызов.', undefined, 'rtc-join-timeout'), timeoutMs);
+    joinTimer = setTimeout(() => fail('Не удалось соединить звонок', undefined, 'rtc-join-timeout'), timeoutMs);
     requireRtcSuccess(engine.joinChannel(token, channelName, uid, {
       clientRoleType: sdk.broadcaster,
       publishMicrophoneTrack: true,
@@ -133,7 +133,7 @@ export const connectAudio = ({
     peerAccepted: () => {
       if (disposed || failed || connected || peerTimer) return;
       // Ответ через API/push ещё не доказывает, что собеседник вошёл в RTC-канал.
-      peerTimer = setTimeout(() => fail('Собеседник ответил, но голосовое соединение не установлено. Повторите вызов.', undefined, 'rtc-peer-timeout'), timeoutMs);
+      peerTimer = setTimeout(() => fail('Собеседник ответил, но голосовое соединение не установлено', undefined, 'rtc-peer-timeout'), timeoutMs);
     },
   };
 };

@@ -316,7 +316,7 @@ export const validateForm = (form) => {
   if (!form.date) return 'Выберите дату';
   if (!form.executor) return 'Выберите исполнителя';
   if (worksPayload(form.works).some((work) => Number.isNaN(work.quantity) || (work.quantity !== null && work.quantity < 0))) {
-    return 'Проверьте количества в видах работ';
+    return 'Неверное количество в видах работ';
   }
   return null;
 };

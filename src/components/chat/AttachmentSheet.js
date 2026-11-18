@@ -21,7 +21,7 @@ export const takePhoto = async () => {
   try {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      openSettingsAlert('Доступ к камере', 'Разрешите доступ к камере в настройках телефона.');
+      openSettingsAlert('Доступ к камере', 'Нет доступа к камере');
       return null;
     }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
@@ -57,7 +57,7 @@ export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOption
     } catch (error) {
       restoreStatusBar();
       if (isPermissionError(error)) {
-        openSettingsAlert('Нет доступа', 'Разрешите доступ в настройках телефона, чтобы прикрепить файл.');
+        openSettingsAlert('Нет доступа', 'Нет доступа к файлам');
         return;
       }
       console.warn('[Attach] Не удалось выбрать вложение:', error?.message ?? error);
@@ -68,7 +68,7 @@ export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOption
   const camera = (mediaTypes) => async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      openSettingsAlert('Доступ к камере', 'Разрешите доступ к камере в настройках телефона.');
+      openSettingsAlert('Доступ к камере', 'Нет доступа к камере');
       return null;
     }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes, quality: 0.8 });
