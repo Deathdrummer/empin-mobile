@@ -46,7 +46,7 @@ export const Dialog = ({ visible, onClose, icon, title, message, children, butto
   );
 };
 
-/** Кнопка диалога: secondary — нейтральная, primary — акцентная, danger — удаление */
+/** Кнопка диалога: secondary — нейтральная, primary — акцентная, danger — удаление и отклонение, success — согласование */
 export const DialogButton = ({ title, onPress, variant = 'secondary', disabled = false, loading = false }) => {
   const s = useThemedStyles(makeStyles);
   const textStyle = variant === 'secondary' ? s.secondaryText : s.filledText;
@@ -132,6 +132,10 @@ const makeStyles = (theme) => StyleSheet.create({
   },
   danger: {
     backgroundColor: theme.danger,
+  },
+  // Согласование отчёта (решение пользователя 19.11.2026: «Согласовать» — зелёная)
+  success: {
+    backgroundColor: theme.success,
   },
   disabled: {
     opacity: 0.4,

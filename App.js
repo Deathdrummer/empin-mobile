@@ -18,9 +18,13 @@ import ChatArchiveScreen from './src/screens/Messenger/ChatArchiveScreen';
 import TaskScreen from './src/screens/Tasks/TaskScreen';
 import TaskFormScreen from './src/screens/Tasks/TaskFormScreen';
 import TurvScreen from './src/screens/Turv/TurvScreen';
+import ReportScreen from './src/screens/Reports/ReportScreen';
+import ApprovalsScreen from './src/screens/Reports/ApprovalsScreen';
+import ObjectHistoryScreen from './src/screens/Reports/ObjectHistoryScreen';
 import { PRODUCTION_CACHE_KEY, resetProductionState } from './src/services/production';
 import { clearTaskChatOutbox } from './src/services/taskChat';
 import { clearAttendanceState } from './src/services/attendance';
+import { clearReportsState } from './src/services/reports';
 import { clearDrafts, DRAFTS_STORAGE_KEY } from './src/services/drafts';
 import { clearPendingReplies } from './src/services/messageActions';
 import { authAPI, setUnauthorizedCallback } from './src/services/api';
@@ -93,6 +97,7 @@ export default function App() {
         clearTaskChatOutbox(),
         // И отметки выхода, заявки и подтверждения
         clearAttendanceState(),
+        clearReportsState(),
       ]);
       clearDrafts();
       // Задания и права прежнего сотрудника не должны остаться в памяти
@@ -190,6 +195,9 @@ export default function App() {
                       <Stack.Screen name="Task" component={TaskScreen} />
                       <Stack.Screen name="TaskForm" component={TaskFormScreen} />
                       <Stack.Screen name="Turv" component={TurvScreen} />
+                      <Stack.Screen name="Report" component={ReportScreen} />
+                      <Stack.Screen name="Approvals" component={ApprovalsScreen} />
+                      <Stack.Screen name="ObjectHistory" component={ObjectHistoryScreen} />
                     </Stack.Navigator>
                   </NavigationContainer>
                 ) : (

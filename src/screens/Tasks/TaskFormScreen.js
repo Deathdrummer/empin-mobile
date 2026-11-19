@@ -18,6 +18,7 @@ import {
 import { PickerSheet } from './PickerSheet';
 import { ExecutorPickerSheet, ForeignObjectDialog, ObjectPickerSheet, objectSubtitle } from './pickers';
 import { useAfterModalClose } from '../../hooks/useAfterModalClose';
+import { checkPercent, percentText } from '../../utils/reports';
 
 /** Создание и изменение задания (п. 6.4) */
 export default function TaskFormScreen({ navigation, route }) {
@@ -35,6 +36,8 @@ export default function TaskFormScreen({ navigation, route }) {
   const [foreignObject, setForeignObject] = useState(null);
   const [acknowledged, setAcknowledged] = useState([]);
   const [error, setError] = useState(null);
+  // Подтверждение изменения задания с отчётом и готовность объектов при смене объекта (П-ЗД-27, П-ЗД-29, П-ФК-42)
+  const [confirm, setConfirm] = useState(null);
 
   const [fleet, setFleet] = useState(null);
   const [plan, setPlan] = useState(null);
@@ -140,7 +143,7 @@ export default function TaskFormScreen({ navigation, route }) {
 
   // ---- Сохранение ----
 
-  const save = async () => {
+  const save = async (confirmed = null) => {
     const problem = validateForm(form);
     if (problem) {
       Toast.show({ type: 'error', text1: problem, position: 'top' });
@@ -152,6 +155,38 @@ export default function TaskFormScreen({ navigation, route }) {
       setSaved(true);
       return;
     }
+    if (original && !confirmed) {
+      const objectChanged = Number(original.object?.id) !== Number(form.object?.id);
+      const status = original.report?.status;
+      const notes = [
+        ...(status === 'submitted' || status === 'approved' ? ['Отчёт уже есть'] : []),
+        ...(status && form.date !== original.date ? ['Отчёт перейдёт на новую дату'] : []),
+        ...(status && objectChanged ? ['Отчёт перейдёт на новый объект'] : []),
+      ];
+      if (notes.length || objectChanged) {
+        setConfirm({
+          notes,
+          readiness: objectChanged ? {
+            old: { object: original.object, shown: original.object?.readiness ?? null, percent: percentText(original.object?.readiness ?? null) },
+            new: { object: form.object, shown: form.object?.readiness ?? null, percent: percentText(form.object?.readiness ?? null) },
+          } : null,
+        });
+        return;
+      }
+    }
+    if (confirmed?.readiness) {
+      const check = ['old', 'new'].map((key) => checkPercent(confirmed.readiness[key].percent));
+      const bad = check.find((c) => c.error);
+      if (bad) {
+        Toast.show({ type: 'error', text1: bad.error, position: 'top' });
+        return;
+      }
+      body.readiness = ['old', 'new'].reduce((result, key, index) => ({
+        ...result,
+        [key]: { percent: check[index].value, shown: confirmed.readiness[key].shown },
+      }), {});
+    }
+    setConfirm(null);
     setSaving(true);
     try {
       const data = original ? await productionAPI.updateTask(original.id, body) : await productionAPI.createTask(body);
@@ -239,7 +274,7 @@ export default function TaskFormScreen({ navigation, route }) {
         <Ionicons name="chevron-back" size={28} color={theme.accent} />
       </Pressable>
       <Text style={s.topTitle}>{original ? 'Изменение задания' : 'Новое задание'}</Text>
-      <TouchableOpacity onPress={save} disabled={saving} style={s.save} hitSlop={8} accessibilityLabel="Сохранить">
+      <TouchableOpacity onPress={() => save()} disabled={saving} style={s.save} hitSlop={8} accessibilityLabel="Сохранить">
         {saving ? <ActivityIndicator color={theme.accent} /> : <Text style={s.saveText}>Готово</Text>}
       </TouchableOpacity>
     </View>
@@ -467,6 +502,37 @@ export default function TaskFormScreen({ navigation, route }) {
         )}
       />
 
+      <Dialog
+        visible={!!confirm}
+        keyboard
+        onClose={() => setConfirm(null)}
+        title="Сохранить изменения?"
+        message={confirm?.notes.join('\n') || null}
+        buttons={(
+          <>
+            <DialogButton title="Отмена" onPress={() => setConfirm(null)} />
+            <DialogButton title="Сохранить" variant="primary" onPress={() => save(confirm)} loading={saving} />
+          </>
+        )}
+      >
+        {confirm?.readiness ? ['old', 'new'].map((key) => (
+          <View key={key} style={s.readinessRow}>
+            <View style={s.rowBody}>
+              <Text style={s.rowLabel}>{key === 'old' ? 'Готовность прежнего объекта' : 'Готовность нового объекта'}</Text>
+              <Text style={s.rowTitle} numberOfLines={1}>{confirm.readiness[key].object?.number || confirm.readiness[key].object?.title || ''}</Text>
+            </View>
+            <TextInput
+              style={s.quantityInput}
+              value={confirm.readiness[key].percent}
+              onChangeText={(percent) => setConfirm((c) => ({ ...c, readiness: { ...c.readiness, [key]: { ...c.readiness[key], percent } } }))}
+              keyboardType="decimal-pad"
+              accessibilityLabel={key === 'old' ? 'Готовность прежнего объекта, %' : 'Готовность нового объекта, %'}
+            />
+            <Text style={s.unit}>%</Text>
+          </View>
+        )) : null}
+      </Dialog>
+
       <ForeignObjectDialog object={foreignObject} onCancel={() => setForeignObject(null)} onContinue={chooseObject} />
     </SafeAreaView>
   );
@@ -524,4 +590,5 @@ const styles = (theme) => StyleSheet.create({
     paddingVertical: 6,
   },
   unit: { minWidth: 24, fontSize: 14, color: theme.textSecondary },
+  readinessRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
 });

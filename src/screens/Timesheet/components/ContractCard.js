@@ -11,6 +11,7 @@ import { useTheme, useThemedStyles } from '../../../theme';
 import { messengerAPI } from '../../../services/api';
 import { setTotalUnread } from '../../../services/messengerStore';
 import { shortName, vehicleTitle } from '../../../utils/tasks';
+import { reportMark } from '../../../utils/reports';
 
 const MENU_ITEM_HEIGHT = 50;
 
@@ -27,6 +28,9 @@ export const ContractCard = ({ task, chat, onOpenTask, onEditTask, onCopyTask, o
   const count = items ? items.length : task.comments_count || 0;
   const object = task.object || {};
   const abilities = task.abilities || {};
+  // Отметка отчёта (FR9-026) и «нет отчёта» у прошедшего задания (П-ЗД-37)
+  const mark = reportMark(task.report);
+  const markColor = mark ? { danger: theme.danger, accent: theme.accentText, success: theme.success, muted: theme.textSecondary }[mark.tone] : null;
 
   // Переписку задания открыли в плане-графике — в «Чатах» объект больше не непрочитанный
   useEffect(() => {
@@ -123,6 +127,13 @@ export const ContractCard = ({ task, chat, onOpenTask, onEditTask, onCopyTask, o
                 {vehicleTitle(task.vehicle)}
                 {task.driver?.name ? `  ·  ${shortName(task.driver.name)}` : '  ·  без водителя'}
               </Text>
+            </View>
+          ) : null}
+
+          {mark ? (
+            <View style={styles.vehicleRow}>
+              <Ionicons name={task.report?.missing ? 'alert-circle' : 'document-text-outline'} size={14} color={markColor} />
+              <Text style={[styles.vehicleText, { color: markColor }]} numberOfLines={1}>{mark.title}</Text>
             </View>
           ) : null}
 

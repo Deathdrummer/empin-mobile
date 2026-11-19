@@ -12,6 +12,8 @@ export const RIGHT = {
   TASK_EDIT_OWN: 2,
   TASK_EDIT_OTHERS: 4,
   TASK_INVITE: 7,
+  REPORT_SUBMIT: 8,
+  REPORT_APPROVE_OTHERS: 9,
   TIMESHEET_VIEW: 19,
 };
 
@@ -68,6 +70,13 @@ export const relativeDayLabel = (key, todayKey) => {
   if (diff === 1) return 'Завтра';
   if (diff === -1) return 'Вчера';
   return formatDayShort(key, todayKey);
+};
+
+/** «Вчера, 18 ноября» для ближних дней, «16 ноября» — для остальных (без повтора даты) */
+export const dayLabelWithDate = (key, todayKey) => {
+  const relative = relativeDayLabel(key, todayKey);
+  const short = formatDayShort(key, todayKey);
+  return relative === short ? short : `${relative}, ${short}`;
 };
 
 /**

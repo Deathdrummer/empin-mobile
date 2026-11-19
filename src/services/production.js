@@ -19,7 +19,7 @@ export const productionAPI = {
   task: async (id) => (await api.get(`/production/tasks/${id}`, READ)).data,
   createTask: async (body) => (await api.post('/production/tasks', body, WRITE)).data,
   updateTask: async (id, body) => (await api.patch(`/production/tasks/${id}`, body, WRITE)).data,
-  deleteTask: async (id) => (await api.delete(`/production/tasks/${id}`, WRITE)).data,
+  deleteTask: async (id, readiness = null) => (await api.delete(`/production/tasks/${id}`, { ...WRITE, params: readiness ? { readiness } : undefined })).data,
   copyTask: async (id, date) => (await api.post(`/production/tasks/${id}/copy`, { date }, WRITE)).data,
   invite: async (id, staffId) => (await api.post(`/production/tasks/${id}/invites`, { staff_id: staffId }, WRITE)).data,
   revokeInvite: async (id, staffId) => (await api.delete(`/production/tasks/${id}/invites/${staffId}`, WRITE)).data,

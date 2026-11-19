@@ -39,7 +39,7 @@ export const takePhoto = async () => {
  * Выбор вложений: галерея, камера (фото и видео), файл. onPicked(assets) — в формате expo-image/document-picker.
  * extraOptions — дополнительные пункты (например, «Опрос» в группе): [{ key, label, icon, color, onPress }].
  */
-export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOptions = [] }) => {
+export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOptions = [], photosOnly = false }) => {
   const insets = useSafeAreaInsets();
   // iOS не показывает новое окно (системное или наше, например «Опрос»), пока закрывается это
   const closeFirst = async () => {
@@ -83,7 +83,7 @@ export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOption
       color: '#3B82F6',
       action: async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images', 'videos'],
+          mediaTypes: photosOnly ? ['images'] : ['images', 'videos'],
           quality: 0.8,
           allowsMultipleSelection: true,
           selectionLimit: 10,
@@ -105,6 +105,8 @@ export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOption
     },
   ];
 
+  // Только фото (отчёт по заданию): галерея и камера
+  const shown = photosOnly ? options.filter((option) => option.key === 'gallery' || option.key === 'photo') : options;
   const extra = extraOptions.map((option) => ({
     ...option,
     action: null,
@@ -120,7 +122,7 @@ export const AttachmentSheet = ({ visible, theme, onClose, onPicked, extraOption
         <Pressable style={[styles.sheet, { backgroundColor: theme.sheet, paddingBottom: Math.max(insets.bottom + 8, 34) }]}>
           <View style={[styles.handle, { backgroundColor: theme.separator }]} />
           <View style={styles.grid}>
-            {[...options, ...extra].map((option) => (
+            {[...shown, ...extra].map((option) => (
               <Pressable key={option.key} style={styles.option} onPress={() => (option.onSelect ? option.onSelect() : run(option.action))}>
                 <View style={[styles.icon, { backgroundColor: option.color }]}>
                   <Ionicons name={option.icon} size={26} color="#FFFFFF" />

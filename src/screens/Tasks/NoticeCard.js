@@ -6,9 +6,17 @@ import { formatStamp } from '../../utils/tasks';
 
 const ICONS = {
   task_executor_changed: 'swap-horizontal',
+  report_due: 'document-text',
+  report_submitted: 'document-text',
+  report_quantities_changed: 'create',
+  report_not_accepted: 'cloud-offline',
+  report_provided: 'checkmark-done',
 };
 
-/** Плашка-уведомление вверху экрана текущего дня (инт. 9.36: «в виде таблички, пока не закроют»; п. 9.3) */
+/**
+ * Плашка-уведомление вверху экрана текущего дня (инт. 9.36: «в виде таблички, пока не закроют»; п. 9.3). Без onClose —
+ * не закрывается (например, «нет отчёта» висит, пока отчёт не предоставлен, П-ЗД-37)
+ */
 export const NoticeCard = ({ notice, closing, onClose, onPress }) => {
   const theme = useTheme();
   const s = useThemedStyles(makeStyles);
@@ -26,9 +34,9 @@ export const NoticeCard = ({ notice, closing, onClose, onPress }) => {
       <View style={s.body}>
         <Text style={s.title}>{notice.title}</Text>
         {notice.body ? <Text style={s.text}>{notice.body}</Text> : null}
-        <Text style={s.time}>{formatStamp(notice.created_at)}</Text>
+        {notice.created_at ? <Text style={s.time}>{formatStamp(notice.created_at)}</Text> : null}
       </View>
-      <TouchableOpacity
+      {onClose ? <TouchableOpacity
         style={s.close}
         onPress={onClose}
         disabled={closing}
@@ -38,7 +46,7 @@ export const NoticeCard = ({ notice, closing, onClose, onPress }) => {
         {closing ? <ActivityIndicator size="small" color={theme.textSecondary} /> : (
           <Ionicons name="close" size={18} color={theme.textSecondary} />
         )}
-      </TouchableOpacity>
+      </TouchableOpacity> : null}
     </Pressable>
   );
 };

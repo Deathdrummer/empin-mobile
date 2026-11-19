@@ -11,11 +11,12 @@ import {
 } from '../../services/production';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
-  describeHistoryEntry, executorSubtitle, executorTitle, formatDayShort, formatQuantity, formatReadiness, formatStamp,
-  isOfflineError, objectTitle, relativeDayLabel, shortName, vehicleTitle,
+  describeHistoryEntry, executorSubtitle, executorTitle, formatDay, formatDayShort, formatQuantity, formatReadiness, formatStamp,
+  hasRight, isOfflineError, objectTitle, relativeDayLabel, RIGHT, shortName, vehicleTitle,
 } from '../../utils/tasks';
 import { PickerSheet } from './PickerSheet';
 import { AttendanceBlock } from './AttendanceBlock';
+import { TaskReportSection } from '../Reports/TaskReportSection';
 
 /**
  * Карточка задания (п. 6.4): объект с готовностью, дата, исполнитель, создатель, содержание, виды работ, техника и
@@ -29,6 +30,10 @@ export default function TaskScreen({ navigation, route }) {
   const [invites, setInvites] = useState(null);
   const [history, setHistory] = useState([]);
   const [attendance, setAttendance] = useState(null);
+  const [report, setReport] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const [deleteChoice, setDeleteChoice] = useState(null);
+  const [readinessChoice, setReadinessChoice] = useState('keep');
   const [state, setState] = useState(preview ? 'preview' : 'loading');
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -43,6 +48,9 @@ export default function TaskScreen({ navigation, route }) {
     setInvites(data.invites ?? null);
     setHistory(data.history || []);
     setAttendance(data.attendance ?? null);
+    setReport(data.report ?? null);
+    setProgress(data.progress ?? null);
+    setDeleteChoice(data.delete_choice ?? null);
   }, []);
 
   const load = useCallback(async () => {
@@ -85,7 +93,8 @@ export default function TaskScreen({ navigation, route }) {
   const remove = async () => {
     setBusy(true);
     try {
-      await productionAPI.deleteTask(task.id);
+      // Готовность установлена отчётом этого задания — выбор «оставить / вернуть прежнюю» (П-ФК-40)
+      await productionAPI.deleteTask(task.id, deleteChoice ? readinessChoice : null);
       forgetTask(task.id);
       emitTasksChanged([task.date]);
       setDeleting(false);
@@ -176,7 +185,6 @@ export default function TaskScreen({ navigation, route }) {
   }
 
   const { object, executor, creator, vehicle, driver, works } = task;
-  const readiness = formatReadiness(object?.readiness);
 
   return (
     <SafeAreaView style={s.container} edges={['top']}>
@@ -216,11 +224,10 @@ export default function TaskScreen({ navigation, route }) {
             title={object?.responsible?.name ? shortName(object.responsible.name) : 'Не назначен'}
             subtitle="Ответственный начальник участка"
           />
-          <InfoRow s={s} theme={theme} border icon="speedometer" color="#C46A1B" title={readiness || 'Не задана'} subtitle="Утверждённая готовность объекта" />
         </View>
 
         <View style={s.card}>
-          <InfoRow s={s} theme={theme} icon="calendar" color={theme.accent} title={relativeDayLabel(task.date, today)} subtitle={formatDayShort(task.date, today)} />
+          <InfoRow s={s} theme={theme} icon="calendar" color={theme.accent} title={relativeDayLabel(task.date, today)} subtitle={relativeDayLabel(task.date, today) === formatDayShort(task.date, today) ? formatDay(task.date, today).weekDay : formatDayShort(task.date, today)} />
           <InfoRow
             s={s}
             theme={theme}
@@ -278,6 +285,19 @@ export default function TaskScreen({ navigation, route }) {
           taskId={task.id}
           staffId={me?.staff?.id}
           onChanged={(block) => { setAttendance(block); emitTasksChanged([task.date]); }}
+        />
+
+        <TaskReportSection
+          s={s}
+          theme={theme}
+          task={task}
+          report={report}
+          progress={progress}
+          online={canAct}
+          canCreate={hasRight(me, RIGHT.REPORT_SUBMIT)}
+          onOpenReport={() => navigation.navigate('Report', { task })}
+          onOpenHistory={() => navigation.navigate('ObjectHistory', { task })}
+          onReadinessChanged={(value) => { setProgress((p) => ({ ...p, readiness: value })); emitTasksChanged([task.date]); }}
         />
 
         {invites !== null ? (
@@ -370,14 +390,28 @@ export default function TaskScreen({ navigation, route }) {
         visible={deleting}
         onClose={() => setDeleting(false)}
         title="Удалить задание?"
-        message={objectTitle(object)}
+        message={report ? `${objectTitle(object)}\nОтчёт будет удалён` : objectTitle(object)}
         buttons={(
           <>
             <DialogButton title="Отмена" onPress={() => setDeleting(false)} />
             <DialogButton title="Удалить" variant="danger" onPress={remove} loading={busy} />
           </>
         )}
-      />
+      >
+        {deleteChoice ? (
+          <View style={s.choice}>
+            {[
+              ['keep', `Оставить готовность ${formatReadiness(deleteChoice.current) || ''}`],
+              ['restore', `Вернуть прежнюю: ${formatReadiness(deleteChoice.previous) || 'не задана'}`],
+            ].map(([key, title]) => (
+              <Pressable key={key} style={s.choiceRow} onPress={() => setReadinessChoice(key)} accessibilityRole="radio" accessibilityState={{ checked: readinessChoice === key }}>
+                <Ionicons name={readinessChoice === key ? 'radio-button-on' : 'radio-button-off'} size={22} color={readinessChoice === key ? theme.accent : theme.textMuted} />
+                <Text style={[s.rowTitle, s.flex]}>{title}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+      </Dialog>
     </SafeAreaView>
   );
 }
@@ -441,4 +475,6 @@ const styles = (theme) => StyleSheet.create({
   historyRow: { paddingHorizontal: 14, paddingVertical: 10, gap: 2 },
   historyDetail: { fontSize: 14, color: theme.text },
   actionIcon: { width: 30, textAlign: 'center' },
+  choice: { marginTop: 14, gap: 4 },
+  choiceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
 });

@@ -14,7 +14,7 @@ import {
 import { flushTaskChat } from '../../services/taskChat';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
-  addDays, canCreateOn, dayRange, daysBetween, filtersKey, filtersToParams, filterTags, hasFilters, isOfflineError,
+  addDays, canCreateOn, dayRange, daysBetween, filtersKey, formatDayShort, filtersToParams, filterTags, hasFilters, isOfflineError,
   hasRight, objectTitle, parseDateKey, RIGHT, toDateKey, unseenWarnings,
 } from '../../utils/tasks';
 import { useAfterModalClose } from '../../hooks/useAfterModalClose';
@@ -22,6 +22,8 @@ import { Dialog, DialogButton } from '../../components/ui/Dialog';
 import { DayCard } from './components/DayCard';
 import { ShiftCard } from '../Tasks/ShiftCard';
 import { flushAttendance } from '../../services/attendance';
+import { flushReports, loadDueReports, useDueReports } from '../../services/reports';
+import { NoticeCard } from '../Tasks/NoticeCard';
 import { ActiveFilterTags } from './components/ActiveFilterTags';
 import { CalendarModal } from './components/modals/CalendarModal';
 import { EditCommentModal } from './components/modals/EditCommentModal';
@@ -58,6 +60,8 @@ function PlanScreenContent() {
   // «Сегодня» — по серверу в часовом поясе организации (п. 9.2), до первого ответа — по телефону
   const today = useToday();
   const notices = useNotifications();
+  // Задания без отчёта — плашка вверху текущего дня, пока отчёт не предоставлен (П-ЗД-37)
+  const dueReports = useDueReports();
   const [center, setCenter] = useState(getToday);
   const [current, setCurrent] = useState(getToday);
   const [filters, setFilters] = useState({});
@@ -157,15 +161,18 @@ function PlanScreenContent() {
     setRefreshing(false);
   }, [current, load, around]);
 
+  const staffId = me?.staff?.id;
   const reloadNotifications = useCallback(async () => {
     setNotificationsLoading(true);
     await loadNotifications();
+    if (staffId) loadDueReports(staffId);
     setNotificationsLoading(false);
-  }, []);
+  }, [staffId]);
 
   useEffect(() => {
     reloadNotifications();
     flushTaskChat();
+    flushReports();
   }, [reloadNotifications]);
 
   // Телефон думал, что сегодня другой день (часы, часовой пояс): сервер поправил — открываем его «сегодня»
@@ -357,6 +364,11 @@ function PlanScreenContent() {
       forgetTask(task.id);
       emitTasksChanged([task.date]);
     } catch (error) {
+      // Готовность объекта установлена отчётом этого задания — выбор «оставить / вернуть» в карточке (П-ФК-40)
+      if (error?.response?.data?.reason === 'readiness_choice') {
+        navigation.navigate('Task', { taskId: task.id, task });
+        return;
+      }
       Toast.show({
         type: 'error',
         text1: 'Не удалось удалить',
@@ -407,7 +419,18 @@ function PlanScreenContent() {
       deletingTask={deletingTask}
       chat={chat}
       notices={date === today ? notices : null}
-      shiftCard={date === today && me?.staff?.id ? <ShiftCard staffId={me.staff.id} refreshKey={shiftRefresh} /> : null}
+      shiftCard={date === today && me?.staff?.id ? (
+        <>
+          <ShiftCard staffId={me.staff.id} refreshKey={shiftRefresh} />
+          {dueReports.map((task) => (
+            <NoticeCard
+              key={`due-${task.id}`}
+              notice={{ kind: 'report_due', title: 'Нет отчёта', body: `${objectTitle(task.object)}, ${formatDayShort(task.date, today)}` }}
+              onPress={() => navigation.navigate('Task', { taskId: task.id, task })}
+            />
+          ))}
+        </>
+      ) : null}
       closingNotice={closingNotice}
       onRefresh={refresh}
       onAddTeam={startAddTeam}
@@ -429,7 +452,8 @@ function PlanScreenContent() {
           отступ на её высоту — внутри карточки дня (см. DayCard, bottomInset) */}
       <SafeAreaView style={s.container} edges={['top']}>
         <View style={s.topBar}>
-          <Text style={s.title}>План-график</Text>
+          {/* Кнопок в шапке стало пять: на узком экране заголовок уменьшается, а не выталкивает кнопки за край */}
+          <Text style={s.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>План-график</Text>
           <View style={s.actions}>
             <TouchableOpacity
               style={s.actionButton}
@@ -444,6 +468,12 @@ function PlanScreenContent() {
                 </View>
               ) : null}
             </TouchableOpacity>
+            {/* На согласование: создателям заданий и владельцам права «Согласовывать чужие отчёты» (п. 8.4) */}
+            {hasRight(me, RIGHT.TASK_CREATE) || hasRight(me, RIGHT.REPORT_APPROVE_OTHERS) ? (
+              <TouchableOpacity style={s.actionButton} onPress={() => navigation.navigate('Approvals')} hitSlop={6} accessibilityLabel="На согласование">
+                <Ionicons name="checkmark-done-outline" size={21} color={theme.text} />
+              </TouchableOpacity>
+            ) : null}
             {/* ТУРВ: членам бригад, водителям и владельцам права «Просматривать ТУРВ» (п. 7.2) */}
             {me?.brigades?.length || me?.driver || hasRight(me, RIGHT.TIMESHEET_VIEW) ? (
               <TouchableOpacity style={s.actionButton} onPress={() => navigation.navigate('Turv')} hitSlop={6} accessibilityLabel="Табель">
@@ -549,7 +579,7 @@ function PlanScreenContent() {
           visible={!!deleting}
           onClose={() => setDeleting(null)}
           title="Удалить задание?"
-          message={deleting ? objectTitle(deleting.object) : ''}
+          message={deleting ? [objectTitle(deleting.object), deleting.report?.status ? 'Отчёт будет удалён' : null].filter(Boolean).join('\n') : ''}
           buttons={(
             <>
               <DialogButton title="Отмена" onPress={() => setDeleting(null)} />
@@ -585,6 +615,7 @@ const makeStyles = (theme) => StyleSheet.create({
     paddingBottom: 6,
   },
   title: {
+    flexShrink: 1,
     fontSize: 30,
     fontWeight: '700',
     color: theme.text,
@@ -593,6 +624,7 @@ const makeStyles = (theme) => StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 8,
+    marginLeft: 8,
   },
   actionButton: {
     width: 40,
