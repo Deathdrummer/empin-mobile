@@ -56,6 +56,7 @@ export const AttendanceBlock = ({ s, theme, block, taskId, staffId, onChanged })
                 <Text style={s.rowTitle}>{brigade.name}</Text>
                 <Text style={s.rowSub}>{pending ? 'Подтверждено' : brigadeStatus(brigade)}</Text>
                 {brigade.declared_by ? <Text style={s.rowSub}>{`Заявил состав: ${shortName(brigade.declared_by.name)}`}</Text> : null}
+                {brigade.changed_by ? <Text style={s.rowSub}>{`Изменено: ${shortName(brigade.changed_by.name)}`}</Text> : null}
               </View>
               {pending ? <Ionicons name="cloud-offline-outline" size={18} color={theme.textSecondary} /> : null}
             </View>

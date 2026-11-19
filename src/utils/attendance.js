@@ -58,6 +58,7 @@ export const brigadeStatus = (brigade) => (brigade?.status === 'confirmed'
 export const driverStatus = (driver) => {
   switch (driver?.status) {
     case 'confirmed': return `Подтверждено: ${shortName(driver.confirmed_by?.name)}`;
+    case 'changed': return `Изменено: ${shortName(driver.changed_by?.name)}`;
     case 'in_brigade': return 'Отметился в бригаде';
     case 'not_marked': return 'Не отметился';
     default: return 'Не подтверждён';

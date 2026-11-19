@@ -17,6 +17,7 @@ import ChatMediaScreen from './src/screens/Messenger/ChatMediaScreen';
 import ChatArchiveScreen from './src/screens/Messenger/ChatArchiveScreen';
 import TaskScreen from './src/screens/Tasks/TaskScreen';
 import TaskFormScreen from './src/screens/Tasks/TaskFormScreen';
+import TurvScreen from './src/screens/Turv/TurvScreen';
 import { PRODUCTION_CACHE_KEY, resetProductionState } from './src/services/production';
 import { clearTaskChatOutbox } from './src/services/taskChat';
 import { clearAttendanceState } from './src/services/attendance';
@@ -188,6 +189,7 @@ export default function App() {
                       <Stack.Screen name="ChatArchive" component={ChatArchiveScreen} />
                       <Stack.Screen name="Task" component={TaskScreen} />
                       <Stack.Screen name="TaskForm" component={TaskFormScreen} />
+                      <Stack.Screen name="Turv" component={TurvScreen} />
                     </Stack.Navigator>
                   </NavigationContainer>
                 ) : (

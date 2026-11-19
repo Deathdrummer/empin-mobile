@@ -15,7 +15,7 @@ import { flushTaskChat } from '../../services/taskChat';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
   addDays, canCreateOn, dayRange, daysBetween, filtersKey, filtersToParams, filterTags, hasFilters, isOfflineError,
-  objectTitle, parseDateKey, toDateKey, unseenWarnings,
+  hasRight, objectTitle, parseDateKey, RIGHT, toDateKey, unseenWarnings,
 } from '../../utils/tasks';
 import { useAfterModalClose } from '../../hooks/useAfterModalClose';
 import { Dialog, DialogButton } from '../../components/ui/Dialog';
@@ -444,6 +444,12 @@ function PlanScreenContent() {
                 </View>
               ) : null}
             </TouchableOpacity>
+            {/* ТУРВ: членам бригад, водителям и владельцам права «Просматривать ТУРВ» (п. 7.2) */}
+            {me?.brigades?.length || me?.driver || hasRight(me, RIGHT.TIMESHEET_VIEW) ? (
+              <TouchableOpacity style={s.actionButton} onPress={() => navigation.navigate('Turv')} hitSlop={6} accessibilityLabel="Табель">
+                <Ionicons name="grid-outline" size={20} color={theme.text} />
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity style={s.actionButton} onPress={openCalendar} hitSlop={6} accessibilityLabel="Выбрать дату">
               <Ionicons name="calendar-outline" size={22} color={theme.text} />
             </TouchableOpacity>

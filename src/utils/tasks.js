@@ -12,6 +12,7 @@ export const RIGHT = {
   TASK_EDIT_OWN: 2,
   TASK_EDIT_OTHERS: 4,
   TASK_INVITE: 7,
+  TIMESHEET_VIEW: 19,
 };
 
 // ---- Даты: строка YYYY-MM-DD, без часовых поясов (дата задания — календарная дата организации) ----
