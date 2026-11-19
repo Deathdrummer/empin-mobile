@@ -20,6 +20,8 @@ import {
 import { useAfterModalClose } from '../../hooks/useAfterModalClose';
 import { Dialog, DialogButton } from '../../components/ui/Dialog';
 import { DayCard } from './components/DayCard';
+import { ShiftCard } from '../Tasks/ShiftCard';
+import { flushAttendance } from '../../services/attendance';
 import { ActiveFilterTags } from './components/ActiveFilterTags';
 import { CalendarModal } from './components/modals/CalendarModal';
 import { EditCommentModal } from './components/modals/EditCommentModal';
@@ -61,6 +63,8 @@ function PlanScreenContent() {
   const [filters, setFilters] = useState({});
   const [entries, setEntries] = useState({});
   const [refreshing, setRefreshing] = useState(false);
+  // Обновление дня обновляет и плашку «Выход на смену»
+  const [shiftRefresh, setShiftRefresh] = useState(0);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [calendarDates, setCalendarDates] = useState(null);
   const [filterVisible, setFilterVisible] = useState(false);
@@ -142,6 +146,8 @@ function PlanScreenContent() {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     flushTaskChat();
+    flushAttendance();
+    setShiftRefresh((value) => value + 1);
     const { expandedTask, reload } = chatRef.current;
     await Promise.all([
       load(around(current), { force: true }),
@@ -401,6 +407,7 @@ function PlanScreenContent() {
       deletingTask={deletingTask}
       chat={chat}
       notices={date === today ? notices : null}
+      shiftCard={date === today && me?.staff?.id ? <ShiftCard staffId={me.staff.id} refreshKey={shiftRefresh} /> : null}
       closingNotice={closingNotice}
       onRefresh={refresh}
       onAddTeam={startAddTeam}

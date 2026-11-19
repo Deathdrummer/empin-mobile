@@ -19,6 +19,7 @@ import TaskScreen from './src/screens/Tasks/TaskScreen';
 import TaskFormScreen from './src/screens/Tasks/TaskFormScreen';
 import { PRODUCTION_CACHE_KEY, resetProductionState } from './src/services/production';
 import { clearTaskChatOutbox } from './src/services/taskChat';
+import { clearAttendanceState } from './src/services/attendance';
 import { clearDrafts, DRAFTS_STORAGE_KEY } from './src/services/drafts';
 import { clearPendingReplies } from './src/services/messageActions';
 import { authAPI, setUnauthorizedCallback } from './src/services/api';
@@ -89,6 +90,8 @@ export default function App() {
         clearPendingReplies(),
         // Неотправленная переписка заданий не должна уйти от имени следующего сотрудника
         clearTaskChatOutbox(),
+        // И отметки выхода, заявки и подтверждения
+        clearAttendanceState(),
       ]);
       clearDrafts();
       // Задания и права прежнего сотрудника не должны остаться в памяти

@@ -28,6 +28,8 @@ export const DayCard = ({
   deletingTask,
   chat,
   notices = null,
+  // Плашка «Выход на смену» — только на сегодняшнем дне
+  shiftCard = null,
   closingNotice,
   onRefresh,
   onAddTeam,
@@ -47,6 +49,8 @@ export const DayCard = ({
   const { dateText, weekDay, year } = formatDay(date, today);
   const groups = useMemo(() => groupByExecutor(entry?.items), [entry?.items]);
   const loading = !entry?.items && !entry?.offline;
+  // Счётчик заданий с неподтверждёнными выходами (П-ЗД-44)
+  const unconfirmed = (entry?.items || []).filter((item) => item.attendance_unconfirmed).length;
 
   return (
     <View style={styles.dayContainer}>
@@ -60,6 +64,12 @@ export const DayCard = ({
               </Text>
               {!!weekDay && <Text style={styles.weekDay}>{weekDay}</Text>}
             </View>
+            {unconfirmed > 0 && (
+              <View style={styles.unconfirmedPill} accessibilityLabel={`Неподтверждённых выходов: ${unconfirmed}`}>
+                <Ionicons name="people-circle" size={16} color={theme.onAccent} />
+                <Text style={styles.todayLabel}>{unconfirmed}</Text>
+              </View>
+            )}
             {date === today && (
               <View style={styles.todayPill}>
                 <Text style={styles.todayLabel}>Сегодня</Text>
@@ -86,6 +96,7 @@ export const DayCard = ({
           bottomOffset={KEYBOARD_GAP}
           refreshControl={<RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={theme.accent} colors={[theme.accent]} />}
         >
+          {shiftCard}
           {(notices || []).map((notice) => (
             <NoticeCard
               key={`notice-${notice.id}`}
@@ -98,7 +109,7 @@ export const DayCard = ({
           {loading ? (
             <ActivityIndicator style={styles.loader} color={theme.accent} />
           ) : groups.length > 0 ? (
-            <View style={(notices || []).length ? styles.afterNotices : null}>
+            <View style={(notices || []).length || shiftCard ? styles.afterNotices : null}>
               {groups.map((group) => (
                 <TeamCard
                   key={group.key}
@@ -195,6 +206,16 @@ const makeStyles = (theme) => StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 3,
+  },
+  unconfirmedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: theme.danger,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginRight: 6,
   },
   todayLabel: {
     fontSize: 13,

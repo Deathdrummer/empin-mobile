@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 import { Dialog, DialogButton } from '../../components/ui/Dialog';
 import {
-  cachedTask, emitTasksChanged, forgetTask, productionAPI, saveTask, setCopiedTask, useToday,
+  cachedTask, emitTasksChanged, forgetTask, productionAPI, saveTask, setCopiedTask, useProductionMe, useToday,
 } from '../../services/production';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
@@ -15,6 +15,7 @@ import {
   isOfflineError, objectTitle, relativeDayLabel, shortName, vehicleTitle,
 } from '../../utils/tasks';
 import { PickerSheet } from './PickerSheet';
+import { AttendanceBlock } from './AttendanceBlock';
 
 /**
  * Карточка задания (п. 6.4): объект с готовностью, дата, исполнитель, создатель, содержание, виды работ, техника и
@@ -27,6 +28,7 @@ export default function TaskScreen({ navigation, route }) {
   const [task, setTask] = useState(preview || null);
   const [invites, setInvites] = useState(null);
   const [history, setHistory] = useState([]);
+  const [attendance, setAttendance] = useState(null);
   const [state, setState] = useState(preview ? 'preview' : 'loading');
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -34,11 +36,13 @@ export default function TaskScreen({ navigation, route }) {
   const [staff, setStaff] = useState(null);
   const [scrolled, setScrolled] = useState(false);
   const today = useToday();
+  const me = useProductionMe();
 
   const apply = useCallback((data) => {
     setTask(data.task);
     setInvites(data.invites ?? null);
     setHistory(data.history || []);
+    setAttendance(data.attendance ?? null);
   }, []);
 
   const load = useCallback(async () => {
@@ -266,6 +270,15 @@ export default function TaskScreen({ navigation, route }) {
             </View>
           </>
         ) : null}
+
+        <AttendanceBlock
+          s={s}
+          theme={theme}
+          block={attendance}
+          taskId={task.id}
+          staffId={me?.staff?.id}
+          onChanged={(block) => { setAttendance(block); emitTasksChanged([task.date]); }}
+        />
 
         {invites !== null ? (
           <>

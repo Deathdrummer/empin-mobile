@@ -101,6 +101,9 @@ export const ContractCard = ({ task, chat, onOpenTask, onEditTask, onCopyTask, o
             <View style={styles.col1}>
               <Text style={styles.contractNumber}>{object.number || '—'}</Text>
               {count > 0 && <CommentsIcon count={count} />}
+              {task.attendance_unconfirmed ? (
+                <Ionicons name="people-circle" size={20} color={theme.danger} accessibilityLabel="Выход не подтверждён" />
+              ) : null}
             </View>
             <View style={styles.col2}>
               <Text style={styles.contractTitle}>{object.title || 'Объект'}</Text>
