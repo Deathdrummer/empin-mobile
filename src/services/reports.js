@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
 import api from './api';
-import { markRefused, settleRefusedQueue } from '../utils/reports';
+import { markRefused, outboxFailure, retryDelay, settleRefusedQueue } from '../utils/reports';
 import { emitTasksChanged } from './production';
 import { getUserFacingError } from '../utils/userFacingError';
 import { isOfflineError } from '../utils/tasks';
@@ -97,6 +97,8 @@ const RETRY_MS = 20000;
 let queue = null;
 let flushing = false;
 let retryTimer = null;
+// Попыток подряд со сбоем сервера: фото не выгружается заново каждые 20 секунд, пока сервер отвечает ошибкой
+let serverFailures = 0;
 const queueListeners = new Set();
 const resultListeners = new Set();
 
@@ -116,7 +118,7 @@ const persist = () => AsyncStorage.setItem(OUTBOX_KEY, JSON.stringify(queue || [
 
 const scheduleRetry = () => {
   clearTimeout(retryTimer);
-  if ((queue || []).some((item) => !item.failed)) retryTimer = setTimeout(() => flushReports(), RETRY_MS);
+  if ((queue || []).some((item) => !item.failed)) retryTimer = setTimeout(() => flushReports(), retryDelay(serverFailures, RETRY_MS));
 };
 
 const photoDir = () => {
@@ -173,24 +175,33 @@ const settleRefused = (staffId, taskId) => {
   flushReports();
 };
 
-/** Отправить ожидающее; ошибка сервера по одному заданию не держит остальные */
+/** Отправить ожидающее; сбой сервера по одному заданию не держит остальные */
 export const flushReports = async () => {
   if (flushing) return;
   flushing = true;
+  let serverFailed = false;
   try {
     await load();
+    const postponed = new Set();
     for (const item of [...queue]) {
-      if (item.failed) continue;
+      const key = `${item.staffId}:${item.taskId}`;
       // Фото — после изменения отчёта того же задания: без отчёта его некуда прикрепить
+      if (item.failed || postponed.has(key)) continue;
       try {
         finish(item, await send(item, true));
       } catch (error) {
-        const status = error?.response?.status;
-        if (isOfflineError(error) || !status || status >= 500 || status === 429) break;
+        const action = outboxFailure(error?.response?.status, isOfflineError(error));
+        if (action === 'stop') break;
+        if (action === 'skip') {
+          postponed.add(key);
+          serverFailed = true;
+          continue;
+        }
         refuse(item, getUserFacingError(error, 'Не принято'));
       }
     }
   } finally {
+    serverFailures = serverFailed ? serverFailures + 1 : 0;
     flushing = false;
     scheduleRetry();
   }

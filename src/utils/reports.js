@@ -264,6 +264,20 @@ export const describeObjectEntry = (entry) => {
 
 // ---- Очередь отправки: данные, не принятые сервером (П-ФК-44, п. 9.1, правила 3–4) ----
 
+/**
+ * Что делать очереди с ошибкой отправки: нет связи или сервер просит подождать — остановиться до следующей попытки;
+ * сбой сервера — отложить только это задание (порядок внутри задания сохраняется), остальные отправлять; ответ с
+ * причиной — не принято
+ */
+export const outboxFailure = (status, offline) => {
+  if (offline || !status || status === 429) return 'stop';
+  if (status >= 500) return 'skip';
+  return 'refuse';
+};
+
+/** Пауза до следующей попытки: после сбоев сервера подряд — вдвое дольше каждый раз, не больше 10 минут */
+export const retryDelay = (serverFailures, base) => Math.min(base * 2 ** serverFailures, 600000);
+
 /** Элемент очереди не принят: остаётся с причиной и больше сам не отправляется */
 export const markRefused = (queue, uuid, error) => queue.map((entry) => (entry.uuid === uuid ? { ...entry, failed: error } : entry));
 
