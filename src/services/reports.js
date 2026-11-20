@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
 import api from './api';
+import { markRefused, settleRefusedQueue } from '../utils/reports';
 import { emitTasksChanged } from './production';
 import { getUserFacingError } from '../utils/userFacingError';
 import { isOfflineError } from '../utils/tasks';
@@ -115,7 +116,7 @@ const persist = () => AsyncStorage.setItem(OUTBOX_KEY, JSON.stringify(queue || [
 
 const scheduleRetry = () => {
   clearTimeout(retryTimer);
-  if ((queue || []).length) retryTimer = setTimeout(() => flushReports(), RETRY_MS);
+  if ((queue || []).some((item) => !item.failed)) retryTimer = setTimeout(() => flushReports(), RETRY_MS);
 };
 
 const photoDir = () => {
@@ -146,8 +147,30 @@ const finish = (item, data, error = null) => {
   if (data) {
     saveReportScreen(item.staffId, item.taskId, data);
     emitTasksChanged([item.date]);
+    if (item.kind === 'save') settleRefused(item.staffId, item.taskId);
   }
   resultListeners.forEach((listener) => listener(item, data, error));
+};
+
+/**
+ * Сервер не принял данные, внесённые без связи (П-ФК-44, п. 9.1, правила 3–4): заполненное остаётся на устройстве —
+ * в очереди с причиной, без повторной отправки; открывается в отчёте и уходит заново после сохранения отчёта
+ */
+const refuse = (item, error) => {
+  queue = markRefused(queue, item.uuid, error);
+  persist();
+  notify();
+  resultListeners.forEach((listener) => listener(item, null, error));
+};
+
+/** Отчёт задания сохранён на сервере: прежний непринятый текст больше не нужен, непринятые фото — отправить снова */
+const settleRefused = (staffId, taskId) => {
+  const next = settleRefusedQueue(queue || [], staffId, taskId);
+  if (next === queue) return;
+  queue = next;
+  persist();
+  notify();
+  flushReports();
 };
 
 /** Отправить ожидающее; ошибка сервера по одному заданию не держит остальные */
@@ -157,13 +180,14 @@ export const flushReports = async () => {
   try {
     await load();
     for (const item of [...queue]) {
+      if (item.failed) continue;
       // Фото — после изменения отчёта того же задания: без отчёта его некуда прикрепить
       try {
         finish(item, await send(item, true));
       } catch (error) {
         const status = error?.response?.status;
         if (isOfflineError(error) || !status || status >= 500 || status === 429) break;
-        finish(item, null, getUserFacingError(error, 'Не принято'));
+        refuse(item, getUserFacingError(error, 'Не принято'));
       }
     }
   } finally {
@@ -182,12 +206,13 @@ export const submitReport = async ({ staffId, taskId, date, body, clientUuid }) 
   try {
     const data = await reportsAPI.save(taskId, { ...body, client_uuid: clientUuid });
     saveReportScreen(staffId, taskId, data);
+    settleRefused(staffId, taskId);
     return { data };
   } catch (error) {
     if (!isOfflineError(error)) throw error;
     const previous = queue.find((item) => item.kind === 'save' && Number(item.taskId) === Number(taskId) && Number(item.staffId) === Number(staffId));
-    // Отправка, ожидающая связи, не отменяется следующим сохранением
-    const merged = previous?.body?.submit ? { ...body, submit: true } : body;
+    // Отправка, ожидающая связи, не отменяется следующим сохранением; непринятая — не наследуется
+    const merged = previous?.body?.submit && !previous.failed ? { ...body, submit: true } : body;
     const item = { uuid: newUuid(), kind: 'save', staffId, taskId, date, body: merged, clientUuid };
     queue = previous ? queue.map((entry) => (entry === previous ? item : entry)) : [...queue, item];
     persist();

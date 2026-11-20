@@ -41,6 +41,8 @@ export default function ReportScreen({ navigation, route }) {
   const pending = usePendingReports(staffId, taskId);
   const pendingSave = pending.find((item) => item.kind === 'save');
   const pendingPhotos = pending.filter((item) => item.kind === 'photo');
+  // Не принято сервером (П-ФК-44): заполненное остаётся на устройстве, причина — в строке статуса
+  const refused = pending.find((item) => item.failed);
 
   const [data, setData] = useState(null);
   const [state, setState] = useState('loading');
@@ -235,7 +237,7 @@ export default function ReportScreen({ navigation, route }) {
 
   const photos = [
     ...(report?.photos || []).map((photo) => ({ key: `s${photo.id}`, id: photo.id, uri: resolveMediaUri(photo.url) })),
-    ...pendingPhotos.map((item) => ({ key: item.uuid, uuid: item.uuid, uri: item.file.uri, pending: true })),
+    ...pendingPhotos.map((item) => ({ key: item.uuid, uuid: item.uuid, uri: item.file.uri, pending: true, failed: !!item.failed })),
   ];
 
   const removePhoto = async (photo) => {
@@ -285,7 +287,7 @@ export default function ReportScreen({ navigation, route }) {
     );
   }
 
-  const status = pendingSave ? (pendingSave.body.submit ? 'Отправлен' : reportStatusTitle(report?.status || 'draft')) : reportStatusTitle(report?.status);
+  const status = pendingSave && !pendingSave.failed ? (pendingSave.body.submit ? 'Отправлен' : reportStatusTitle(report?.status || 'draft')) : reportStatusTitle(report?.status);
   const people = reportPeople(report);
   const objectNow = context.readiness ?? null;
   const prefilled = report?.object_percent?.prefilled ?? null;
@@ -318,8 +320,10 @@ export default function ReportScreen({ navigation, route }) {
               <Text style={s.rowTitle}>{status}</Text>
               {people.map((line) => <Text key={line} style={s.rowSub}>{line}</Text>)}
               {report?.status === 'rejected' && report.reject_comment ? <Text style={s.rowSub}>{`Причина: ${report.reject_comment}`}</Text> : null}
+              {refused ? <Text style={[s.rowSub, { color: theme.danger }]}>{`Не принято: ${refused.failed}`}</Text> : null}
             </View>
-            {pendingSave || pendingPhotos.length ? <Ionicons name="cloud-offline-outline" size={18} color={theme.textSecondary} /> : null}
+            {refused ? <Ionicons name="alert-circle" size={18} color={theme.danger} />
+              : pendingSave || pendingPhotos.length ? <Ionicons name="cloud-offline-outline" size={18} color={theme.textSecondary} /> : null}
           </View>
         </View>
 
@@ -383,7 +387,9 @@ export default function ReportScreen({ navigation, route }) {
             <Pressable key={photo.key} onPress={() => setViewer(index)} style={s.photo} accessibilityLabel={`Фото ${index + 1}`}>
               <CachedImage uri={photo.uri} style={s.photoImage} />
               {photo.pending ? (
-                <View style={s.photoBadge}><Ionicons name="cloud-offline-outline" size={14} color="#FFFFFF" /></View>
+                <View style={[s.photoBadge, photo.failed && { backgroundColor: theme.danger }]}>
+                  <Ionicons name={photo.failed ? 'alert-circle' : 'cloud-offline-outline'} size={14} color="#FFFFFF" />
+                </View>
               ) : null}
             </Pressable>
           ))}

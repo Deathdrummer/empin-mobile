@@ -261,3 +261,24 @@ export const describeObjectEntry = (entry) => {
       .filter(Boolean).join(' · '),
   };
 };
+
+// ---- Очередь отправки: данные, не принятые сервером (П-ФК-44, п. 9.1, правила 3–4) ----
+
+/** Элемент очереди не принят: остаётся с причиной и больше сам не отправляется */
+export const markRefused = (queue, uuid, error) => queue.map((entry) => (entry.uuid === uuid ? { ...entry, failed: error } : entry));
+
+/**
+ * Отчёт задания сохранён на сервере: непринятый прежний текст убирается, непринятые фото снова в отправку.
+ * Нечего менять — та же очередь (без лишней записи на устройство).
+ */
+export const settleRefusedQueue = (queue, staffId, taskId) => {
+  const mine = (entry) => Number(entry.staffId) === Number(staffId) && Number(entry.taskId) === Number(taskId);
+  if (!queue.some((entry) => mine(entry) && entry.failed)) return queue;
+  return queue
+    .filter((entry) => !(mine(entry) && entry.failed && entry.kind === 'save'))
+    .map((entry) => {
+      if (!(mine(entry) && entry.failed)) return entry;
+      const { failed, ...rest } = entry;
+      return rest;
+    });
+};
