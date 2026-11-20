@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppState, Dimensions, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { Accelerometer } from 'expo-sensors';
@@ -183,19 +183,30 @@ function PlanScreenContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
 
-  // Вкладку открыли снова или вернулись из карточки: тихо обновляем открытые дни, права, уведомления, переписку
+  // Вкладку открыли снова, вернулись из карточки или из фона (утром — уже новый день): тихо обновляем открытые дни,
+  // права, уведомления, плашку «Выход на смену», переписку
+  const quietRefresh = useRef(null);
+  quietRefresh.current = () => {
+    load(around(current), { force: true });
+    refreshMe();
+    reloadNotifications();
+    flushTaskChat();
+    setShiftRefresh((value) => value + 1);
+    if (chatRef.current.expandedTask) chatRef.current.reload(chatRef.current.expandedTask);
+  };
   const wasFocused = useRef(isFocused);
   useEffect(() => {
-    if (isFocused && !wasFocused.current) {
-      load(around(current), { force: true });
-      refreshMe();
-      reloadNotifications();
-      flushTaskChat();
-      if (chatRef.current.expandedTask) chatRef.current.reload(chatRef.current.expandedTask);
-    }
+    if (isFocused && !wasFocused.current) quietRefresh.current();
     wasFocused.current = isFocused;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFocused]);
+  useEffect(() => {
+    let previous = AppState.currentState;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && previous === 'background' && wasFocused.current) quietRefresh.current();
+      previous = next;
+    });
+    return () => subscription.remove();
+  }, []);
 
   // Задание создано, изменено, удалено или вставлено — обновляем затронутые дни
   useEffect(() => subscribeTasksChanged((dates) => {

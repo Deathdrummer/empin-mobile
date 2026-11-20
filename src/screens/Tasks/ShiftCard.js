@@ -8,7 +8,8 @@ import { PickerSheet } from './PickerSheet';
 import {
   loadAttendanceToday, serverNow, submitAttendance, subscribeAttendanceResult, useAttendanceOutbox, useAttendanceToday,
 } from '../../services/attendance';
-import { crewText, markChoices, markedBrigade, markTitle, markWindowOpen } from '../../utils/attendance';
+import { getToday } from '../../services/production';
+import { crewText, dayState, markChoices, markedBrigade, markTitle, markWindowOpen, outboxDay } from '../../utils/attendance';
 import { shortName } from '../../utils/tasks';
 import { getUserFacingError } from '../../utils/userFacingError';
 
@@ -19,8 +20,11 @@ import { getUserFacingError } from '../../utils/userFacingError';
 export const ShiftCard = ({ staffId, refreshKey = 0 }) => {
   const theme = useTheme();
   const s = useThemedStyles(makeStyles);
-  const state = useAttendanceToday();
-  const outbox = useAttendanceOutbox(staffId);
+  // «Сегодня» — на каждой отрисовке (раз в 30 с — по таймеру): после полуночи плашка переходит на новый день сама
+  const today = getToday();
+  const saved = useAttendanceToday();
+  const state = dayState(saved, today);
+  const outbox = useAttendanceOutbox(staffId).filter((item) => outboxDay(item) === today);
   const [busy, setBusy] = useState(null);
   const [choosing, setChoosing] = useState(false);
   const [declaring, setDeclaring] = useState(null);
@@ -30,6 +34,10 @@ export const ShiftCard = ({ staffId, refreshKey = 0 }) => {
 
   const reload = useCallback(() => (staffId ? loadAttendanceToday(staffId) : null), [staffId]);
   useEffect(() => { reload(); }, [reload, refreshKey]);
+  // Состояние за прошлый день — обновить (без связи останется сохранённое, но без вчерашней отметки)
+  useEffect(() => {
+    if (saved?.date && saved.date !== today) reload();
+  }, [saved?.date, today, reload]);
   useEffect(() => subscribeAttendanceResult((item, result, error) => {
     if (error) Toast.show({ type: 'error', text1: item.kind === 'crew' ? 'Заявка состава не принята' : 'Отметка не принята', text2: error, position: 'top' });
     reload();
@@ -53,7 +61,7 @@ export const ShiftCard = ({ staffId, refreshKey = 0 }) => {
     setChoosing(false);
     setBusy('mark');
     try {
-      const result = await submitAttendance({ kind: 'mark', body: choice.body, staffId });
+      const result = await submitAttendance({ kind: 'mark', body: choice.body, staffId, date: today });
       if (result.data) reload();
       else Toast.show({ type: 'info', text1: 'Вы отметились', position: 'top' });
     } catch (error) {
@@ -88,7 +96,7 @@ export const ShiftCard = ({ staffId, refreshKey = 0 }) => {
     const target = declaring;
     setBusy('crew');
     try {
-      const result = await submitAttendance({ kind: 'crew', body: { brigade_id: target.id, staff_ids: selected }, staffId });
+      const result = await submitAttendance({ kind: 'crew', body: { brigade_id: target.id, staff_ids: selected }, staffId, date: today });
       setDeclaring(null);
       if (result.data) reload();
       else Toast.show({ type: 'info', text1: 'Состав заявлен', position: 'top' });

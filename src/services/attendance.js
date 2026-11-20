@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
+import { noteServerToday } from './production';
 import { getUserFacingError } from '../utils/userFacingError';
 import { isOfflineError } from '../utils/tasks';
 
@@ -36,6 +37,7 @@ export const loadAttendanceToday = async (staffId) => {
     const data = await attendanceAPI.today();
     const now = Date.parse(data?.now);
     if (!Number.isNaN(now)) clockOffset = now - Date.now();
+    noteServerToday(data?.date);
     setToday({ ...data, staffId });
     AsyncStorage.setItem(TODAY_KEY, JSON.stringify({ ...data, staffId })).catch(() => {});
   } catch {
@@ -139,9 +141,9 @@ export const flushAttendance = async () => {
  *
  * @returns {Promise<{data?: object, queued?: boolean}>} ответ сервера или признак «уйдёт при появлении связи»
  */
-export const submitAttendance = async ({ kind, taskId = null, body, staffId }) => {
+export const submitAttendance = async ({ kind, taskId = null, body, staffId, date = null }) => {
   await load();
-  const item = { uuid: newUuid(), kind, taskId, body, staffId, pressedAt: new Date().toISOString() };
+  const item = { uuid: newUuid(), kind, taskId, body, staffId, date, pressedAt: new Date().toISOString() };
   try {
     return { data: await send(item, false) };
   } catch (error) {

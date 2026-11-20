@@ -1,6 +1,29 @@
-import { shortName } from './tasks.js';
+import { shortName, toDateKey } from './tasks.js';
 
 /** Логика выхода на смену без React (ТЗ, раздел 7): окно отметки, выбор бригады, подписи статусов */
+
+/**
+ * Плашка на сегодня: сохранённое состояние за прошлый день (телефон пролежал ночь в фоне, без связи) не показывает
+ * вчерашнюю отметку, заявку и состав — сегодня можно отметиться, в том числе без связи (П-СМ-03а)
+ */
+export const dayState = (state, today) => {
+  if (!state?.date || !today || state.date === today) return state;
+  return {
+    ...state,
+    date: today,
+    mark: null,
+    brigades: (state.brigades || []).map((brigade) => ({
+      ...brigade,
+      crew: [],
+      declared: null,
+      confirmed: null,
+      members: (brigade.members || []).map((member) => ({ ...member, marked: false })),
+    })),
+  };
+};
+
+/** День действия в очереди: запомнен при нажатии; у записей без него — дата нажатия по часам телефона */
+export const outboxDay = (item) => item?.date || (item?.pressedAt ? toDateKey(new Date(item.pressedAt)) : null);
 
 /** Минуты от начала суток по времени организации; смещение пояса берётся из серверного «сейчас» («…+03:00») */
 export const orgMinutes = (serverNowIso, nowMs) => {
