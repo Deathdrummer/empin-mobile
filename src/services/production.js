@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
 import { currentToday, parseDateKey, toDateKey } from '../utils/tasks';
+import { createRepeatKeys } from '../utils/repeatKey';
 
 /**
  * Производственный модуль (ТЗ ЭМПИН-pro): запросы к /api/production и состояние вне React-дерева —
@@ -11,16 +12,21 @@ import { currentToday, parseDateKey, toDateKey } from '../utils/tasks';
 const READ = { timeout: 15000 };
 const WRITE = { timeout: 30000 };
 
+const newUuid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+// Создание и вставка — только при связи (п. 9.1), но ответ может не дойти: повтор того же действия уходит с той же
+// меткой, и сервер возвращает уже созданное задание, а не второе такое же
+const once = createRepeatKeys(newUuid);
+
 export const productionAPI = {
   me: async () => (await api.get('/production/me', READ)).data,
   tasks: async (params) => (await api.get('/production/tasks', { ...READ, params })).data,
   taskDates: async (params) => (await api.get('/production/tasks/dates', { ...READ, params })).data,
   filterOptions: async () => (await api.get('/production/tasks/filters', READ)).data,
   task: async (id) => (await api.get(`/production/tasks/${id}`, READ)).data,
-  createTask: async (body) => (await api.post('/production/tasks', body, WRITE)).data,
+  createTask: (body) => once(JSON.stringify(['create', body]), async (uuid) => (await api.post('/production/tasks', { ...body, client_uuid: uuid }, WRITE)).data),
   updateTask: async (id, body) => (await api.patch(`/production/tasks/${id}`, body, WRITE)).data,
   deleteTask: async (id, readiness = null) => (await api.delete(`/production/tasks/${id}`, { ...WRITE, params: readiness ? { readiness } : undefined })).data,
-  copyTask: async (id, date) => (await api.post(`/production/tasks/${id}/copy`, { date }, WRITE)).data,
+  copyTask: (id, date) => once(JSON.stringify(['copy', id, date]), async (uuid) => (await api.post(`/production/tasks/${id}/copy`, { date, client_uuid: uuid }, WRITE)).data),
   invite: async (id, staffId) => (await api.post(`/production/tasks/${id}/invites`, { staff_id: staffId }, WRITE)).data,
   revokeInvite: async (id, staffId) => (await api.delete(`/production/tasks/${id}/invites/${staffId}`, WRITE)).data,
   objects: async (params) => (await api.get('/production/objects', { ...READ, params })).data,
