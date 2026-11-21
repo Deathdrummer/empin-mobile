@@ -7,7 +7,7 @@ import { useCall } from '../services/agora/useCall';
 import { messengerAPI } from '../services/api';
 import { setCallAudioActive } from '../services/callAudioState';
 import { HOLD, incomingDuringCall, peerOnHoldFromDetails } from '../services/callHold';
-import { incomingCallEvents, resolveNativeAnswer, setCallScreenMounted } from '../services/incomingCallEvents';
+import { incomingCallEvents, resolveNativeAnswer, setCallScreenMounted, takePendingAnswer } from '../services/incomingCallEvents';
 import { recordCallDiagnostic } from '../services/callDiagnostics';
 import { CALL_CAUSES as C } from '../services/callDiagnosticFormat';
 import EmpinCallService from '../../modules/empin-call-service';
@@ -450,7 +450,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
   useEffect(() => {
     // Пока экран звонков есть, окно звонка обрабатывается здесь, а не в index.js
     setCallScreenMounted(true);
-    RNNotificationCall.addEventListener('answer', async (event) => {
+    const onNativeAnswer = async (event) => {
       recordCallDiagnostic('answer-android', { callId: event?.callUUID, cause: C.answerAndroid });
       if (!isLoggedInRef.current) {
         RNNotificationCall.hideNotification();
@@ -522,7 +522,11 @@ export const CallProvider = ({ children, isLoggedIn }) => {
       } else {
         console.log('[CallCtx][answer] NO callId, acceptCall skipped');
       }
-    });
+    };
+    RNNotificationCall.addEventListener('answer', onNativeAnswer);
+    // «Ответить» нажали, пока экрана звонков не было (приложение было выгружено): отвечаем сейчас
+    const answeredCallId = takePendingAnswer();
+    if (answeredCallId) onNativeAnswer({ callUUID: answeredCallId });
 
     RNNotificationCall.addEventListener('endCall', async (event) => {
       recordCallDiagnostic('android-end-event', { callId: event?.callUUID, cause: C.androidEnd });

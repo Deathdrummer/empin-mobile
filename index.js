@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import App from './App';
-import { endWithoutCallScreen, incomingCallEvents } from './src/services/incomingCallEvents';
+import { answerWithoutCallScreen, endWithoutCallScreen, incomingCallEvents } from './src/services/incomingCallEvents';
 
 if (Platform.OS === 'android') {
   // «Ответить» / «Прочитано» в уведомлении о сообщении, когда приложение свёрнуто или закрыто:
@@ -46,6 +46,15 @@ if (Platform.OS === 'android') {
       : messengerAPI.rejectCall(ended.callId, cause)).catch(() => {});
   });
 
+  // «Ответить», когда экрана звонков нет: приложение открывает само окно звонка, а ответит CallContext,
+  // как только появится (takePendingAnswer)
+  RNNotificationCall.addEventListener('answer', (event) => {
+    if (answerWithoutCallScreen(event)) {
+      const { recordCallDiagnostic } = require('./src/services/callDiagnostics');
+      recordCallDiagnostic('answer-without-app', { callId: event?.callUUID });
+    }
+  });
+
   // Обработчик FCM в background/killed — единственный надёжный способ на Android
   // Expo Push API оборачивает наш data-объект в строку remoteMessage.data.body
   setBackgroundMessageHandler(getMessaging(), async (remoteMessage) => {
@@ -61,18 +70,6 @@ if (Platform.OS === 'android') {
       if (!authToken) return;
 
       const callId = String(data.call_id);
-      if (!incomingCallEvents.canPresent(callId, data.expires_at)) return;
-      // Не открываем системный вызов из push, если сервер уже закончил этот звонок.
-      try {
-        const { messengerAPI } = require('./src/services/api');
-        const response = await messengerAPI.getCallDetails(callId);
-        if (!['initiated', 'ringing'].includes(response?.call?.status)) {
-          incomingCallEvents.finish(callId);
-          return;
-        }
-      } catch (error) {
-        if ([401, 403, 404].includes(error?.response?.status)) return;
-      }
       if (!incomingCallEvents.canPresent(callId, data.expires_at)) return;
 
       // Сохраняем данные звонка — React state недоступен в headless контексте,
@@ -107,6 +104,28 @@ if (Platform.OS === 'android') {
           notificationSound: 'default',
         }
       );
+
+      // Окно показано сразу: Android 12+ разрешает службу звонка из фона лишь недолго после push, и проверка на
+      // сервере (до 5 с) могла этот срок съесть. Звонок, который сервер уже закончил (push опоздал), закрываем следом.
+      // Принятый («active») не трогаем — его мог только что принять этот же телефон
+      let finished = false;
+      try {
+        const { messengerAPI } = require('./src/services/api');
+        const response = await messengerAPI.getCallDetails(callId);
+        finished = ['completed', 'cancelled', 'rejected', 'missed'].includes(response?.call?.status);
+      } catch (error) {
+        finished = [401, 403, 404].includes(error?.response?.status);
+      }
+      if (finished) {
+        incomingCallEvents.finish(callId);
+        const pending = await AsyncStorage.getItem('@pendingCall');
+        let pendingId;
+        try { pendingId = pending ? JSON.parse(pending).callId : null; } catch {}
+        if (String(pendingId) === callId) {
+          await AsyncStorage.removeItem('@pendingCall');
+          RNNotificationCall.hideNotification();
+        }
+      }
     }
 
     if (data.type === 'message') {

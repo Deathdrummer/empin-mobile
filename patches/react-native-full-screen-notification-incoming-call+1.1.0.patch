@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/IncomingCallActivity.java b/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/IncomingCallActivity.java
-index 3395f00..6d7f723 100644
+index 3395f00..8d0a535 100644
 --- a/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/IncomingCallActivity.java
 +++ b/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/IncomingCallActivity.java
 @@ -11,13 +11,15 @@ import android.view.WindowManager;
@@ -101,7 +101,17 @@ index 3395f00..6d7f723 100644
      active = false;
      WritableMap params = Arguments.createMap();
      Bundle bundle = getIntent().getExtras();
-@@ -183,6 +200,7 @@ public class IncomingCallActivity extends AppCompatActivity implements DefaultHa
+@@ -174,6 +191,9 @@ public class IncomingCallActivity extends AppCompatActivity implements DefaultHa
+     params.putString("callUUID", uuid);
+     FullScreenNotificationIncomingCallModule.sendEventToJs(Constants.RNNotificationAnswerAction, params);
+     stopService(new Intent(this, IncomingCallService.class));
++    // Окно звонка — в своей задаче (taskAffinity в expo.js): приложение открываем сами, иначе после ответа
++    // осталось бы то, что было на экране до звонка
++    NotificationReceiverHandler.openApp(this);
+ 
+     if (Build.VERSION.SDK_INT >= 21) {
+       finishAndRemoveTask();
+@@ -183,6 +203,7 @@ public class IncomingCallActivity extends AppCompatActivity implements DefaultHa
    }
  
    private void dismissDialing(String action) {
@@ -110,10 +120,89 @@ index 3395f00..6d7f723 100644
      WritableMap params = Arguments.createMap();
      Bundle bundle = getIntent().getExtras();
 diff --git a/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/IncomingCallService.java b/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/IncomingCallService.java
-index 502fe36..a17854a 100644
+index 502fe36..637c0f1 100644
 --- a/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/IncomingCallService.java
 +++ b/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/IncomingCallService.java
-@@ -339,9 +339,15 @@ public class IncomingCallService extends Service {
+@@ -23,12 +23,15 @@ import android.os.Build;
+ import android.os.Bundle;
+ import android.os.Handler;
+ import android.os.IBinder;
++import android.os.PowerManager;
++import android.provider.Settings;
+ import android.util.Log;
+ import android.content.BroadcastReceiver;
+ import android.content.IntentFilter;
+ 
+ import androidx.annotation.Nullable;
+ import androidx.core.app.NotificationCompat;
++import androidx.core.app.NotificationManagerCompat;
+ import androidx.core.app.Person;
+ import androidx.core.content.ContextCompat;
+ import androidx.core.graphics.drawable.IconCompat;
+@@ -145,11 +148,40 @@ public class IncomingCallService extends Service {
+       throw new RuntimeException("Failed to build notification", e);
+     }
+ 
+-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+-      startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
+-    } else {
+-      startForeground(1, notification);
++    try {
++      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
++        startForeground(1, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
++      } else {
++        startForeground(1, notification);
++      }
++    } catch (RuntimeException e) {
++      // Android 12+ разрешает службу переднего плана из фона лишь недолго после push. Если окно звонка
++      // показывается позже, startForeground бросает исключение и роняет приложение — показываем то же
++      // уведомление обычным (кнопки и тайм-аут работают, пока служба жива)
++      Log.e(TAG, "startForeground not allowed, posting notification", e);
++      try {
++        NotificationManagerCompat.from(this).notify(1, notification);
++      } catch (RuntimeException notifyError) {
++        Log.e(TAG, "Failed to post incoming call notification", notifyError);
++      }
+     }
++    startActivityIfScreenOn();
++  }
++
++  /**
++   * Если экран активен (не заблокирован) и есть разрешение SYSTEM_ALERT_WINDOW,
++   * запускаем IncomingCallActivity напрямую (не через fullscreen_intent).
++   * Android разрешает fullscreen_intent только при выключенном экране.
++   */
++  private void startActivityIfScreenOn() {
++    PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
++    if (pm == null || !pm.isInteractive()) return;
++    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return;
++    if (bundleData == null) return;
++    Intent activityIntent = new Intent(this, IncomingCallActivity.class);
++    activityIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
++    activityIntent.putExtras(bundleData);
++    startActivity(activityIntent);
+   }
+ 
+   private PendingIntent onButtonNotificationClick(int id, String action, String eventName) {
+@@ -304,10 +336,16 @@ public class IncomingCallService extends Service {
+     super.onDestroy();
+     Log.d(TAG, "onDestroy service");
+     cancelTimer();
+-    stopForeground(true);
++    removeNotification();
+     unregisterBroadcastPressEvent();
+   }
+ 
++  /** Убрать уведомление о звонке — и службы переднего плана, и показанное обычным (см. startForegroundWithNotification) */
++  private void removeNotification() {
++    stopForeground(true);
++    NotificationManagerCompat.from(this).cancel(1);
++  }
++
+   public void registerBroadcastPressEvent() {
+     if (isRegistered) return;
+     IntentFilter filter = new IntentFilter();
+@@ -339,9 +377,15 @@ public class IncomingCallService extends Service {
          }
          params.putString("callUUID", uuid);
          params.putString("endAction", Constants.ACTION_HIDE_CALL);
@@ -132,3 +221,59 @@ index 502fe36..a17854a 100644
        }
      };
      callhandle.postDelayed(handleTimeout, timeoutNumber);
+@@ -392,7 +436,7 @@ public class IncomingCallService extends Service {
+           params.putString("callUUID", uuid);
+           params.putString("endAction", Constants.ACTION_REJECTED_CALL);
+           FullScreenNotificationIncomingCallModule.sendEventToJs(Constants.RNNotificationEndCallAction, params);
+-          stopForeground(true);
++          removeNotification();
+         }
+       }
+     }
+diff --git a/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/NotificationReceiverHandler.java b/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/NotificationReceiverHandler.java
+index beb50db..9a3810e 100644
+--- a/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/NotificationReceiverHandler.java
++++ b/node_modules/react-native-full-screen-notification-incoming-call/android/src/main/java/com/reactnativefullscreennotificationincomingcall/NotificationReceiverHandler.java
+@@ -74,6 +74,22 @@ public class NotificationReceiverHandler {
+     params.putString("callUUID", uuid);
+     FullScreenNotificationIncomingCallModule.sendEventToJs(eventName, params);
+     context.stopService(new Intent(context, IncomingCallService.class));
++    openApp(context);
++  }
++
++  /**
++   * «Ответить»: открыть приложение сразу, пока идёт нажатие. Позже Android 12+ не даст открыть экран из фона,
++   * а экрана звонков, который сделал бы это сам, может ещё не быть (приложение выгружено)
++   */
++  static void openApp(Context context) {
++    Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
++    if (launch == null) return;
++    launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
++    try {
++      context.startActivity(launch);
++    } catch (RuntimeException e) {
++      Log.e(TAG, "Failed to open app on answer", e);
++    }
+   }
+ 
+   @SuppressLint("LongLogTag")
+diff --git a/node_modules/react-native-full-screen-notification-incoming-call/lib/commonjs/expo.js b/node_modules/react-native-full-screen-notification-incoming-call/lib/commonjs/expo.js
+index a515e23..f691a1e 100644
+--- a/node_modules/react-native-full-screen-notification-incoming-call/lib/commonjs/expo.js
++++ b/node_modules/react-native-full-screen-notification-incoming-call/lib/commonjs/expo.js
+@@ -39,6 +39,7 @@ const withFullScreenNotificationIncomingCall = (config, props) => {
+         'android:name': 'com.reactnativefullscreennotificationincomingcall.IncomingCallActivity',
+         'android:theme': '@style/incomingCall',
+         'android:launchMode': 'singleTask',
++        'android:taskAffinity': '',
+         'android:excludeFromRecents': 'true',
+         'android:exported': 'false',
+         'android:showWhenLocked': 'true',
+@@ -50,6 +51,7 @@ const withFullScreenNotificationIncomingCall = (config, props) => {
+         'android:name': 'com.reactnativefullscreennotificationincomingcall.NotificationReceiverActivity',
+         'android:theme': '@style/incomingCall',
+         'android:launchMode': 'singleTask',
++        'android:taskAffinity': '',
+         'android:excludeFromRecents': 'true',
+         'android:exported': 'false',
+         'android:showWhenLocked': 'true',

@@ -39,6 +39,25 @@ export const endWithoutCallScreen = (event) => {
   return { callId, how: event?.endAction === 'ACTION_HIDE_CALL' ? 'timeout' : 'reject' };
 };
 
+// «Ответить» без экрана звонков: приложение открывает окно звонка, а ответит CallContext, когда появится.
+// Ответ помним не дольше, чем звонит окно: позже звонок уже закончен
+const PENDING_ANSWER_MS = 30000;
+let pendingAnswer = null;
+
+export const answerWithoutCallScreen = (event, now = Date.now()) => {
+  if (callScreenMounted) return false;
+  const callId = String(event?.callUUID ?? '');
+  if (!/^\d+$/.test(callId)) return false;
+  pendingAnswer = { callId, at: now };
+  return true;
+};
+
+export const takePendingAnswer = (now = Date.now()) => {
+  const answer = pendingAnswer;
+  pendingAnswer = null;
+  return answer && now - answer.at <= PENDING_ANSWER_MS ? answer.callId : null;
+};
+
 // Нативная кнопка относится к своему callUUID, а не к последнему push из хранилища.
 export const selectIncomingCall = (eventCallId, storedCall, foregroundCall) => {
   const candidates = [storedCall, foregroundCall].filter((call) => call?.callId != null);
