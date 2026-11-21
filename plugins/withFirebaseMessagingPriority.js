@@ -6,6 +6,8 @@
  *
  * 2. Добавляет MainActivity флаги showWhenLocked и turnScreenOn,
  *    чтобы приложение могло открываться поверх экрана блокировки при ответе на звонок.
+ *
+ * 3. Цвет значка уведомлений Firebase — из expo-notifications (tools:replace).
  */
 const { withAndroidManifest } = require('@expo/config-plugins');
 
@@ -38,6 +40,19 @@ module.exports = (config) => {
         }
       }
     }
+
+    // 3. Цвет значка уведомлений Firebase задаёт expo-notifications (app.json), а модуль Firebase объявляет свой
+    //    (@color/white) — без tools:replace слияние манифестов падает. Через firebase.json нельзя: release
+    //    проверяет ресурсы модуля Firebase, а цвета приложения в нём нет
+    const FCM_COLOR = 'com.google.firebase.messaging.default_notification_color';
+    config.modResults.manifest.$['xmlns:tools'] = config.modResults.manifest.$['xmlns:tools'] || 'http://schemas.android.com/tools';
+    application['meta-data'] = application['meta-data'] ?? [];
+    let colorItem = application['meta-data'].find((item) => item.$?.['android:name'] === FCM_COLOR);
+    if (!colorItem) {
+      colorItem = { $: { 'android:name': FCM_COLOR, 'android:resource': '@color/notification_icon_color' } };
+      application['meta-data'].push(colorItem);
+    }
+    colorItem.$['tools:replace'] = 'android:resource';
 
     return config;
   });
