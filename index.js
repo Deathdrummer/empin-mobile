@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import App from './App';
-import { incomingCallEvents } from './src/services/incomingCallEvents';
+import { endWithoutCallScreen, incomingCallEvents } from './src/services/incomingCallEvents';
 
 if (Platform.OS === 'android') {
   // «Ответить» / «Прочитано» в уведомлении о сообщении, когда приложение свёрнуто или закрыто:
@@ -21,6 +21,30 @@ if (Platform.OS === 'android') {
   const { getMessaging, setBackgroundMessageHandler } = require('@react-native-firebase/messaging');
   const incomingCallModule = require('react-native-full-screen-notification-incoming-call');
   const RNNotificationCall = incomingCallModule.default ?? incomingCallModule;
+
+  // «Отклонить» и тайм-аут окна звонка, когда приложение выгружено: экрана звонков нет, и без этого сервер
+  // не узнаёт об отказе — у звонящего вызов продолжается. Подписка раньше, чем в CallContext, поэтому его
+  // removeEventListener('endCall') снимает только свою
+  RNNotificationCall.addEventListener('endCall', async (event) => {
+    const ended = endWithoutCallScreen(event);
+    if (!ended) return;
+    incomingCallEvents.finish(ended.callId);
+    RNNotificationCall.hideNotification();
+    try {
+      const stored = JSON.parse((await AsyncStorage.getItem('@pendingCall')) || 'null');
+      if (String(stored?.callId) === ended.callId) await AsyncStorage.removeItem('@pendingCall');
+    } catch {}
+    if (!(await AsyncStorage.getItem('token'))) return;
+
+    const { messengerAPI } = require('./src/services/api');
+    const { CALL_CAUSES: C } = require('./src/services/callDiagnosticFormat');
+    const { recordCallDiagnostic } = require('./src/services/callDiagnostics');
+    const cause = ended.how === 'timeout' ? C.incomingTimeout : C.androidEnd;
+    recordCallDiagnostic('android-end-without-app', { callId: ended.callId, cause });
+    await (ended.how === 'timeout'
+      ? messengerAPI.endCall(ended.callId, cause)
+      : messengerAPI.rejectCall(ended.callId, cause)).catch(() => {});
+  });
 
   // Обработчик FCM в background/killed — единственный надёжный способ на Android
   // Expo Push API оборачивает наш data-объект в строку remoteMessage.data.body

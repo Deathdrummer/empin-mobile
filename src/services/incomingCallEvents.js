@@ -25,6 +25,20 @@ export const createIncomingCallEvents = ({ now = Date.now, retentionMs = 300000,
 
 export const incomingCallEvents = createIncomingCallEvents();
 
+// Экран звонков (CallContext) смонтирован — «Отклонить» и тайм-аут окна звонка обрабатывает он.
+// Приложение выгружено — экрана нет, и окно звонка, показанное из push, обрабатывается в index.js
+let callScreenMounted = false;
+export const setCallScreenMounted = (mounted) => { callScreenMounted = Boolean(mounted); };
+
+// Окно звонка закрылось без экрана звонков: какой звонок и что сообщить серверу.
+// Тайм-аут окна — пропущенный, а не отклонённый, как и в CallContext
+export const endWithoutCallScreen = (event) => {
+  if (callScreenMounted) return null;
+  const callId = String(event?.callUUID ?? '');
+  if (!/^\d+$/.test(callId)) return null;
+  return { callId, how: event?.endAction === 'ACTION_HIDE_CALL' ? 'timeout' : 'reject' };
+};
+
 // Нативная кнопка относится к своему callUUID, а не к последнему push из хранилища.
 export const selectIncomingCall = (eventCallId, storedCall, foregroundCall) => {
   const candidates = [storedCall, foregroundCall].filter((call) => call?.callId != null);

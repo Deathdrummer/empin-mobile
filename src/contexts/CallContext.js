@@ -7,7 +7,7 @@ import { useCall } from '../services/agora/useCall';
 import { messengerAPI } from '../services/api';
 import { setCallAudioActive } from '../services/callAudioState';
 import { HOLD, incomingDuringCall, peerOnHoldFromDetails } from '../services/callHold';
-import { incomingCallEvents, resolveNativeAnswer } from '../services/incomingCallEvents';
+import { incomingCallEvents, resolveNativeAnswer, setCallScreenMounted } from '../services/incomingCallEvents';
 import { recordCallDiagnostic } from '../services/callDiagnostics';
 import { CALL_CAUSES as C } from '../services/callDiagnosticFormat';
 import EmpinCallService from '../../modules/empin-call-service';
@@ -448,6 +448,8 @@ export const CallProvider = ({ children, isLoggedIn }) => {
    * Подписка на события нативного полноэкранного окна (RNNotificationCall)
    */
   useEffect(() => {
+    // Пока экран звонков есть, окно звонка обрабатывается здесь, а не в index.js
+    setCallScreenMounted(true);
     RNNotificationCall.addEventListener('answer', async (event) => {
       recordCallDiagnostic('answer-android', { callId: event?.callUUID, cause: C.answerAndroid });
       if (!isLoggedInRef.current) {
@@ -591,6 +593,7 @@ export const CallProvider = ({ children, isLoggedIn }) => {
     });
 
     return () => {
+      setCallScreenMounted(false);
       RNNotificationCall.removeEventListener('answer');
       RNNotificationCall.removeEventListener('endCall');
     };
