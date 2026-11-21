@@ -96,12 +96,13 @@ if (Platform.OS === 'android') {
         {
           channelId: 'calls_v2',
           channelName: 'Звонки',
-          notificationIcon: 'ic_launcher',
+          // Значок уведомлений и его цвет создаёт плагин expo-notifications (app.json)
+          notificationIcon: 'notification_icon',
           notificationTitle: data.caller_name ?? 'Входящий звонок',
           notificationBody: 'Входящий голосовой звонок',
           answerText: 'Ответить',
           declineText: 'Отклонить',
-          notificationColor: 'colorPrimary',
+          notificationColor: 'notification_icon_color',
           isVideo: false,
           notificationSound: 'default',
         }

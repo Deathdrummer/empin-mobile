@@ -87,7 +87,9 @@
       [
         "expo-notifications",
         {
-          "enableBackgroundRemoteNotifications": true
+          "enableBackgroundRemoteNotifications": true,
+          "icon": "./assets/notification-icon.png",
+          "color": "#D52433"
         }
       ],
       "@react-native-firebase/app",
