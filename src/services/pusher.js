@@ -3,10 +3,50 @@ import { Pusher } from '@pusher/pusher-websocket-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { emitMessengerEvent } from './messengerStore';
 import { SERVER_URL } from './api';
-import { PUSHER_APP_KEY, PUSHER_CLUSTER, userChannel } from './pusherConfig';
+import { authRetryDelay, isRetryableAuthStatus, PUSHER_APP_KEY, PUSHER_CLUSTER, userChannel } from './pusherConfig';
 
 let pusherInstance = null;
 let isConnecting = false;
+
+// Подпись, с которой Pusher откажет в подписке: нативная часть получает ответ и не ждёт его вечно
+const REFUSED_AUTH = { auth: '' };
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Подпись приватного канала с сервера. Ответ нужен всегда: без него Android ждёт его без срока, и подписка
+ * не восстанавливается до перезапуска приложения. Сбой связи или временный ответ сервера — повтор с паузой;
+ * отказ в доступе или выход из аккаунта — отказная подпись.
+ */
+const authorizeChannel = async (channelName, socketId) => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return REFUSED_AUTH;
+      // Тот же сервер, что и API: при локальном EXPO_PUBLIC_API_BASE_URL токен не уходит на боевой домен
+      const response = await fetch(`${SERVER_URL}/broadcasting/auth`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          socket_id: socketId,
+          channel_name: channelName,
+        }),
+      });
+      if (response.ok) return await response.json();
+      if (!isRetryableAuthStatus(response.status)) {
+        console.error('[Pusher] Auth refused:', response.status);
+        return REFUSED_AUTH;
+      }
+      console.warn('[Pusher] Auth failed, retry:', response.status);
+    } catch (error) {
+      console.warn('[Pusher] Auth error, retry:', error?.message ?? error);
+    }
+    await wait(authRetryDelay(attempt));
+  }
+};
 
 /**
  * Получить/инициализировать Pusher instance.
@@ -26,35 +66,7 @@ export const getPusher = async () => {
       apiKey: PUSHER_APP_KEY,
       cluster: PUSHER_CLUSTER,
       useTLS: true,
-      onAuthorizer: async (channelName, socketId) => {
-        try {
-          const token = await AsyncStorage.getItem('token');
-          if (!token) throw new Error('No auth token in storage');
-
-          // Тот же сервер, что и API: при локальном EXPO_PUBLIC_API_BASE_URL токен не уходит на боевой домен
-          const response = await fetch(`${SERVER_URL}/broadcasting/auth`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: JSON.stringify({
-              socket_id: socketId,
-              channel_name: channelName,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error(`Auth failed: ${response.status}`);
-          }
-
-          return await response.json();
-        } catch (error) {
-          console.error('[Pusher] Auth error:', error);
-          throw error;
-        }
-      },
+      onAuthorizer: authorizeChannel,
     });
 
     await pusher.connect();
