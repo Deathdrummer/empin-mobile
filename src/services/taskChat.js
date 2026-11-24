@@ -23,7 +23,12 @@ export const taskChatAPI = {
       : { timeout: SEND_TIMEOUT_MS };
     return (await api.post(`/production/tasks/${taskId}/comments`, body, config)).data;
   },
-  update: async (taskId, commentId, message) => (await api.put(`/production/tasks/${taskId}/comments/${commentId}`, { message }, { timeout: 30000 })).data,
+  // keepMedia — пути оставленных вложений; без него сервер вложения не меняет
+  update: async (taskId, commentId, message, keepMedia) => (await api.put(
+    `/production/tasks/${taskId}/comments/${commentId}`,
+    keepMedia ? { message, keep_media: keepMedia } : { message },
+    { timeout: 30000 },
+  )).data,
   remove: async (taskId, commentId) => (await api.delete(`/production/tasks/${taskId}/comments/${commentId}`, { timeout: 30000 })).data,
   react: async (taskId, commentId, emoji) => (await api.post(`/production/tasks/${taskId}/comments/${commentId}/reaction`, { emoji }, { timeout: 15000 })).data,
 };

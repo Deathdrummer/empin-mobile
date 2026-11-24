@@ -6,8 +6,9 @@ import {
   discardTaskMessage, enqueueTaskMessage, retryTaskMessage, subscribeTaskMessageSent, taskChatAPI, useTaskOutbox,
 } from '../../../services/taskChat';
 import { needsPreparation, prepareMediaForUpload } from '../../../services/mediaPrepare';
+import { subscribeMessengerEvents } from '../../../services/messengerStore';
 import { getUserFacingError } from '../../../utils/userFacingError';
-import { isOfflineError } from '../../../utils/tasks';
+import { isOfflineError, taskOfChatEvent } from '../../../utils/tasks';
 
 /** Неотправленное из очереди — в ленту переписки, с пометкой «ждёт связи» или причиной отказа */
 const pendingAsComment = (item) => ({
@@ -73,6 +74,12 @@ export const useTaskChat = (meStaffId) => {
     load(taskId);
   }, [load]);
 
+  // Сообщение задания написали, изменили или удалили на сайте, в «Чатах» или на другом телефоне — открытая переписка перечитывается
+  useEffect(() => subscribeMessengerEvents((name, data) => {
+    const taskId = taskOfChatEvent(name, data);
+    if (taskId && Number(taskId) === Number(expandedRef.current)) load(taskId);
+  }), [load]);
+
   // Сообщение из очереди дошло до сервера — сразу в ленту (без мигания) и обновить переписку, если она открыта
   useEffect(() => subscribeTaskMessageSent((taskId, saved) => {
     if (saved?.id) {
@@ -109,11 +116,11 @@ export const useTaskChat = (meStaffId) => {
     position: 'top',
   });
 
-  const handleUpdateComment = async (newMessage) => {
+  const handleUpdateComment = async (newMessage, keepMedia) => {
     if (!editingComment || !expandedTask) return;
     setUpdatingComment(true);
     try {
-      await taskChatAPI.update(expandedTask, editingComment.id, newMessage);
+      await taskChatAPI.update(expandedTask, editingComment.id, newMessage, keepMedia);
       setEditingComment(null);
       load(expandedTask);
     } catch (error) {

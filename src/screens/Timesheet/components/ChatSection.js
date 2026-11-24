@@ -6,6 +6,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Pressable, ActivityIndicator, Dimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { resolveMediaUri } from '../../../utils/mediaUri';
+import { separateMediaAndDocuments } from '../../../utils/chatMedia';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
@@ -88,71 +89,6 @@ const groupReactions = (reactions, currentUserId) => {
   }, {});
 
   return Object.values(grouped);
-};
-
-// Функция для определения типа медиа (изображение/видео или документ)
-const isMediaFile = (media) => {
-  if (!media) return false;
-
-  // Проверяем по mimeType
-  if (media.mimeType) {
-    // НЕ считаем аудио файлы как media, даже если mimeType неправильный
-    if (media.mimeType.startsWith('audio/') || media.mimeType === 'application/ogg') {
-      return false;
-    }
-    return media.mimeType.startsWith('image/') || media.mimeType.startsWith('video/');
-  }
-
-  // Fallback: проверяем по расширению файла
-  if (media.uri || media.name) {
-    const fileName = (media.uri || media.name).toLowerCase();
-
-    // Сначала проверяем аудио расширения - исключаем их из media
-    const audioExtensions = ['.mp3', '.wav', '.ogg', '.oga', '.opus', '.m4a', '.aac', '.flac', '.wma', '.webm', '.amr', '.3gp'];
-    if (audioExtensions.some(ext => fileName.endsWith(ext))) {
-      return false;
-    }
-
-    const mediaExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.mp4', '.mov', '.avi', '.mkv'];
-    return mediaExtensions.some(ext => fileName.endsWith(ext));
-  }
-
-  return false;
-};
-
-// Функция для определения типа аудио
-const isAudioFile = (media) => {
-  if (!media) return false;
-
-  // Проверяем по mimeType
-  if (media.mimeType) {
-    if (media.mimeType.startsWith('audio/') || media.mimeType === 'application/ogg') {
-      return true;
-    }
-  }
-
-  // Fallback: проверяем по расширению файла (приоритет name, потом uri)
-  if (media.name || media.uri) {
-    const fileName = (media.name || media.uri).toLowerCase();
-    const audioExtensions = ['.mp3', '.wav', '.ogg', '.oga', '.opus', '.m4a', '.aac', '.flac', '.wma', '.webm', '.amr', '.3gp'];
-    return audioExtensions.some(ext => fileName.endsWith(ext));
-  }
-
-  return false;
-};
-
-// Функция для разделения массива на медиа (изображения/видео), аудио и документы
-const separateMediaAndDocuments = (array) => {
-  if (!array || array.length === 0) {
-    return { media: [], audio: [], documents: [] };
-  }
-
-  // Сначала проверяем аудио (приоритет), потом медиа, потом документы
-  const audio = array.filter(item => isAudioFile(item));
-  const media = array.filter(item => !isAudioFile(item) && isMediaFile(item));
-  const documents = array.filter(item => !isAudioFile(item) && !isMediaFile(item));
-
-  return { media, audio, documents };
 };
 
 export const ChatSection = ({

@@ -595,7 +595,12 @@ export default function ChatScreen({ navigation, route }) {
           ? current
           : mergeMessages(current, [incoming])));
       } else if (name === 'message.deleted') {
-        setMessages((current) => current.filter((message) => message.id !== data.message_id));
+        // В чате объекта удалённое остаётся пометкой: в цитате ответов — «Сообщение удалено»
+        setMessages((current) => current
+          .filter((message) => message.id !== data.message_id)
+          .map((message) => (isObject && message.reply_to?.id === data.message_id
+            ? { ...message, reply_to: { ...message.reply_to, deleted: true } }
+            : message)));
       } else if (name === 'messages.hidden') {
         // «Удалить у меня» на другом моём устройстве
         dropMessages(data.message_ids || []);

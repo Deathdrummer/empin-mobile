@@ -307,7 +307,7 @@ const MessageBubbleComponent = ({
             {fullName(message.reply_to.from)}
           </Text>
           <Text style={[styles.quoteText, { color: colors.text }]} numberOfLines={2}>
-            {plainText(message.reply_to.message) || mediaLabel(message.reply_to.type)}
+            {message.reply_to.deleted ? 'Сообщение удалено' : plainText(message.reply_to.message) || mediaLabel(message.reply_to.type)}
           </Text>
         </Pressable>
       ) : null}
