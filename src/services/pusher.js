@@ -1,10 +1,9 @@
-import Pusher from '@pusher/pusher-websocket-react-native';
+// Библиотека экспортирует класс только по имени: импорт по умолчанию — undefined, подключение не начиналось
+import { Pusher } from '@pusher/pusher-websocket-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { emitMessengerEvent } from './messengerStore';
 import { SERVER_URL } from './api';
-
-const PUSHER_APP_KEY = '88f644943a85b36b115e';
-const PUSHER_CLUSTER = 'eu';
+import { PUSHER_APP_KEY, PUSHER_CLUSTER, userChannel } from './pusherConfig';
 
 let pusherInstance = null;
 let isConnecting = false;
@@ -73,7 +72,7 @@ export const getPusher = async () => {
  */
 export const subscribeToCalls = async (staffId, handlers) => {
   const pusher = await getPusher();
-  const channelName = `private-user.${staffId}`;
+  const channelName = userChannel(staffId);
 
   await pusher.subscribe({
     channelName,
@@ -126,7 +125,7 @@ export const subscribeToCalls = async (staffId, handlers) => {
 export const unsubscribeFromCalls = async (staffId) => {
   if (!pusherInstance) return;
   try {
-    await pusherInstance.unsubscribe({ channelName: `private-user.${staffId}` });
+    await pusherInstance.unsubscribe({ channelName: userChannel(staffId) });
   } catch (e) {
     console.warn('[Pusher] Unsubscribe error:', e);
   }
