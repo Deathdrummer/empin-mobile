@@ -382,10 +382,11 @@ export const isOfflineError = (error) => !!error && !error.response && (!!error.
 
 /**
  * Задание из события «Чатов» о сообщении чата объекта: сервер кладёт `context.task_id` в сообщение,
- * а в событие удаления — `task_id`. Открытая переписка этого задания перечитывается.
+ * а в событие удаления и в событие о длинном сообщении без текста (`truncated`) — `task_id`.
+ * Открытая переписка этого задания перечитывается.
  */
 export const taskOfChatEvent = (name, data) => {
   if (name === 'message.deleted') return data?.task_id ?? null;
-  if (name === 'message.created' || name === 'message.updated') return data?.message?.context?.task_id ?? null;
+  if (name === 'message.created' || name === 'message.updated') return data?.message?.context?.task_id ?? data?.task_id ?? null;
   return null;
 };

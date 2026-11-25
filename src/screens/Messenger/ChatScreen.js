@@ -42,6 +42,7 @@ import { useAfterModalClose } from '../../hooks/useAfterModalClose';
 import { plainText } from '../../utils/richText';
 import { appendSearchPage, firstSearchPage, searchCursor } from '../../utils/chatSearch';
 import { isReadByOthers, readersOf } from '../../utils/readReceipts';
+import { nextReactions } from '../../utils/reactions';
 import { useTheme, withAlpha } from '../../theme';
 import { getUserFacingError } from '../../utils/userFacingError';
 import {
@@ -781,9 +782,7 @@ export default function ChatScreen({ navigation, route }) {
       setBurst({ messageId: message.id, emoji, key: Date.now() });
     }
     const before = message.reactions || [];
-    // Одна реакция от человека: та же снимается, другая заменяет прежнюю (как на сервере)
-    const others = before.filter((reaction) => Number(reaction.user_id) !== Number(me.userId));
-    const optimistic = hasReacted ? others : [...others, { user_id: me.userId, emoji }];
+    const optimistic = nextReactions(before, me.userId, emoji, hasReacted);
     setMessages((current) => current.map((item) => (item.id === message.id ? { ...item, reactions: optimistic } : item)));
     try {
       const data = await messengerAPI.addReaction(message.id, emoji, chatId);
