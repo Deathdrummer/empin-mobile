@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from './api';
 import { currentToday, parseDateKey, toDateKey } from '../utils/tasks';
 import { createRepeatKeys } from '../utils/repeatKey';
+import { subscribeMessengerEvents } from './messengerStore';
 
 /**
  * Производственный модуль (ТЗ ЭМПИН-pro): запросы к /api/production и состояние вне React-дерева —
@@ -290,4 +291,22 @@ export const emitTasksChanged = (dates = []) => {
 export const subscribeTasksChanged = (listener) => {
   changeListeners.add(listener);
   return () => changeListeners.delete(listener);
+};
+
+// ---- Доступ изменился в ERP (права, состав бригад, список водителей): сервер сообщает сразу — права,
+// календарь и открытый табель перечитываются (ИС-СМ-13: отзыв права сразу убирает данные с экрана) ----
+
+export const ACCESS_CHANGED_EVENT = 'production.access_changed';
+const accessListeners = new Set();
+
+subscribeMessengerEvents((name) => {
+  if (name !== ACCESS_CHANGED_EVENT) return;
+  refreshMe();
+  emitTasksChanged([]);
+  accessListeners.forEach((listener) => listener());
+});
+
+export const subscribeAccessChanged = (listener) => {
+  accessListeners.add(listener);
+  return () => accessListeners.delete(listener);
 };

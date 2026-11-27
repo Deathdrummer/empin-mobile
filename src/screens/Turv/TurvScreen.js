@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, useThemedStyles } from '../../theme';
 import { Dialog, DialogButton } from '../../components/ui/Dialog';
 import { PickerSheet } from '../Tasks/PickerSheet';
-import { productionAPI, useToday } from '../../services/production';
+import { productionAPI, subscribeAccessChanged, useToday } from '../../services/production';
 import { exportTurv, turvAPI } from '../../services/turv';
 import { canCorrectCell, cellText, createOrderSaver, isWeekend, monthOf, monthTitle, moveRow, moveSection, orderOf, shiftMonth } from '../../utils/turv';
 import { formatDayShort, isOfflineError, shortName } from '../../utils/tasks';
@@ -70,6 +70,8 @@ export default function TurvScreen({ navigation }) {
   }, [month]);
 
   useEffect(() => { load(); }, [load]);
+  // Права или состав бригад изменились в ERP — табель сразу по новым правам (ИС-СМ-13)
+  useEffect(() => subscribeAccessChanged(() => load(true)), [load]);
   // Пока экран открыт — тихо обновлять: табель всегда по актуальным данным (П-СМ-27, инт. 8.60)
   useFocusEffect(useCallback(() => {
     const timer = setInterval(() => load(true), REFRESH_MS);

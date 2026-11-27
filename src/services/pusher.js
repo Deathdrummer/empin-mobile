@@ -118,6 +118,8 @@ export const subscribeToCalls = async (staffId, handlers) => {
         case 'chat.typing':
         case 'chat.pinned':
         case 'chat.updated':
+        // Права или состав бригад изменились в ERP — приложение перечитывает их сразу
+        case 'production.access_changed':
           emitMessengerEvent(event.eventName, data);
           break;
       }
