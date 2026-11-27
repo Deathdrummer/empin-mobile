@@ -9,7 +9,7 @@ import { Dialog, DialogButton } from '../../components/ui/Dialog';
 import { PickerSheet } from '../Tasks/PickerSheet';
 import { productionAPI, useToday } from '../../services/production';
 import { exportTurv, turvAPI } from '../../services/turv';
-import { canCorrectCell, cellText, isWeekend, monthOf, monthTitle, moveRow, moveSection, orderOf, shiftMonth } from '../../utils/turv';
+import { canCorrectCell, cellText, createOrderSaver, isWeekend, monthOf, monthTitle, moveRow, moveSection, orderOf, shiftMonth } from '../../utils/turv';
 import { formatDayShort, isOfflineError, shortName } from '../../utils/tasks';
 import { getUserFacingError } from '../../utils/userFacingError';
 
@@ -42,13 +42,24 @@ export default function TurvScreen({ navigation }) {
   const [adding, setAdding] = useState(null);
   const [staff, setStaff] = useState(null);
   const savedOrder = useRef(null);
+  const saver = useRef(null);
   const left = useRef(null);
   const right = useRef(null);
+
+  // Порядок сохраняется после каждой перестановки, по одному запросу; ошибка — молча вернуть сохранённый (инт. 8.53, 8.54, 8.68)
+  if (!saver.current) {
+    saver.current = createOrderSaver((next) => turvAPI.order(orderOf(next)), {
+      onSaved: (next) => { savedOrder.current = next; },
+      onFailed: () => setTable((t) => (t ? { ...t, sections: savedOrder.current || t.sections } : t)),
+    });
+  }
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setState('loading');
     try {
       const data = await turvAPI.month(month);
+      // Тихое обновление не перебивает перестановку, которая ещё сохраняется
+      if (quiet && saver.current.pending) return;
       setTable(data);
       savedOrder.current = data.sections;
       setState('ready');
@@ -71,9 +82,7 @@ export default function TurvScreen({ navigation }) {
 
   const reorder = (next) => {
     setTable((t) => ({ ...t, sections: next }));
-    // Сохраняется после каждой перестановки; ошибка — молча вернуть сохранённый порядок (инт. 8.53, 8.54, 8.68)
-    turvAPI.order(orderOf(next)).then(() => { savedOrder.current = next; })
-      .catch(() => setTable((t) => ({ ...t, sections: savedOrder.current || t.sections })));
+    saver.current.push(next);
   };
 
   const openCell = (section, row, date, code) => {

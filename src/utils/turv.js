@@ -54,3 +54,36 @@ export const orderOf = (sections) => ({
 
 /** Число выходов в строке */
 export const totalOf = (row) => (row?.cells || []).filter((code) => code === 'R').length;
+
+/**
+ * Сохранение порядка после каждой перестановки (инт. 8.53) — по одному запросу: быстрые нажатия не обгоняют
+ * друг друга на сервере, следом уходит только последний порядок. Ошибка последнего — молча вернуть сохранённый
+ * (инт. 8.68); `pending` — пока что-то сохраняется
+ */
+export const createOrderSaver = (save, { onSaved, onFailed }) => {
+  let running = false;
+  let next = null;
+  const run = async () => {
+    running = true;
+    while (next) {
+      const sending = next;
+      next = null;
+      try {
+        await save(sending);
+        onSaved(sending);
+      } catch {
+        if (!next) onFailed();
+      }
+    }
+    running = false;
+  };
+  return {
+    push(order) {
+      next = order;
+      if (!running) run();
+    },
+    get pending() {
+      return running || next !== null;
+    },
+  };
+};
