@@ -6,12 +6,12 @@ import permissionsEmitter from '../utils/permissionsEmitter';
 import { getInstallationId } from './deviceInstallation';
 import Constants from 'expo-constants';
 import { recordCallDiagnostic, getCallDiagnosticSession } from './callDiagnostics';
+import { apiBaseUrl, serverUrl } from './apiConfig';
 
-const API_BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://empin-pro.ru/api')
-  .replace(/\/$/, '');
+const API_BASE_URL = apiBaseUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
 
 // URL сервера без /api для доступа к файлам
-export const SERVER_URL = API_BASE_URL.replace('/api', '');
+export const SERVER_URL = serverUrl(API_BASE_URL);
 
 const MESSAGE_REFRESH_TIMEOUT_MS = 15000;
 const MESSAGE_SEND_TIMEOUT_MS = 30000;
